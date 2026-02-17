@@ -74,11 +74,19 @@ const pullAccel = 0.8;
 const onPointerDown = (e: MouseEvent | TouchEvent) => {
     if (loading.value || isPulled.value || isDropping) return;
     
-    if (!containerRef.value) return;
-    const rect = containerRef.value.getBoundingClientRect();
+    const container = containerRef.value;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
 
-    const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX;
-    const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY;
+    let clientX: number, clientY: number;
+    if (e instanceof MouseEvent) {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    } else {
+        if (!e.touches[0]) return;
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    }
 
     pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -86,13 +94,15 @@ const onPointerDown = (e: MouseEvent | TouchEvent) => {
     raycaster.setFromCamera(pointer, camera);
     const intersects = raycaster.intersectObjects([cardGroup], true);
 
-    if (intersects.length > 0) {
+    const firstHit = intersects[0];
+
+    if (firstHit && cardBody) {
         isDragging = true;
         const p = cardBody.translation();
         const worldPos = new THREE.Vector3(p.x, p.y, p.z);
         
         // Calculate offset for natural dragging
-        const hitPoint = intersects[0].point;
+        const hitPoint = firstHit.point;
         draggedOffset.copy(hitPoint).sub(worldPos);
         
         cardBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
@@ -101,16 +111,24 @@ const onPointerDown = (e: MouseEvent | TouchEvent) => {
 };
 
 const onPointerMove = (e: MouseEvent | TouchEvent) => {
-    const rect = containerRef.value?.getBoundingClientRect();
-    if (!rect) return;
+    const container = containerRef.value;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
 
-    const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX;
-    const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY;
+    let clientX: number, clientY: number;
+    if (e instanceof MouseEvent) {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    } else {
+        if (!e.touches[0]) return;
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    }
 
     pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-    if (isDragging) {
+    if (isDragging && cardBody) {
         // Project mouse to world at card depth
         const vec = new THREE.Vector3(pointer.x, pointer.y, 0.5);
         vec.unproject(camera);
@@ -139,7 +157,7 @@ const onPointerUp = () => {
     if (!isDragging) return;
     isDragging = false;
     document.body.style.cursor = 'default';
-    cardBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    if (cardBody) cardBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
 
     // If tensioned enough, fire authorization!
     if (currentTension > 14) { 
@@ -301,8 +319,7 @@ const init = async () => {
             color: new THREE.Color(0x111111),
             lineWidth: 0.1,
             resolution: new THREE.Vector2(w, h),
-            sizeAttenuation: 1,
-            depthTest: true
+            sizeAttenuation: 1
         });
         ropeMesh = new THREE.Mesh(ropeGeometry, ropeMat);
         scene.add(ropeMesh);

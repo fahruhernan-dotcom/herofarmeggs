@@ -91,8 +91,8 @@ const createParticle = (i: number, t: number, d: number[], r: number) => {
   const safeColor = colors[colorIndex] || '#FF8C00';
 
   return {
-    start: getXY(d[0], count - i, count),
-    end: getXY(d[1] + noise(7), count - i, count),
+    start: getXY(d[0] ?? 80, count - i, count),
+    end: getXY((d[1] ?? 10) + noise(7), count - i, count),
     time: t,
     scale: 1 + noise(0.2),
     color: safeColor,
@@ -102,8 +102,8 @@ const createParticle = (i: number, t: number, d: number[], r: number) => {
 
 const makeParticles = (element: HTMLElement) => {
   if (!element) return;
-  const d = props.particleDistances;
-  const r = props.particleR;
+  const d = props.particleDistances ?? [80, 10];
+  const r = props.particleR ?? 100;
   const baseTime = (props.animationTime || 600) * 2;
   const count = Math.max(1, props.particleCount || 10);
   const timeVar = props.timeVariance || 300;
