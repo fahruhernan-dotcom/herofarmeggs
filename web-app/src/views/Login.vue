@@ -1,6 +1,6 @@
 <template>
   <div class="login-container">
-    <!-- 🌌 FUTURISTIC BACKGROUND ANIMATION - INCREASED SPEED -->
+    <!-- 🌌 FUTURISTIC BACKGROUND ANIMATION -->
     <DarkVeil 
       :hueShift="25" 
       :warpAmount="0.4" 
@@ -12,70 +12,82 @@
       <!-- Outer Glow Effect -->
       <div class="card-outer-glow"></div>
       
-      <div class="glass-panel login-card">
-        <div class="card-header">
-          <div class="header-glow"></div>
-          <h4 class="brand-tag">SECURITY FOUNDATION</h4>
-          <h1 class="hero-font main-title">{{ isSignUp ? 'CREATE ADMIN' : 'HERO FARM' }}</h1>
-          <p class="subtitle">{{ isSignUp ? 'Initialize your elite access.' : 'Access the hub of premium standards.' }}</p>
-        </div>
+      <!-- 📛 3D LANYARD AUTH TRANSITION -->
+      <transition name="lanyard-fade">
+        <Lanyard 
+          v-if="showLanyard" 
+          :userName="email.split('@')[0]" 
+          userRole="AUTHORIZED ADMIN"
+          @authorized="handleAuthorized"
+        />
+      </transition>
 
-        <form @submit.prevent="handleSubmit" class="login-form">
-          <div class="input-group">
-            <label for="email">IDENTIFIER</label>
-            <div class="input-wrapper">
-              <input 
-                type="email" 
-                id="email" 
-                v-model="email" 
-                placeholder="admin@herofarm.com"
-                required
-                autocomplete="off"
-              />
-              <div class="input-border"></div>
+      <transition name="card-auth">
+        <div class="glass-panel login-card" v-if="!showLanyard">
+          <div class="card-header">
+            <div class="header-glow"></div>
+            <h4 class="brand-tag">SECURITY FOUNDATION</h4>
+            <h1 class="hero-font main-title">{{ isSignUp ? 'CREATE ADMIN' : 'HERO FARM' }}</h1>
+            <p class="subtitle">{{ isSignUp ? 'Initialize your elite access.' : 'Access the hub of premium standards.' }}</p>
+          </div>
+
+          <form @submit.prevent="handleSubmit" class="login-form">
+            <div class="input-group">
+              <label for="email">IDENTIFIER</label>
+              <div class="input-wrapper">
+                <input 
+                  type="email" 
+                  id="email" 
+                  v-model="email" 
+                  placeholder="admin@herofarm.com"
+                  required
+                  autocomplete="off"
+                />
+                <div class="input-border"></div>
+              </div>
             </div>
-          </div>
 
-          <div class="input-group">
-            <label for="password">SECURITY KEY</label>
-            <div class="input-wrapper">
-              <input 
-                type="password" 
-                id="password" 
-                v-model="password" 
-                placeholder="••••••••"
-                required
-              />
-              <div class="input-border"></div>
+            <div class="input-group">
+              <label for="password">SECURITY KEY</label>
+              <div class="input-wrapper">
+                <input 
+                  type="password" 
+                  id="password" 
+                  v-model="password" 
+                  placeholder="••••••••"
+                  required
+                />
+                <div class="input-border"></div>
+              </div>
             </div>
-          </div>
 
-          <div v-if="errorMsg" class="error-message">
-            <span class="error-dot"></span>
-            {{ errorMsg }}
-          </div>
-          <div v-if="successMsg" class="success-message">
-            <span class="success-dot"></span>
-            {{ successMsg }}
-          </div>
-
-          <button type="submit" class="btn-primary-premium" :disabled="loading">
-            <div class="btn-content">
-              <span v-if="!loading">{{ isSignUp ? 'AUTHORIZE REGISTRATION' : 'ACCESS HUB' }}</span>
-              <span v-else class="loader-dots">
-                <span>.</span><span>.</span><span>.</span>
-              </span>
+            <div v-if="errorMsg" class="error-message">
+              <span class="error-dot"></span>
+              {{ errorMsg }}
             </div>
-            <div class="btn-shine"></div>
-          </button>
+            <div v-if="successMsg" class="success-message">
+              <span class="success-dot"></span>
+              {{ successMsg }}
+            </div>
 
-          <div class="toggle-mode">
-            <button type="button" @click="isSignUp = !isSignUp" class="btn-link">
-              {{ isSignUp ? 'LOG IN TO EXISTING NODE' : 'INITIALIZE NEW ADMIN PROFILE' }}
+            <button type="submit" class="btn-primary-premium" :disabled="loading">
+              <div class="btn-content">
+                <span v-if="!loading">{{ isSignUp ? 'AUTHORIZE REGISTRATION' : 'ACCESS HUB' }}</span>
+                <span v-else class="loader-dots">
+                  <span>.</span><span>.</span><span>.</span>
+                </span>
+              </div>
+              <div class="btn-shine"></div>
             </button>
-          </div>
-        </form>
-      </div>
+
+            <div class="toggle-mode">
+              <button type="button" @click="isSignUp = !isSignUp" class="btn-link">
+                {{ isSignUp ? 'LOG IN TO EXISTING NODE' : 'INITIALIZE NEW ADMIN PROFILE' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </transition>
     </div>
   </div>
 </template>
@@ -85,6 +97,7 @@ import { ref } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useRouter } from 'vue-router';
 import DarkVeil from '../components/animations/DarkVeil.vue';
+import Lanyard from '../components/animations/Lanyard.vue';
 
 const email = ref('');
 const password = ref('');
@@ -92,6 +105,7 @@ const isSignUp = ref(false);
 const loading = ref(false);
 const errorMsg = ref('');
 const successMsg = ref('');
+const showLanyard = ref(false);
 const router = useRouter();
 
 async function handleSubmit() {
@@ -111,20 +125,30 @@ async function handleSubmit() {
       isSignUp.value = false;
     }
   } else {
+    // 🔍 AUTHENTICATION ATTEMPT
     const { error } = await supabase.auth.signInWithPassword({
       email: email.value,
       password: password.value,
     });
+
     if (error) {
       errorMsg.value = error.message;
     } else {
-      router.push('/');
+      console.log('Auth Success: Waiting for Identity Authorization...');
+      showLanyard.value = true;
+      // No more automatic redirect here!
     }
   }
   
   loading.value = false;
 }
+
+function handleAuthorized() {
+  console.log('Final Authorization Received: Redirecting to Hub...');
+  router.push('/');
+}
 </script>
+
 
 <style scoped>
 .login-container {
@@ -159,7 +183,6 @@ async function handleSubmit() {
 
 .login-card {
   padding: 56px;
-  animation: card-appear 1.4s cubic-bezier(0.16, 1, 0.3, 1);
   background: rgba(8, 8, 8, 0.5);
   backdrop-filter: blur(40px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -167,11 +190,6 @@ async function handleSubmit() {
     0 40px 120px -20px rgba(0, 0, 0, 0.8),
     inset 0 0 20px rgba(255, 255, 255, 0.02);
   border-radius: 32px;
-}
-
-@keyframes card-appear {
-  from { opacity: 0; transform: translateY(80px) scale(0.9); filter: blur(10px); }
-  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 
 .card-header {
@@ -209,6 +227,7 @@ async function handleSubmit() {
   margin-bottom: 16px;
   letter-spacing: -3px;
   background: linear-gradient(to bottom, #fff 40%, rgba(255,255,255,0.6));
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -284,15 +303,6 @@ async function handleSubmit() {
   opacity: 1;
 }
 
-/* Chrome/Safari Autofill override */
-.input-group input:-webkit-autofill,
-.input-group input:-webkit-autofill:hover, 
-.input-group input:-webkit-autofill:focus {
-  -webkit-text-fill-color: white;
-  -webkit-box-shadow: 0 0 0px 1000px rgba(15, 15, 15, 1) inset;
-  transition: background-color 5000s ease-in-out 0s;
-}
-
 .error-message, .success-message {
   font-size: 0.8rem;
   padding: 16px 20px;
@@ -313,7 +323,6 @@ async function handleSubmit() {
   color: #00FFB2;
   background: rgba(0, 255, 178, 0.08);
   border: 1px solid rgba(0, 255, 178, 0.15);
-  animation: popDown 0.4s ease;
 }
 
 .error-dot { width: 6px; height: 6px; background: #FF6B6B; border-radius: 50%; box-shadow: 0 0 10px #FF6B6B; }
@@ -346,10 +355,6 @@ async function handleSubmit() {
 .btn-primary-premium:hover {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 25px 50px -12px rgba(255, 140, 0, 0.6);
-}
-
-.btn-primary-premium:active {
-  transform: translateY(0) scale(0.98);
 }
 
 .btn-shine {
@@ -406,6 +411,25 @@ async function handleSubmit() {
 .btn-link:hover {
   color: white;
   opacity: 1;
-  text-decoration: none;
+}
+
+/* 🎭 AUTH TRANSITIONS - MORPH EFFECT */
+.card-auth-leave-active {
+  transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.card-auth-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.85);
+  filter: blur(40px) brightness(2);
+}
+
+.lanyard-fade-enter-active {
+  transition: opacity 1.2s ease-out;
+  transition-delay: 0.2s;
+}
+
+.lanyard-fade-enter-from {
+  opacity: 0;
 }
 </style>

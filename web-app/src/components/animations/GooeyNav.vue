@@ -58,11 +58,11 @@ const props = withDefaults(defineProps<{
   colors?: string[];
 }>(), {
   animationTime: 600,
-  particleCount: 10, // USER REQUESTED: 10
+  particleCount: 10,
   particleDistances: () => [80, 10],
-  particleR: 100, // USER REQUESTED: 100
-  timeVariance: 300, // USER REQUESTED: 300
-  colors: () => ['var(--color-primary)', '#FF4D00', '#FFBD2E', '#ffffff']
+  particleR: 100,
+  timeVariance: 300,
+  colors: () => ['#FF8C00', '#FF4D00', '#FFBD2E', '#ffffff']
 });
 
 const route = useRoute();
@@ -75,19 +75,28 @@ const activeIndex = ref(0);
 const noise = (n = 1) => n / 2 - Math.random() * n;
 
 const getXY = (distance: number, pointIndex: number, totalPoints: number) => {
-  const angle = ((360 + noise(8)) / totalPoints) * pointIndex * (Math.PI / 180);
+  const safeTotal = Math.max(1, totalPoints);
+  const angle = ((360 + noise(8)) / safeTotal) * pointIndex * (Math.PI / 180);
   return [distance * Math.cos(angle), distance * Math.sin(angle)];
 };
 
 const createParticle = (i: number, t: number, d: number[], r: number) => {
-  let rotate = noise(r / 10);
+  const count = Math.max(1, props.particleCount || 10);
+  const colors = props.colors.length > 0 ? props.colors : ['#FF8C00', '#ffffff'];
+  
+  const rotateVal = noise(r / 10);
+  const finalRotate = rotateVal > 0 ? (rotateVal + r / 20) * 10 : (rotateVal - r / 20) * 10;
+  
+  const colorIndex = Math.floor(Math.random() * colors.length);
+  const safeColor = colors[colorIndex] || '#FF8C00';
+
   return {
-    start: getXY(d[0], props.particleCount - i, props.particleCount),
-    end: getXY(d[1] + noise(7), props.particleCount - i, props.particleCount),
+    start: getXY(d[0], count - i, count),
+    end: getXY(d[1] + noise(7), count - i, count),
     time: t,
     scale: 1 + noise(0.2),
-    color: props.colors[Math.floor(Math.random() * props.colors.length)],
-    rotate: rotate > 0 ? (rotate + r / 20) * 10 : (rotate - r / 20) * 10
+    color: safeColor,
+    rotate: finalRotate
   };
 };
 
@@ -95,10 +104,12 @@ const makeParticles = (element: HTMLElement) => {
   if (!element) return;
   const d = props.particleDistances;
   const r = props.particleR;
-  const baseTime = props.animationTime * 2;
+  const baseTime = (props.animationTime || 600) * 2;
+  const count = Math.max(1, props.particleCount || 10);
+  const timeVar = props.timeVariance || 300;
 
-  for (let i = 0; i < props.particleCount; i++) {
-    const t = baseTime + noise(props.timeVariance * 2);
+  for (let i = 0; i < count; i++) {
+    const t = baseTime + noise(timeVar * 2);
     const p = createParticle(i, t, d, r);
 
     const particle = document.createElement('span');
@@ -119,14 +130,14 @@ const makeParticles = (element: HTMLElement) => {
     element.appendChild(particle);
 
     setTimeout(() => {
-      if (element.contains(particle)) {
+      if (element && element.contains(particle)) {
         element.removeChild(particle);
       }
     }, t);
   }
 };
 
-const updateEffectPosition = (element: HTMLElement | undefined) => {
+const updateEffectPosition = (element: HTMLElement | null | undefined) => {
   if (!element || !containerRef.value || !filterRef.value || !textRef.value) return;
   
   const containerRect = containerRef.value.getBoundingClientRect();
@@ -142,27 +153,25 @@ const updateEffectPosition = (element: HTMLElement | undefined) => {
   Object.assign(filterRef.value.style, styles);
   Object.assign(textRef.value.style, styles);
   
-  // Clone the inner text to the floating text effect layer
   const label = element.querySelector('.nav-label');
   if (label) {
     textRef.value.innerText = (label as HTMLElement).innerText;
   }
 };
 
-const handleClick = (e: MouseEvent, index: number) => {
-  // If clicking same item, just trigger particles for fun
+const handleClick = (_e: MouseEvent, index: number) => {
   activeIndex.value = index;
   
   nextTick(() => {
-    const liEl = (navRef.value?.querySelectorAll('li')[index]) as HTMLElement;
+    if (!navRef.value) return;
+    const items = navRef.value.querySelectorAll('li');
+    const liEl = items[index] as HTMLElement;
     updateEffectPosition(liEl);
     
     if (filterRef.value) {
-      // Clear old particles if any
       const oldParticles = filterRef.value.querySelectorAll('.particle');
       oldParticles.forEach(p => filterRef.value?.removeChild(p));
       
-      // Trigger animation
       filterRef.value.classList.remove('active');
       void filterRef.value.offsetWidth;
       filterRef.value.classList.add('active');
@@ -177,31 +186,35 @@ const handleClick = (e: MouseEvent, index: number) => {
   });
 };
 
-// Sync active state with Router
 watch(() => route.path, (newPath) => {
   const index = props.items.findIndex(item => item.path === newPath);
   if (index !== -1) {
     activeIndex.value = index;
     nextTick(() => {
-      const activeLi = navRef.value?.querySelectorAll('li')[index] as HTMLElement;
+      if (!navRef.value) return;
+      const items = navRef.value.querySelectorAll('li');
+      const activeLi = items[index] as HTMLElement;
       updateEffectPosition(activeLi);
     });
   }
 }, { immediate: true });
 
-let resizeObserver: ResizeObserver;
+let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
-  // Initial position
   setTimeout(() => {
-    const activeLi = navRef.value?.querySelectorAll('li')[activeIndex.value] as HTMLElement;
+    if (!navRef.value) return;
+    const items = navRef.value.querySelectorAll('li');
+    const activeLi = items[activeIndex.value] as HTMLElement;
     updateEffectPosition(activeLi);
     textRef.value?.classList.add('active');
     filterRef.value?.classList.add('active');
   }, 100);
 
   resizeObserver = new ResizeObserver(() => {
-    const currentActiveLi = navRef.value?.querySelectorAll('li')[activeIndex.value] as HTMLElement;
+    if (!navRef.value) return;
+    const items = navRef.value.querySelectorAll('li');
+    const currentActiveLi = items[activeIndex.value] as HTMLElement;
     updateEffectPosition(currentActiveLi);
   });
 
@@ -219,7 +232,6 @@ onUnmounted(() => {
 .gooey-nav-container {
   position: relative;
   width: 100%;
-  --time: 1200ms; /* Default full cycle time */
 }
 
 .gooey-svg-def {
@@ -240,7 +252,7 @@ nav ul {
 
 li {
   position: relative;
-  z-index: 5; /* Keep real links above the blob background */
+  z-index: 5;
 }
 
 .nav-anchor {
@@ -251,13 +263,13 @@ li {
   text-decoration: none;
   color: var(--color-text-dim);
   border-radius: 16px;
-  transition: color 0.4s ease;
+  transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
   font-weight: 600;
   background: transparent;
 }
 
 li.active .nav-anchor {
-  color: transparent !important; /* Hide real text, show effect text */
+  color: transparent !important;
 }
 
 li.active .nav-icon {
@@ -273,7 +285,6 @@ li.active .nav-icon {
   opacity: 0.6;
 }
 
-/* EFFECT BLOB (THE LIQUID) */
 .effect {
   position: absolute;
   pointer-events: none;
@@ -292,11 +303,10 @@ li.active .nav-icon {
   box-shadow: 0 10px 30px -5px rgba(255, 140, 0, 0.4);
 }
 
-/* THE FLOATING TEXT (Perfect Aligned) */
 .effect.text {
   display: flex;
   align-items: center;
-  padding-left: 56px; /* Icon width (20) + gap (16) + left padding (20) */
+  padding-left: 56px;
   color: white;
   font-weight: 700;
   background: transparent;
@@ -314,7 +324,6 @@ li.active .nav-icon {
   to { opacity: 1; transform: translateX(0); }
 }
 
-/* PARTICLES INTERNAL */
 :deep(.particle) {
   position: absolute;
   top: 50%;
@@ -333,7 +342,7 @@ li.active .nav-icon {
   margin: -16px 0 0 -16px;
   background: var(--color);
   border-radius: 50%;
-  transform: translate3d(var(--start-x), var(--start-y), 0) scale(var(--scale));
+  transform: translate3d(var(--start-x), var(--start-y), 0) scale(var(--scale)) rotate(var(--rotate));
   animation: particle-move var(--time) ease-out forwards;
 }
 

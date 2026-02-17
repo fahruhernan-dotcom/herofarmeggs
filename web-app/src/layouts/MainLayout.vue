@@ -3,18 +3,14 @@
     <!-- 🌌 AURORA BACKGROUND -->
     <div class="aurora-static"></div>
 
-    <!-- Persistent Sidebar Navigation -->
-    <aside class="sidebar glass-panel">
-      <div class="sidebar-header">
-        <div class="logo-text hero-font">HERO FARM</div>
-        <div class="badge">OWNER HUB</div>
-      </div>
-      
-      <div class="nav-container-wrapper">
-        <GooeyNav :items="navLinks" />
-      </div>
+    <!-- Persistent Sidebar Navigation (CardNav Implementation) -->
+    <aside class="sidebar">
+      <CardNav 
+        :items="navCards" 
+        class="main-card-nav"
+      />
 
-      <div class="sidebar-footer">
+      <div class="sidebar-footer glass-panel">
         <div class="user-info">
           <div class="pfp"></div>
           <div class="user-details">
@@ -43,7 +39,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
-import GooeyNav from '../components/animations/GooeyNav.vue';
+import CardNav from '../components/animations/CardNav.vue';
 import { 
   LayoutDashboardIcon, 
   PackageIcon, 
@@ -55,11 +51,21 @@ import {
 const authStore = useAuthStore();
 const router = useRouter();
 
-const navLinks = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboardIcon },
-  { path: '/stock', label: 'Inventory', icon: PackageIcon },
-  { path: '/sales', label: 'Sales Trace', icon: ShoppingCartIcon },
-  { path: '/customers', label: 'CRM Base', icon: UsersIcon },
+const navCards = [
+  {
+    label: 'Operations',
+    links: [
+      { label: 'Dashboard', path: '/', icon: LayoutDashboardIcon },
+      { label: 'Inventory', path: '/stock', icon: PackageIcon }
+    ]
+  },
+  {
+    label: 'Revenue',
+    links: [
+      { label: 'Sales Trace', path: '/sales', icon: ShoppingCartIcon },
+      { label: 'CRM Database', path: '/customers', icon: UsersIcon }
+    ]
+  }
 ];
 
 async function handleLogout() {
@@ -91,38 +97,15 @@ async function handleLogout() {
 
 /* SIDEBAR */
 .sidebar {
-  width: 300px;
+  width: 320px;
   display: flex;
   flex-direction: column;
-  padding: 32px 24px;
+  gap: 16px;
   z-index: 10;
   flex-shrink: 0;
 }
 
-.sidebar-header {
-  margin-bottom: 48px;
-}
-
-.logo-text {
-  font-size: 1.8rem;
-  letter-spacing: -0.05em;
-  color: var(--color-primary);
-  line-height: 1;
-}
-
-.badge {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 800;
-  padding: 4px 8px;
-  background: rgba(255, 140, 0, 0.1);
-  color: var(--color-primary);
-  border-radius: 4px;
-  margin-top: 8px;
-  letter-spacing: 0.1em;
-}
-
-.nav-container-wrapper {
+.main-card-nav {
   flex: 1;
 }
 
@@ -131,6 +114,7 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  padding: 24px;
 }
 
 .user-info {
@@ -153,21 +137,26 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 12px;
+  gap: 12px;
+  padding: 14px;
   background: rgba(255, 62, 62, 0.05);
-  border: 1px solid rgba(255, 62, 62, 0.1);
+  border: 1px solid rgba(255, 62, 62, 0.15);
   color: var(--color-error);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-family: var(--font-headline);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
   transition: var(--transition-smooth);
 }
 
 .btn-logout:hover {
   background: rgba(255, 62, 62, 0.1);
+  border-color: rgba(255, 62, 62, 0.3);
   transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 62, 62, 0.1);
 }
 
 /* WORKSPACE */
@@ -177,7 +166,8 @@ async function handleLogout() {
   flex-direction: column;
   z-index: 10;
   overflow-y: auto;
-  padding: 16px;
+  padding: 40px;
+  scroll-behavior: smooth;
 }
 
 /* Page Transitions */

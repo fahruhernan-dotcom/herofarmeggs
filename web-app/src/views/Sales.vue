@@ -56,12 +56,12 @@
 
           <div class="quantity-input-group">
             <div class="form-group">
-              <label>Quantity (Butir)</label>
+              <label>Quantity (Pack / 10 Butir)</label>
               <input 
                 type="number" 
                 v-model.number="form.quantity" 
                 min="1" 
-                :max="maxStock"
+                :max="maxPacks"
                 class="premium-input qty-box"
               />
             </div>
@@ -110,7 +110,7 @@
               <tbody>
                 <tr>
                   <td>{{ selectedEggLabel }}</td>
-                  <td>{{ form.quantity }}</td>
+                  <td>{{ form.quantity }} Pack ({{ form.quantity * 10 }} Butir)</td>
                   <td>{{ currentPrice.toLocaleString() }}</td>
                   <td>{{ currentTotal.toLocaleString() }}</td>
                 </tr>
@@ -171,10 +171,13 @@ async function fetchData() {
 
 const heroStock = computed(() => inventory.value.find(i => i.id === 'hero_size')?.current_stock ?? 0);
 const standardStock = computed(() => inventory.value.find(i => i.id === 'standard_size')?.current_stock ?? 0);
+
 const maxStock = computed(() => inventory.value.find(i => i.id === selectedEggType.value)?.current_stock ?? 0);
+const maxPacks = computed(() => Math.floor(maxStock.value / 10));
+
 const currentPrice = computed(() => inventory.value.find(i => i.id === selectedEggType.value)?.base_price_per_pack ?? 0);
 const currentTotal = computed(() => form.quantity * currentPrice.value);
-const isFormValid = computed(() => form.quantity > 0 && form.quantity <= maxStock.value);
+const isFormValid = computed(() => form.quantity > 0 && form.quantity <= maxPacks.value);
 
 const selectedCustomerName = computed(() => {
   if (!form.customer_id) return 'Guest Customer';
@@ -215,15 +218,17 @@ async function confirmSale() {
       subtotal: currentTotal.value
     });
 
-    // 3. Update Inventory & Log
-    const newStock = maxStock.value - form.quantity;
+    // 3. Update Inventory & Log (Subtract in Butir)
+    const quantityInButir = form.quantity * 10;
+    const newStock = maxStock.value - quantityInButir;
+    
     await supabase.from('inventory').update({ current_stock: newStock }).eq('id', selectedEggType.value);
     
     await supabase.from('stock_logs').insert({
       egg_type: selectedEggType.value,
-      change: -form.quantity,
+      change: -quantityInButir,
       log_type: 'sale',
-      notes: `Sale to ${selectedCustomerName.value} (#${sale.id})`
+      notes: `Sale to ${selectedCustomerName.value} (${form.quantity} Pack / ${quantityInButir} Butir) (#${sale.id})`
     });
 
     alert('Transaction Successful!');
