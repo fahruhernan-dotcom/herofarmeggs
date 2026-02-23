@@ -27,8 +27,8 @@
           <div class="card-header">
             <div class="header-glow"></div>
             <h4 class="brand-tag">SECURITY FOUNDATION</h4>
-            <h1 class="hero-font main-title">{{ isSignUp ? 'CREATE ADMIN' : 'HERO FARM' }}</h1>
-            <p class="subtitle">{{ isSignUp ? 'Initialize your elite access.' : 'Access the hub of premium standards.' }}</p>
+            <h1 class="hero-font main-title">HERO FARM</h1>
+            <p class="subtitle">Access the hub of premium standards.</p>
           </div>
 
           <form @submit.prevent="handleSubmit" class="login-form">
@@ -72,19 +72,13 @@
 
             <button type="submit" class="btn-primary-premium" :disabled="loading">
               <div class="btn-content">
-                <span v-if="!loading">{{ isSignUp ? 'AUTHORIZE REGISTRATION' : 'ACCESS HUB' }}</span>
+                <span v-if="!loading">ACCESS HUB</span>
                 <span v-else class="loader-dots">
                   <span>.</span><span>.</span><span>.</span>
                 </span>
               </div>
               <div class="btn-shine"></div>
             </button>
-
-            <div class="toggle-mode">
-              <button type="button" @click="isSignUp = !isSignUp" class="btn-link">
-                {{ isSignUp ? 'LOG IN TO EXISTING NODE' : 'INITIALIZE NEW ADMIN PROFILE' }}
-              </button>
-            </div>
           </form>
         </div>
       </transition>
@@ -101,7 +95,6 @@ import Lanyard from '../components/animations/Lanyard.vue';
 
 const email = ref('');
 const password = ref('');
-const isSignUp = ref(false);
 const loading = ref(false);
 const errorMsg = ref('');
 const successMsg = ref('');
@@ -113,31 +106,17 @@ async function handleSubmit() {
   errorMsg.value = '';
   successMsg.value = '';
   
-  if (isSignUp.value) {
-    const { error } = await supabase.auth.signUp({
-      email: email.value,
-      password: password.value,
-    });
-    if (error) {
-      errorMsg.value = error.message;
-    } else {
-      successMsg.value = 'Registration successful! You can now login.';
-      isSignUp.value = false;
-    }
-  } else {
-    // 🔍 AUTHENTICATION ATTEMPT
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.value,
-      password: password.value,
-    });
+  // 🔍 AUTHENTICATION ATTEMPT
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.value,
+    password: password.value,
+  });
 
-    if (error) {
-      errorMsg.value = error.message;
-    } else {
-      console.log('Auth Success: Waiting for Identity Authorization...');
-      showLanyard.value = true;
-      // No more automatic redirect here!
-    }
+  if (error) {
+    errorMsg.value = error.message;
+  } else {
+    console.log('Auth Success: Waiting for Identity Authorization...');
+    showLanyard.value = true;
   }
   
   loading.value = false;

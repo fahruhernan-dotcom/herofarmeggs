@@ -5,34 +5,23 @@ Folder ini dirancang untuk merapikan alur kerja (workflow) pembuatan konten meng
 ## 📂 Struktur Workflow
 
 1.  **`01_mentahan/`**: 
-    - Taruh semua hasil generate AI di sini (gambar, teks, atau draft).
-    - Jangan diedit di dalam folder ini. Ini adalah "dumping ground" hasil asli.
+    - Dumping ground untuk semua hasil pancingan AI (Raw Output).
+    - Berisi file `ASSET_SELECTION.md` sebagai panduan kurasi.
 2.  **`02_seleksi/`**: 
-    - Pindahkan hanya gambar/konten terbaik dari folder `01_mentahan` ke sini.
-    - Gunakan folder ini untuk menyeleksi mana yang akan diproses lebih lanjut.
+    - Folder kurasi yang rapi, dibagi per kategori:
+      - `01_produk/`: Foto fokus produk (telur, kuning telur).
+      - `02_edukasi/`: Infografis dan konten manfaat.
+      - `03_lifestyle/`: Suasana farm, masakan, dan ads creative.
+      - `04_branding/`: Aset identitas brand (logo, ikon).
 3.  **`03_siap_upload/`**: 
-    - Tempat aset yang sudah ditambahkan watermark, teks, atau sudah melalui proses editing akhir.
-    - Folder ini adalah sumber utama untuk posting ke IG/TikTok/WA.
+    - Aset final yang sudah siap diposting (watermarked/optimized).
 
-## 🛠️ Cara Seleksi & Merapikan
-- Jika ada banyak kategori, buat sub-folder di dalam `02_seleksi/` dengan nama:
-  - `/product/` (Foto telur/mika)
-  - `/lifestyle/` (Contoh masakan/suasana farm)
-  - `/edu/` (Infografis/edukasi)
+## 🏷️ Pola Penamaan
+Format: `HF_[KATEGORI]_[DESKRIPSI_ATAU_TGL].ext`
 
-## 🏷️ Pola Penamaan (Rekomendasi)
-Agar pencarian lebih mudah, gunakan format:
-`HF_[KATEGORI]_[TGL]_[NO].jpg`
-
-- **HF**: Hero Farm (Kode Project)
-- **KATEGORI**: 
-  - `PROD` (Produk)
-  - `EDU` (Edukasi)
-  - `LIFE` (Lifestyle/BTS)
-- **TGL**: format `DDMMYY`
-- **NO**: 001, 002, dst.
-
-*Contoh: `HF_PROD_170226_01.jpg`*
+- **HF**: Hero Farm
+- **KATEGORI**: `PROD`, `EDU`, `LIFE`, `BRAND`
+- **DESKRIPSI**: Nama singkat aset (misal: `Hero_Yolk`) atau tanggal (`170226_01`)
 
 ---
 *Gunakan sistem ini agar aset AI Anda tidak berantakan dan mudah ditemukan saat ingin posting.*

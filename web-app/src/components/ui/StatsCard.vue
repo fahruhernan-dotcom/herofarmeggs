@@ -1,5 +1,5 @@
 <template>
-  <div class="glass-panel stat-card" :class="{ 'warning': isLow }">
+  <div class="glass-panel stat-card" :class="status">
     <div class="card-glow"></div>
     <div class="card-content">
       <div class="header">
@@ -14,21 +14,24 @@
       </div>
       <div class="footer">
         <span class="subtext">{{ subtext }}</span>
-        <div v-if="isLow" class="alert-icon">⚠️</div>
+        <div v-if="status === 'critical'" class="alert-icon">⚠️</div>
+        <div v-if="status === 'low'" class="alert-icon">⚡</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{
+withDefaults(defineProps<{
   label: string;
   value: string | number;
   unit?: string;
   subtext?: string;
   trend?: number;
-  isLow?: boolean;
-}>();
+  status?: 'healthy' | 'low' | 'critical';
+}>(), {
+  status: 'healthy'
+});
 </script>
 
 <style scoped>
@@ -37,6 +40,7 @@ defineProps<{
   padding: 24px;
   overflow: hidden;
   min-height: 160px;
+  transition: var(--transition-smooth);
 }
 
 .card-content {
@@ -103,7 +107,11 @@ defineProps<{
 .trend.up { background: rgba(0, 255, 157, 0.1); color: var(--color-success); }
 .trend.down { background: rgba(255, 62, 62, 0.1); color: var(--color-error); }
 
-.warning { border-color: rgba(255, 140, 0, 0.4); }
+/* Status Styles */
+.stat-card.critical { border-color: rgba(255, 66, 66, 0.5); box-shadow: inset 0 0 20px rgba(255, 66, 66, 0.05); }
+.stat-card.low { border-color: rgba(255, 215, 0, 0.4); box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.05); }
+.stat-card.healthy { border-color: var(--glass-border); }
+
 .alert-icon { font-size: 1.2rem; }
 
 .card-glow {
@@ -112,7 +120,10 @@ defineProps<{
   left: 0;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at top right, rgba(255, 140, 0, 0.05), transparent 70%);
+  background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.03), transparent 70%);
   z-index: 1;
 }
+
+.critical .card-glow { background: radial-gradient(circle at top right, rgba(255, 66, 66, 0.15), transparent 70%); }
+.low .card-glow { background: radial-gradient(circle at top right, rgba(255, 215, 0, 0.1), transparent 70%); }
 </style>

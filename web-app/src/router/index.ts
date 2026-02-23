@@ -40,9 +40,33 @@ const router = createRouter({
                     meta: { requiresAuth: true }
                 },
                 {
+                    path: 'orders',
+                    name: 'orders',
+                    component: () => import('../views/Orders.vue'),
+                    meta: { requiresAuth: true }
+                },
+                {
+                    path: 'suppliers',
+                    name: 'suppliers',
+                    component: () => import('../views/Suppliers.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
+                    path: 'employees',
+                    name: 'employees',
+                    component: () => import('../views/Employees.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
                     path: 'stickers',
                     name: 'stickers',
                     component: () => import('../views/StickerDesign.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
+                    path: 'profile',
+                    name: 'profile',
+                    component: () => import('../views/Profile.vue'),
                     meta: { requiresAuth: true }
                 }
             ]
@@ -50,17 +74,38 @@ const router = createRouter({
     ]
 })
 
-// Authentication Guard
+import { useAuthStore } from '../stores/auth';
+
+// Navigation Guard
 router.beforeEach(async (to, _from, next) => {
-    const { data: { session } } = await supabase.auth.getSession()
+    const authStore = useAuthStore();
 
-    if (to.meta.requiresAuth && !session) {
-        next('/login')
-    } else if (to.path === '/login' && session) {
-        next('/')
-    } else {
-        next()
+    // Ensure auth is initialized
+    if (authStore.loading) {
+        await authStore.initialize();
     }
-})
 
-export default router
+    const isLoggedIn = !!authStore.user;
+
+    // 1. If trying to access login page while logged in, redirect home
+    if (to.path === '/login' && isLoggedIn) {
+        return next('/');
+    }
+
+    // 2. If trying to access protected page while NOT logged in, redirect login
+    if (to.meta.requiresAuth && !isLoggedIn) {
+        return next('/login');
+    }
+
+    // 3. If trying to access admin page and user is NOT admin, redirect home
+    if (to.meta.requiresAdmin) {
+        const isAdmin = authStore.profile?.role === 'admin';
+        if (!isAdmin) {
+            return next('/');
+        }
+    }
+
+    next();
+});
+
+export default router;

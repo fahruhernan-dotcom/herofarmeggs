@@ -14,7 +14,7 @@
         <div class="user-info">
           <div class="pfp"></div>
           <div class="user-details">
-            <p class="user-name">Owner</p>
+            <p class="user-name">{{ authStore.profile?.full_name || authStore.user?.email?.split('@')[0] || 'Loading...' }}</p>
             <p class="user-email text-dim">{{ authStore.user?.email }}</p>
           </div>
         </div>
@@ -37,6 +37,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 import CardNav from '../components/animations/CardNav.vue';
@@ -45,34 +46,63 @@ import {
   PackageIcon, 
   ShoppingCartIcon, 
   UsersIcon, 
-  LogOutIcon 
+  LogOutIcon,
+  ClipboardListIcon,
+  TruckIcon,
+  SettingsIcon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
 const router = useRouter();
 
-const navCards = [
-  {
-    label: 'Operations',
-    links: [
-      { label: 'Dashboard', path: '/', icon: LayoutDashboardIcon },
-      { label: 'Inventory', path: '/stock', icon: PackageIcon }
-    ]
-  },
-  {
-    label: 'Revenue',
-    links: [
-      { label: 'Sales Trace', path: '/sales', icon: ShoppingCartIcon },
-      { label: 'CRM Database', path: '/customers', icon: UsersIcon }
-    ]
-  },
-  {
-    label: 'Brand Assets',
-    links: [
-      { label: 'Sticker Studio', path: '/stickers', icon: PackageIcon }
-    ]
+const navCards = computed(() => {
+  const role = authStore.profile?.role || 'staff';
+  
+  const sections = [
+    {
+      label: 'Operations',
+      links: [
+        { label: 'Dashboard', path: '/', icon: LayoutDashboardIcon },
+        { label: 'Inventory', path: '/stock', icon: PackageIcon }
+      ]
+    },
+    {
+      label: 'Revenue',
+      links: [
+        { label: 'New Order', path: '/sales', icon: ShoppingCartIcon },
+        { label: 'Order List', path: '/orders', icon: ClipboardListIcon },
+        { label: 'CRM Database', path: '/customers', icon: UsersIcon },
+        { label: 'Suppliers', path: '/suppliers', icon: TruckIcon }
+      ]
+    }
+  ];
+
+  // Admin Only Sections
+  if (role === 'admin') {
+    sections.push({
+      label: 'Management',
+      links: [
+        { label: 'Team Members', path: '/employees', icon: UsersIcon }
+      ]
+    });
+    
+    sections.push({
+      label: 'Brand Assets',
+      links: [
+        { label: 'Sticker Studio', path: '/stickers', icon: PackageIcon }
+      ]
+    });
   }
-];
+
+  sections.push({
+    label: 'Account',
+    links: [
+      { label: 'My Profile', path: '/profile', icon: SettingsIcon }
+    ]
+  });
+
+  return sections;
+});
 
 async function handleLogout() {
   await authStore.signOut();
@@ -104,12 +134,16 @@ async function handleLogout() {
 /* SIDEBAR */
 .sidebar {
   width: 320px;
+  height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
   gap: 16px;
   z-index: 10;
   flex-shrink: 0;
+  overflow-y: auto;
+  scrollbar-width: none; /* Hide for clean look */
 }
+.sidebar::-webkit-scrollbar { display: none; }
 
 .main-card-nav {
   flex: 1;
