@@ -65,6 +65,12 @@ const navCards = [
       { label: 'Sales Trace', path: '/sales', icon: ShoppingCartIcon },
       { label: 'CRM Database', path: '/customers', icon: UsersIcon }
     ]
+  },
+  {
+    label: 'Brand Assets',
+    links: [
+      { label: 'Sticker Studio', path: '/stickers', icon: PackageIcon }
+    ]
   }
 ];
 

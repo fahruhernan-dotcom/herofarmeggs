@@ -38,6 +38,12 @@ const router = createRouter({
                     name: 'customers',
                     component: () => import('../views/Customers.vue'),
                     meta: { requiresAuth: true }
+                },
+                {
+                    path: 'stickers',
+                    name: 'stickers',
+                    component: () => import('../views/StickerDesign.vue'),
+                    meta: { requiresAuth: true }
                 }
             ]
         }
