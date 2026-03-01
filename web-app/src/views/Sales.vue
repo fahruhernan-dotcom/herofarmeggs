@@ -521,7 +521,8 @@ async function confirmSale() {
         customer_id: finalCustomerId,
         total_price: totalSnapshot,
         payment_status: form.paymentStatus,
-        fulfillment_status: 'processing'
+        fulfillment_status: 'processing',
+        stock_reserved: true
       })
       .select()
       .single();
@@ -553,8 +554,20 @@ async function confirmSale() {
           egg_type: eggId,
           change: -quantityInButir,
           log_type: 'sale',
-          notes: `Sale #${sale.id} (${item.quantity} Pack)`
+          notes: `Sale #${sale.id.toString().substring(0,6).toUpperCase()} (${item.quantity} Pack)`
         });
+
+        // Price Override Audit
+        if (item.price !== eggInInv.base_price_per_pack) {
+          const uemail = await supabase.auth.getUser().then(r => r.data.user?.email || 'Unknown');
+          await supabase.from('price_overrides').insert({
+            sale_id: sale.id,
+            product_id: eggId,
+            original_price: eggInInv.base_price_per_pack,
+            override_price: item.price,
+            override_by: uemail
+          });
+        }
       }
     }
 

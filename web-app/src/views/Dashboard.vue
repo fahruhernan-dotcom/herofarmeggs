@@ -19,21 +19,21 @@
         label="Hero Size Availability" 
         :value="heroStock" 
         unit="Butir"
-        subtext="Premium Grade A+"
+        :subtext="`Physical: ${heroStock + reservedHero} | Reserved: ${reservedHero}`"
         :status="getDashboardStatus(heroStock)"
       />
       <StatsCard 
         label="Standard Size Availability" 
         :value="standardStock" 
         unit="Butir"
-        subtext="Community Retail Grade"
+        :subtext="`Physical: ${standardStock + reservedStandard} | Reserved: ${reservedStandard}`"
         :status="getDashboardStatus(standardStock)"
       />
       <StatsCard 
         label="Telur Asin Availability" 
         :value="saltedStock" 
         unit="Butir"
-        subtext="Premium Salted Grade"
+        :subtext="`Physical: ${saltedStock + reservedSalted} | Reserved: ${reservedSalted}`"
         :status="getDashboardStatus(saltedStock)"
       />
       <StatsCard 
@@ -164,34 +164,63 @@
       <div v-if="showResetModal" class="modal-overlay" @click.self="closeResetModal">
         <div class="modal-card glass-panel animate-pop reset-modal">
           <div class="modal-header">
-            <h2 class="hero-font text-error">CRITICAL ACTION</h2>
-            <p class="text-dim">This will permanently delete all Sales, Orders, and Stock Logs.</p>
+            <h2 class="hero-font text-error">CRITICAL: SYSTEM RESET</h2>
+            <p class="text-dim">Follow the steps below to securely reset your operational data.</p>
           </div>
 
-          <div class="warning-box">
-             <AlertTriangleIcon class="icon-lg text-error" />
-             <p>All transaction history, digital invoices, and audit trails will be wiped. Inventory levels will remain as they are.</p>
-          </div>
+          <div class="reset-stepper">
+            <!-- STEP 1: WARNING -->
+            <div v-if="resetStep === 1" class="reset-step animate-slide">
+              <div class="warning-box">
+                <AlertTriangleIcon class="icon-lg text-error" />
+                <p>This action will permanently wipe all Sales, Orders, and Stock Logs. Inventory and Customer profiles will be reset to zero.</p>
+              </div>
+              <button class="btn-primary w-full mt-6" @click="resetStep = 2">BEGIN RESET PROCESS</button>
+            </div>
 
-          <div class="form-group mt-6">
-            <label>Type <span class="text-error font-bold">RESET</span> to confirm</label>
-            <input 
-              type="text" 
-              v-model="resetConfirmation" 
-              placeholder="Case-sensitive" 
-              class="reset-input"
-            />
-          </div>
+            <!-- STEP 2: BACKUP -->
+            <div v-if="resetStep === 2" class="reset-step animate-slide">
+              <div class="backup-box glass-panel">
+                <DownloadIcon class="icon-lg text-primary" />
+                <h4 class="font-bold mt-4">Security Requirement</h4>
+                <p class="text-dim text-sm">You must export a full backup before the reset option becomes available.</p>
+                <button class="btn-primary-glow mt-6" @click="exportBackupData">
+                  <FileJsonIcon class="icon-sm" />
+                  <span>EXPORT BACKUP JSON</span>
+                </button>
+              </div>
+              <div v-if="backupStatus === 'downloaded'" class="confirm-backup-row mt-6">
+                <label class="checkbox-container">
+                  <input type="checkbox" v-model="backupDownloaded" />
+                  <span class="checkmark"></span>
+                  <span class="cb-label">I have safely stored the backup file.</span>
+                </label>
+              </div>
+              <button class="btn-secondary w-full mt-6" v-if="backupDownloaded" @click="resetStep = 3">PROCEED TO FINAL STEP</button>
+            </div>
 
-          <div class="modal-actions mt-8">
-            <button class="btn-secondary" @click="closeResetModal">CANCEL</button>
-            <button 
-              class="btn-error" 
-              :disabled="resetConfirmation !== 'RESET' || reseting"
-              @click="handleSystemReset"
-            >
-              {{ reseting ? 'WIPING DATA...' : 'PERMANENTLY RESET DATA' }}
-            </button>
+            <!-- STEP 3: FINAL CONFIRM -->
+            <div v-if="resetStep === 3" class="reset-step animate-slide">
+              <div class="form-group">
+                <label>TYPE <span class="text-error font-bold">RESET SYSTEM</span> TO WIPE DATA</label>
+                <input 
+                  type="text" 
+                  v-model="resetConfirmation" 
+                  placeholder="Case-sensitive" 
+                  class="reset-input"
+                />
+              </div>
+              <div class="modal-actions mt-8">
+                <button class="btn-secondary" @click="resetStep = 2">BACK</button>
+                <button 
+                  class="btn-error" 
+                  :disabled="resetConfirmation !== 'RESET SYSTEM' || reseting"
+                  @click="handleSystemReset"
+                >
+                  {{ reseting ? 'WIPING DATA...' : 'PERMANENTLY RESET DATA' }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -209,7 +238,9 @@ import {
   AlertTriangleIcon, 
   ClockIcon, 
   TruckIcon, 
-  ArrowRightIcon 
+  ArrowRightIcon,
+  DownloadIcon,
+  FileJsonIcon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
@@ -224,6 +255,9 @@ const customers = ref<any[]>([]);
 
 // Reset Logic
 const showResetModal = ref(false);
+const resetStep = ref(1);
+const backupStatus = ref<'idle' | 'downloading' | 'downloaded'>('idle');
+const backupDownloaded = ref(false);
 const resetConfirmation = ref('');
 const reseting = ref(false);
 
@@ -248,7 +282,7 @@ async function fetchData() {
   // Fetch ALL sales with status info
   const { data: sales } = await supabase
     .from('sales')
-    .select('id, total_price, payment_status, fulfillment_status, created_at')
+    .select('id, total_price, payment_status, fulfillment_status, stock_reserved, created_at, sale_items(egg_type, quantity)')
     .order('created_at', { ascending: false });
   if (sales) allSales.value = sales;
 
@@ -297,6 +331,36 @@ const onDeliveryCount = computed(() =>
 const lowStockCount = computed(() => 
   inventory.value.filter(i => i.item_type !== 'packaging' && i.current_stock <= 20).length
 );
+
+const reservedHero = computed(() => {
+  let count = 0;
+  allSales.value.filter(s => s.stock_reserved).forEach(s => {
+    s.sale_items?.forEach((i: any) => {
+      if (i.egg_type === 'hero_size') count += (i.quantity || 0) * 10;
+    });
+  });
+  return count;
+});
+
+const reservedStandard = computed(() => {
+  let count = 0;
+  allSales.value.filter(s => s.stock_reserved).forEach(s => {
+    s.sale_items?.forEach((i: any) => {
+      if (i.egg_type === 'standard_size') count += (i.quantity || 0) * 10;
+    });
+  });
+  return count;
+});
+
+const reservedSalted = computed(() => {
+  let count = 0;
+  allSales.value.filter(s => s.stock_reserved).forEach(s => {
+    s.sale_items?.forEach((i: any) => {
+      if (i.egg_type === 'salted_egg') count += (i.quantity || 0) * 10;
+    });
+  });
+  return count;
+});
 
 // Last 7 days sales chart
 const last7DaysSales = computed(() => {
@@ -354,11 +418,50 @@ function getDashboardStatus(stock: number) {
 
 function closeResetModal() {
   showResetModal.value = false;
+  resetStep.value = 1;
+  backupStatus.value = 'idle';
+  backupDownloaded.value = false;
   resetConfirmation.value = '';
 }
 
+async function exportBackupData() {
+  backupStatus.value = 'downloading';
+  try {
+    const { data: sales } = await supabase.from('sales').select('*, sale_items(*)');
+    const { data: customers } = await supabase.from('customers').select('*');
+    const { data: stockLogs } = await supabase.from('stock_logs').select('*');
+    
+    const backupData = {
+      exported_at: new Date().toISOString(),
+      sales: sales || [],
+      customers: customers || [],
+      stock_logs: stockLogs || []
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
+    
+    a.href = url;
+    a.download = `hero-farm-backup-${dateStr}-${timeStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    backupStatus.value = 'downloaded';
+  } catch (err: any) {
+    alert('Backup failed: ' + err.message);
+    backupStatus.value = 'idle';
+  }
+}
+
 async function handleSystemReset() {
-  if (resetConfirmation.value !== 'RESET') return;
+  if (resetConfirmation.value !== 'RESET SYSTEM') return;
   
   reseting.value = true;
   
@@ -766,6 +869,51 @@ onMounted(() => {
 .reset-input:focus {
   border-color: #ff4242;
   outline: none;
+}
+
+/* RESET STEPPER */
+.reset-stepper {
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.backup-box {
+  padding: 32px;
+  background: rgba(255, 140, 0, 0.03);
+  border: 1px dashed rgba(255, 140, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  justify-content: center;
+  user-select: none;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.cb-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+}
+
+.animate-slide {
+  animation: slideLeft 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes slideLeft {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .animate-pop { animation: popIn 0.3s cubic-bezier(0.23, 1, 0.32, 1); }

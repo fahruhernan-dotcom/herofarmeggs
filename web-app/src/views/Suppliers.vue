@@ -81,10 +81,53 @@
 
       <div v-if="suppliers.length === 0" class="empty-state glass-panel">
         <PackageIcon class="empty-icon" />
-        <h3>No suppliers registered</h3>
-        <p>Your supply chain is empty. Add your first vendor to track HPP and stock logs.</p>
+        <h3>No active suppliers</h3>
+        <p>Your supply chain is clean. Add your first vendor to track HPP and stock logs.</p>
       </div>
     </div>
+
+    <!-- DELETED ARCHIVE (ADMIN ONLY) -->
+    <section v-if="authStore.isAdmin" class="archive-section mt-12">
+      <div class="archive-header" @click="showArchive = !showArchive">
+        <div class="ah-left">
+          <ArchiveIcon class="icon-sm" />
+          <h3 class="subtitle">DELETED RECORDS ARCHIVE</h3>
+          <span class="archive-count">{{ deletedSuppliers.length }}</span>
+        </div>
+        <ChevronDownIcon class="archive-chevron" :class="{ open: showArchive }" />
+      </div>
+
+      <div v-if="showArchive" class="archive-content animate-slide-down">
+        <div v-if="deletedSuppliers.length === 0" class="archive-empty">
+          No deleted suppliers found.
+        </div>
+        <div v-else class="archive-table-wrap glass-panel">
+          <table class="archive-table">
+            <thead>
+              <tr>
+                <th>Vendor Name</th>
+                <th>Category</th>
+                <th>Deleted At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="vendor in deletedSuppliers" :key="vendor.id">
+                <td class="font-bold">{{ vendor.name }}</td>
+                <td>{{ vendor.category }}</td>
+                <td class="text-dim text-xs">{{ new Date(vendor.deleted_at).toLocaleString() }}</td>
+                <td class="actions">
+                  <button class="btn-restore" @click="restoreSupplier(vendor)">
+                    <RefreshCcwIcon class="icon-xs" />
+                    <span>RESTORE</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
     <!-- ADD/EDIT MODAL -->
     <Teleport to="body">
@@ -204,11 +247,18 @@ import {
   HistoryIcon,
   SparklesIcon,
   PlusIcon,
-  Trash2Icon
+  Trash2Icon,
+  ArchiveIcon,
+  ChevronDownIcon,
+  RefreshCcwIcon
 } from 'lucide-vue-next';
 import CustomDropdown from '../components/ui/CustomDropdown.vue';
+import { useAuthStore } from '../stores/auth';
 
+const authStore = useAuthStore();
 const suppliers = ref<any[]>([]);
+const deletedSuppliers = ref<any[]>([]);
+const showArchive = ref(false);
 const showAddModal = ref(false);
 const submitting = ref(false);
 const inventory = ref<any[]>([]);
@@ -245,6 +295,7 @@ async function fetchData() {
     const { data: vendorData, error: vError } = await supabase
       .from('suppliers')
       .select('*')
+      .eq('is_deleted', false)
       .order('name');
     
     if (vError) {
@@ -253,6 +304,16 @@ async function fetchData() {
     }
     
     suppliers.value = vendorData || [];
+
+    // Fetch deleted if admin
+    if (authStore.isAdmin) {
+      const { data: delData } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('is_deleted', true)
+        .order('deleted_at', { ascending: false });
+      deletedSuppliers.value = delData || [];
+    }
     console.log(`Loaded ${suppliers.value.length} vendors`);
 
     const { data: invData, error: iError } = await supabase.from('inventory').select('*');
@@ -322,13 +383,36 @@ async function submitSupplier() {
 }
 
 async function deleteSupplier(vendor: any) {
-  if (!confirm(`Are you sure you want to delete "${vendor.name}"? This action cannot be undone.`)) return;
+  if (!confirm(`Move "${vendor.name}" to archive? You can restore it later.`)) return;
   
   submitting.value = true;
   try {
     const { error } = await supabase
       .from('suppliers')
-      .delete()
+      .update({ 
+        is_deleted: true,
+        deleted_at: new Date().toISOString()
+      })
+      .eq('id', vendor.id);
+
+    if (error) {
+      alert('Error: ' + error.message);
+    } else {
+      fetchData();
+    }
+  } catch (err: any) {
+    alert('System Error: ' + err.message);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function restoreSupplier(vendor: any) {
+  submitting.value = true;
+  try {
+    const { error } = await supabase
+      .from('suppliers')
+      .update({ is_deleted: false, deleted_at: null })
       .eq('id', vendor.id);
 
     if (error) {
@@ -794,6 +878,112 @@ watch(() => route.path, () => {
 }
 
 .section-desc { font-size: 0.75rem; color: var(--color-text-dim); }
+
+/* ARCHIVE STYLES */
+.mt-12 { margin-top: 48px; }
+
+.archive-section {
+  border-top: 1px solid var(--glass-border);
+  padding-top: 32px;
+}
+
+.archive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.archive-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ah-left { display: flex; align-items: center; gap: 12px; }
+.ah-left .subtitle { margin: 0; font-size: 0.8rem; letter-spacing: 0.1em; color: var(--color-text-dim); }
+
+.archive-count {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--color-text-dim);
+}
+
+.archive-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-dim);
+  transition: transform 0.3s ease;
+}
+
+.archive-chevron.open { transform: rotate(180deg); }
+
+.archive-content { margin-top: 16px; }
+
+.archive-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--color-text-dim);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.archive-table-wrap { overflow: hidden; }
+
+.archive-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.archive-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.archive-table td {
+  padding: 12px 16px;
+  font-size: 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.btn-restore {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 255, 157, 0.1);
+  border: 1px solid rgba(0, 255, 157, 0.2);
+  color: var(--color-success);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-restore:hover {
+  background: var(--color-success);
+  color: black;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .catalog-list {
   display: flex;

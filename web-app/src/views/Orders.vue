@@ -90,8 +90,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="order in filteredOrders" :key="order.id" class="order-row">
-              <td class="order-id">#INV-{{ order.id.toString().slice(-6).toUpperCase() }}</td>
+            <tr v-for="order in filteredOrders" :key="order.id" class="order-row" :class="{ 'is-voided': order.payment_status === 'voided' }">
+              <td class="order-id">
+                <span v-if="order.payment_status === 'voided'" class="void-watermark">VOID</span>
+                #INV-{{ order.id.toString().slice(-6).toUpperCase() }}
+              </td>
               <td class="customer-info">
                 <div class="cust-name">{{ order.customers?.name || 'Guest Customer' }}</div>
                 <div class="cust-phone text-dim">{{ order.customers?.whatsapp_number || '-' }}</div>
@@ -237,9 +240,19 @@
                 </thead>
                 <tbody>
                   <tr v-for="item in selectedOrder.sale_items" :key="item.id">
-                    <td class="item-label">{{ formatEggType(item.egg_type) }}</td>
+                    <td class="item-label">
+                      {{ formatEggType(item.egg_type) }}
+                      <span v-if="hasPriceOverride(selectedOrder, item.egg_type)" class="override-badge" title="Price manually overridden">★ EDITED</span>
+                    </td>
                     <td>{{ item.quantity }} Pack</td>
-                    <td>Rp {{ (item.unit_price || 0).toLocaleString() }}</td>
+                    <td>
+                      <div class="price-stack">
+                        <span class="actual-price">Rp {{ (item.unit_price || 0).toLocaleString() }}</span>
+                        <span v-if="hasPriceOverride(selectedOrder, item.egg_type)" class="original-price strike">
+                          Rp {{ getOriginalPrice(selectedOrder, item.egg_type).toLocaleString() }}
+                        </span>
+                      </div>
+                    </td>
                     <td class="item-subtotal">Rp {{ (item.subtotal || 0).toLocaleString() }}</td>
                   </tr>
                 </tbody>
@@ -251,8 +264,14 @@
                 </tfoot>
               </table>
 
+              <!-- VOIDED WATERMARK IN MODAL -->
+              <div v-if="selectedOrder.payment_status === 'voided'" class="void-banner-modal">
+                <BanIcon class="icon-md" />
+                <span>THIS TRANSACTION HAS BEEN VOIDED</span>
+              </div>
+
               <!-- Quick Status Update in Modal -->
-              <div class="modal-quick-actions">
+              <div class="modal-quick-actions" v-if="selectedOrder.payment_status !== 'voided'">
                 <h4 class="quick-title">Quick Status Update</h4>
                 <div class="quick-btns-row">
                   <button
@@ -278,6 +297,16 @@
                     {{ opt.label }}
                   </button>
                 </div>
+              </div>
+
+              <!-- VOID ACTION (ADMIN ONLY) -->
+              <div class="void-action-section" v-if="authStore.profile?.role === 'admin' && selectedOrder.payment_status !== 'voided'">
+                <button class="btn-void" @click="handleVoid(selectedOrder)" :disabled="updatingStatus">
+                  <LockIcon v-if="!updatingStatus" class="icon-sm" />
+                  <Loader2Icon v-else class="icon-sm spin" />
+                  <span>VOID TRANSACTION</span>
+                </button>
+                <p class="void-hint">Restores stock and subtracts from customer total spent.</p>
               </div>
             </div>
 
@@ -312,6 +341,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, markRaw } from 'vue';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/auth';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
 import {
   PlusIcon,
@@ -329,8 +359,12 @@ import {
   BanIcon,
   CircleCheckBigIcon,
   WalletIcon,
-  TimerIcon
+  TimerIcon,
+  LockIcon,
+  Loader2Icon
 } from 'lucide-vue-next';
+
+const authStore = useAuthStore();
 
 // ─── STATE ─────────────────────────
 const orders = ref<any[]>([]);
@@ -491,13 +525,15 @@ async function fetchOrders() {
       total_price,
       payment_status,
       fulfillment_status,
+      stock_reserved,
       created_at,
       customers!sales_customer_id_fkey (
         name,
         whatsapp_number,
         address
       ),
-      sale_items (*)
+      sale_items (*),
+      price_overrides (*)
     `)
     .order('created_at', { ascending: false });
 
@@ -557,9 +593,97 @@ function formatStatusLabel(status: string) {
     cancelled: 'Cancelled',
     processing: 'Processing',
     on_delivery: 'On Delivery',
-    delivered: 'Delivered'
+    delivered: 'Delivered',
+    voided: 'Voided'
   };
   return map[status] || status;
+}
+
+function hasPriceOverride(order: any, eggType: string) {
+  if (!order || !order.price_overrides) return false;
+  return order.price_overrides.some((o: any) => o.product_id === eggType);
+}
+
+function getOriginalPrice(order: any, eggType: string) {
+  if (!order || !order.price_overrides) return 0;
+  const override = order.price_overrides.find((o: any) => o.product_id === eggType);
+  return override ? Number(override.original_price) : 0;
+}
+
+async function handleCancelOrderStock(order: any) {
+  if (!order.stock_reserved) return;
+
+  const items = order.sale_items || [];
+  for (const item of items) {
+    const quantityInButir = (item.quantity || 0) * 10;
+    
+    // Increment Egg Stock
+    const { data: inv } = await supabase.from('inventory').select('current_stock').eq('id', item.egg_type).single();
+    if (inv) {
+      await supabase.from('inventory').update({ 
+        current_stock: inv.current_stock + quantityInButir 
+      }).eq('id', item.egg_type);
+    }
+
+    // Log restoration
+    await supabase.from('stock_logs').insert({
+      egg_type: item.egg_type,
+      change: quantityInButir,
+      log_type: 'void_return',
+      notes: `Stock Restored from Cancelled/Void Order #${order.id.toString().slice(-6).toUpperCase()}`
+    });
+  }
+
+  // Restore Supply Stock (1 Box, 1 Sticker, 1 Card per pack)
+  const totalPacks = items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0);
+  const supplies = ['packaging_standard', 'sticker_label', 'mini_card'];
+  for (const sId of supplies) {
+    const { data: sInv } = await supabase.from('inventory').select('current_stock').eq('id', sId).single();
+    if (sInv) {
+      await supabase.from('inventory').update({ 
+        current_stock: sInv.current_stock + totalPacks 
+      }).eq('id', sId);
+    }
+  }
+
+  // We do not do the UPDATE to sales table here inside the loop. 
+  // We will let the caller update `stock_reserved` and `cancelled_at` together with the status change.
+}
+
+async function handleVoid(order: any) {
+  if (!confirm('CRITICAL ACTION: This will void the invoice, RESTORE ALL STOCK, and subtract from customer spent. Proceed?')) return;
+  
+  updatingStatus.value = true;
+  try {
+    // 1. Mark as Voided
+    const { error: voidError } = await supabase
+      .from('sales')
+      .update({ payment_status: 'voided', stock_reserved: false, cancelled_at: new Date().toISOString() })
+      .eq('id', order.id);
+
+    if (voidError) throw voidError;
+
+    // 2. Restore Stock (Eggs & Supplies)
+    if (order.stock_reserved) {
+      await handleCancelOrderStock(order);
+      order.stock_reserved = false;
+    }
+
+    // 3. Sync Customer Totals (RPC)
+    if (order.customer_id) {
+      await supabase.rpc('sync_customer_totals', { target_customer_id: order.customer_id });
+    }
+
+    // Refresh data
+    await fetchOrders();
+    selectedOrder.value = orders.value.find(o => o.id === order.id);
+
+    showToast('Transaction Voided', 'Stock restored and LTV updated.', 'success');
+  } catch (err: any) {
+    showToast('Void Failed', err.message, 'error');
+  } finally {
+    updatingStatus.value = false;
+  }
 }
 
 function viewOrderDetails(order: any) {
@@ -589,9 +713,28 @@ async function updateStatus(newValue: string) {
   const field = statusMenu.value.type === 'payment' ? 'payment_status' : 'fulfillment_status';
 
   try {
+    const updatePayload: any = { [field]: newValue };
+    
+    // Clear reservation if delivered
+    if (field === 'fulfillment_status' && newValue === 'delivered') {
+      updatePayload.stock_reserved = false;
+    }
+    
+    // Clear reservation and restore stock if cancelled
+    if ((field === 'payment_status' && newValue === 'cancelled') || 
+        (field === 'fulfillment_status' && newValue === 'cancelled')) {
+      updatePayload.stock_reserved = false;
+      updatePayload.cancelled_at = new Date().toISOString();
+      
+      if (order.stock_reserved) {
+        await handleCancelOrderStock(order);
+        order.stock_reserved = false;
+      }
+    }
+
     const { error } = await supabase
       .from('sales')
-      .update({ [field]: newValue })
+      .update(updatePayload)
       .eq('id', order.id);
 
     if (error) throw error;
@@ -625,9 +768,28 @@ async function quickUpdateStatus(order: any, field: string, newValue: string) {
   updatingStatus.value = true;
 
   try {
+    const updatePayload: any = { [field]: newValue };
+    
+    // Clear reservation if delivered
+    if (field === 'fulfillment_status' && newValue === 'delivered') {
+      updatePayload.stock_reserved = false;
+    }
+    
+    // Clear reservation and restore stock if cancelled / voided
+    if ((field === 'payment_status' && (newValue === 'cancelled' || newValue === 'voided')) || 
+        (field === 'fulfillment_status' && newValue === 'cancelled')) {
+      updatePayload.stock_reserved = false;
+      updatePayload.cancelled_at = new Date().toISOString();
+      
+      if (order.stock_reserved) {
+        await handleCancelOrderStock(order);
+        order.stock_reserved = false;
+      }
+    }
+
     const { error } = await supabase
       .from('sales')
-      .update({ [field]: newValue })
+      .update(updatePayload)
       .eq('id', order.id);
 
     if (error) throw error;
@@ -1280,6 +1442,30 @@ onUnmounted(() => {
 .item-label { font-weight: 700; }
 .item-subtotal { font-weight: 800; text-align: right; }
 
+.override-badge {
+  font-size: 0.55rem;
+  background: rgba(255, 170, 0, 0.15);
+  color: #FFAA00;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+  font-weight: 800;
+  border: 1px solid rgba(255, 170, 0, 0.3);
+}
+
+.price-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.original-price.strike {
+  font-size: 0.65rem;
+  color: var(--color-text-dim);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
 .total-row td { padding: 20px 12px; font-weight: 700; color: var(--color-text-dim); }
 .grand-total { font-size: 1.6rem; font-weight: 900; color: var(--color-primary); text-align: right; }
 
@@ -1415,4 +1601,87 @@ onUnmounted(() => {
 .toast-slide-leave-active { transition: all 0.3s ease; }
 .toast-slide-enter-from { opacity: 0; transform: translateX(40px); }
 .toast-slide-leave-to { opacity: 0; transform: translateX(40px); }
+
+/* VOIDED STYLES */
+.order-row.is-voided td {
+  text-decoration: line-through;
+  opacity: 0.5;
+  color: var(--color-error);
+}
+
+.order-row.is-voided .actions {
+  text-decoration: none !important;
+  opacity: 1 !important;
+}
+
+.void-watermark {
+  position: absolute;
+  font-size: 0.6rem;
+  font-weight: 900;
+  background: var(--color-error);
+  color: white;
+  padding: 1px 4px;
+  border-radius: 4px;
+  transform: rotate(-15deg);
+  left: -20px;
+  top: -10px;
+  pointer-events: none;
+}
+
+.void-banner-modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 62, 62, 0.1);
+  border: 1px dashed var(--color-error);
+  color: var(--color-error);
+  padding: 24px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.void-action-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--glass-border);
+  text-align: center;
+}
+
+.btn-void {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 66, 66, 0.1);
+  border: 1px solid rgba(255, 66, 66, 0.3);
+  color: var(--color-error);
+  padding: 14px;
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-void:hover:not(:disabled) {
+  background: var(--color-error);
+  color: white;
+  box-shadow: 0 0 20px rgba(255, 66, 66, 0.4);
+}
+
+.btn-void:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.void-hint {
+  font-size: 0.7rem;
+  color: var(--color-text-dim);
+  margin-top: 10px;
+  font-style: italic;
+}
 </style>

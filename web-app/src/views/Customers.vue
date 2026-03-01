@@ -53,18 +53,66 @@
 
         <div class="card-footer">
           <button class="btn-lite" @click="viewHistory(customer)">View History</button>
-          <button class="btn-icon" @click="editCustomer(customer)">
-            <Edit3Icon class="icon-sm" />
-          </button>
+          <div class="footer-actions">
+            <button class="btn-icon" @click="editCustomer(customer)">
+              <Edit3Icon class="icon-sm" />
+            </button>
+            <button class="btn-icon del" @click="deleteCustomer(customer)">
+              <Trash2Icon class="icon-sm" />
+            </button>
+          </div>
         </div>
       </div>
 
       <div v-if="filteredCustomers.length === 0" class="empty-state glass-panel">
         <UsersIcon class="empty-icon" />
-        <h3>No clients found</h3>
+        <h3>No active clients found</h3>
         <p>Start by registering your first premium customer.</p>
       </div>
     </div>
+
+    <!-- DELETED ARCHIVE (ADMIN ONLY) -->
+    <section v-if="authStore.isAdmin" class="archive-section mt-12">
+      <div class="archive-header" @click="showArchive = !showArchive">
+        <div class="ah-left">
+          <ArchiveIcon class="icon-sm" />
+          <h3 class="subtitle">DELETED RECORDS ARCHIVE</h3>
+          <span class="archive-count">{{ deletedCustomers.length }}</span>
+        </div>
+        <ChevronDownIcon class="archive-chevron" :class="{ open: showArchive }" />
+      </div>
+
+      <div v-if="showArchive" class="archive-content animate-slide-down">
+        <div v-if="deletedCustomers.length === 0" class="archive-empty">
+          No deleted clients found.
+        </div>
+        <div v-else class="archive-table-wrap glass-panel">
+          <table class="archive-table">
+            <thead>
+              <tr>
+                <th>Client Name</th>
+                <th>Phone</th>
+                <th>Deleted At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="customer in deletedCustomers" :key="customer.id">
+                <td class="font-bold">{{ customer.name }}</td>
+                <td class="text-dim">{{ customer.whatsapp_number }}</td>
+                <td class="text-dim text-xs">{{ new Date(customer.deleted_at).toLocaleString() }}</td>
+                <td class="actions">
+                  <button class="btn-restore" @click="restoreCustomer(customer)">
+                    <RefreshCcwIcon class="icon-xs" />
+                    <span>RESTORE</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
     <!-- ADD/EDIT MODAL -->
     <Teleport to="body">
@@ -163,10 +211,18 @@ import {
   UsersIcon, 
   SearchIcon, 
   Edit3Icon,
-  RefreshCwIcon
+  RefreshCwIcon,
+  ArchiveIcon,
+  ChevronDownIcon,
+  RefreshCcwIcon,
+  Trash2Icon
 } from 'lucide-vue-next';
+import { useAuthStore } from '../stores/auth';
 
+const authStore = useAuthStore();
 const customers = ref<any[]>([]);
+const deletedCustomers = ref<any[]>([]);
+const showArchive = ref(false);
 const searchQuery = ref('');
 const showAddModal = ref(false);
 const showHistoryModal = ref(false);
@@ -187,11 +243,21 @@ async function fetchData() {
   const { data, error } = await supabase
     .from('customers')
     .select('*')
+    .eq('is_deleted', false)
     .order('created_at', { ascending: false });
   
   if (error) console.error('CRM Error:', error);
   
   if (data) customers.value = data;
+
+  if (authStore.isAdmin) {
+    const { data: delData } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('is_deleted', true)
+      .order('deleted_at', { ascending: false });
+    deletedCustomers.value = delData || [];
+  }
 }
 
 const filteredCustomers = computed(() => {
@@ -250,6 +316,51 @@ async function submitCustomer() {
   } catch (err: any) {
     console.error('Save Error:', err);
     alert('Failed to save customer: ' + (err.message || 'Unknown error'));
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function deleteCustomer(customer: any) {
+  if (!confirm(`Move "${customer.name}" to archive? You can restore it later.`)) return;
+  
+  submitting.value = true;
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .update({ 
+        is_deleted: true,
+        deleted_at: new Date().toISOString()
+      })
+      .eq('id', customer.id);
+
+    if (error) {
+      alert('Error: ' + error.message);
+    } else {
+      fetchData();
+    }
+  } catch (err: any) {
+    alert('System Error: ' + err.message);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function restoreCustomer(customer: any) {
+  submitting.value = true;
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .update({ is_deleted: false, deleted_at: null })
+      .eq('id', customer.id);
+
+    if (error) {
+      alert('Error: ' + error.message);
+    } else {
+      fetchData();
+    }
+  } catch (err: any) {
+    alert('System Error: ' + err.message);
   } finally {
     submitting.value = false;
   }
@@ -643,4 +754,120 @@ onUnmounted(() => {
 .mt-8 { margin-top: 32px; }
 .text-right { text-align: right; }
 .w-full { width: 100%; }
+
+.footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon.del:hover {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+/* ARCHIVE STYLES */
+.mt-12 { margin-top: 48px; }
+
+.archive-section {
+  border-top: 1px solid var(--glass-border);
+  padding-top: 32px;
+}
+
+.archive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.archive-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ah-left { display: flex; align-items: center; gap: 12px; }
+.ah-left .subtitle { margin: 0; font-size: 0.8rem; letter-spacing: 0.1em; color: var(--color-text-dim); }
+
+.archive-count {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--color-text-dim);
+}
+
+.archive-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-dim);
+  transition: transform 0.3s ease;
+}
+
+.archive-chevron.open { transform: rotate(180deg); }
+
+.archive-content { margin-top: 16px; }
+
+.archive-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--color-text-dim);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.archive-table-wrap { overflow: hidden; }
+
+.archive-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.archive-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.archive-table td {
+  padding: 12px 16px;
+  font-size: 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.btn-restore {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 255, 157, 0.1);
+  border: 1px solid rgba(0, 255, 157, 0.2);
+  color: var(--color-success);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-restore:hover {
+  background: var(--color-success);
+  color: black;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 </style>

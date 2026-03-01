@@ -33,14 +33,19 @@
         </transition>
       </router-view>
     </main>
+
+    <!-- Global Toasts -->
+    <GlobalToast ref="globalToast" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
+import { supabase } from '../lib/supabase';
 import CardNav from '../components/animations/CardNav.vue';
+import GlobalToast from '../components/ui/GlobalToast.vue';
 import { 
   LayoutDashboardIcon, 
   PackageIcon, 
@@ -55,6 +60,8 @@ import {
 
 const authStore = useAuthStore();
 const router = useRouter();
+const globalToast = ref<InstanceType<typeof GlobalToast> | null>(null);
+let inventorySubscription: any = null;
 
 const navCards = computed(() => {
   const sections = [
@@ -107,6 +114,44 @@ async function handleLogout() {
   await authStore.signOut();
   router.push('/login');
 }
+
+onMounted(() => {
+  // Setup Realtime Subscription for Inventory Alerts
+  inventorySubscription = supabase
+    .channel('public:inventory')
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inventory' }, payload => {
+      const { new: newRec, old: oldRec } = payload;
+      
+      // Stock dropped condition
+      if (newRec.stock_quantity < oldRec.stock_quantity) {
+        
+        // Critical Threshold for Eggs
+        if (newRec.name.includes('Telur Hero') && newRec.stock_quantity <= 150 && oldRec.stock_quantity > 150) {
+          globalToast.value?.addToast({
+            type: 'error',
+            title: 'CRITICAL STOCK ALERT',
+            message: `Hero Eggs running low! Only ${newRec.stock_quantity} trays remaining.`
+          });
+        }
+        
+        // Warning Threshold for Packaging
+        if (newRec.name.includes('Paper Box') && newRec.stock_quantity <= 500 && oldRec.stock_quantity > 500) {
+          globalToast.value?.addToast({
+            type: 'warning',
+            title: 'Supply Warning',
+            message: `Packaging boxes below 500 units (${newRec.stock_quantity} left). Time to restock.`
+          });
+        }
+      }
+    })
+    .subscribe();
+});
+
+onUnmounted(() => {
+  if (inventorySubscription) {
+    supabase.removeChannel(inventorySubscription);
+  }
+});
 </script>
 
 <style scoped>

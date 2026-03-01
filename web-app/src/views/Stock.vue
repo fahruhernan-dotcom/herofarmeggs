@@ -183,9 +183,15 @@
               />
             </div>
 
-            <div class="form-group">
-              <label>Amount (Butir)</label>
-              <input type="number" v-model.number="form.change" placeholder="e.g. 100" required />
+            <div class="form-row">
+              <div class="form-group">
+                <label>Amount Recv/Change (Butir)</label>
+                <input type="number" v-model.number="form.change" placeholder="e.g. 100" required />
+              </div>
+              <div v-if="form.log_type === 'arrival'" class="form-group">
+                <label>Damaged / Broken</label>
+                <input type="number" v-model.number="form.damaged" placeholder="e.g. 5" />
+              </div>
             </div>
 
             <div v-if="form.log_type === 'arrival'" class="form-group price-arrival-group animate-slide">
@@ -208,6 +214,14 @@
                   </button>
                 </div>
               </div>
+            </div>
+            
+            <div v-if="form.log_type === 'arrival' && form.damaged > 0" class="form-group info-box animate-slide">
+              <label>Effective HPP per Butir</label>
+              <div class="calc-result">
+                Rp {{ calculateEffectiveEggCost().toLocaleString('id-ID') }}
+              </div>
+              <p class="text-dim mini-text">Formula: (Price × Total) ÷ (Total - Damaged)</p>
             </div>
 
             <div class="form-group">
@@ -284,6 +298,23 @@
             <div class="form-group">
               <label>Harga Jual / Retail (Per Pack)</label>
               <input type="number" v-model.number="editForm.base_price_per_pack" required />
+            </div>
+
+            <div class="form-group info-box mt-4">
+              <label>Price Evolution History</label>
+              <div v-if="loadingHistory" class="text-dim mini-text">Loading records...</div>
+              <div v-else-if="priceHistory.length === 0" class="text-dim mini-text">No price changes recorded.</div>
+              <div v-else class="history-mini-list">
+                <div v-for="ph in priceHistory" :key="ph.id" class="ph-row">
+                  <span class="ph-type" :class="ph.price_type">{{ ph.price_type.toUpperCase() }}</span>
+                  <div class="ph-details">
+                    <span class="ph-old">Rp {{ ph.old_price?.toLocaleString('id-ID') }}</span>
+                    <span class="ph-arr">→</span>
+                    <span class="ph-new">Rp {{ ph.new_price?.toLocaleString('id-ID') }}</span>
+                  </div>
+                  <span class="ph-date text-dim">{{ formatTime(ph.changed_at) }}</span>
+                </div>
+              </div>
             </div>
 
             <div class="modal-actions">
@@ -384,6 +415,9 @@ const showEditModal = ref(false);
 const showPackagingModal = ref(false);
 const submitting = ref(false);
 
+const priceHistory = ref<any[]>([]);
+const loadingHistory = ref(false);
+
 const eggInventory = computed(() => inventory.value.filter(i => i.item_type !== 'packaging'));
 const supplyInventory = computed(() => inventory.value.filter(i => i.item_type === 'packaging'));
 
@@ -424,6 +458,7 @@ const form = reactive({
   egg_type: 'hero_size',
   log_type: 'arrival',
   change: 0,
+  damaged: 0,
   purchase_price: 0,
   supplier: '',
   notes: ''
@@ -437,7 +472,9 @@ const editForm = reactive({
   cost_per_egg: 0,
   cost_per_packaging: 0,
   cost_per_sticker: 0,
-  cost_per_card: 0
+  cost_per_card: 0,
+  old_base_price: 0,
+  old_cost_price: 0
 });
 
 const packForm = reactive({
@@ -495,6 +532,8 @@ function openEditProduct(item: any) {
   editForm.id = item.id;
   editForm.label = item.label;
   editForm.base_price_per_pack = item.base_price_per_pack;
+  editForm.old_base_price = item.base_price_per_pack;
+  editForm.old_cost_price = item.cost_price || 0;
   editForm.cost_per_egg = item.cost_per_egg || 0;
   
   // Use either the item's stored value or the latest from global supply list
@@ -503,10 +542,26 @@ function openEditProduct(item: any) {
   editForm.cost_per_card = latestCard || item.cost_per_card || 0;
   
   showEditModal.value = true;
+  
+  // Fetch price history
+  loadingHistory.value = true;
+  priceHistory.value = [];
+  supabase
+    .from('price_history')
+    .select('*')
+    .eq('product_id', item.id)
+    .order('changed_at', { ascending: false })
+    .limit(5)
+    .then(({ data }) => {
+      if (data) priceHistory.value = data;
+      loadingHistory.value = false;
+    });
 }
 
 async function saveProductEdit() {
   submitting.value = true;
+  const newCostPrice = (editForm.cost_per_egg * 10) + editForm.cost_per_packaging + editForm.cost_per_sticker + editForm.cost_per_card;
+
   const { error } = await supabase
     .from('inventory')
     .update({
@@ -515,12 +570,34 @@ async function saveProductEdit() {
       cost_per_packaging: editForm.cost_per_packaging,
       cost_per_sticker: editForm.cost_per_sticker,
       cost_per_card: editForm.cost_per_card,
-      cost_price: (editForm.cost_per_egg * 10) + editForm.cost_per_packaging + editForm.cost_per_sticker + editForm.cost_per_card,
+      cost_price: newCostPrice,
       updated_at: new Date().toISOString()
     })
     .eq('id', editForm.id);
 
   if (!error) {
+    // Audit Price Changes
+    const authorName = authStore.profile?.full_name || 'Admin';
+    if (editForm.base_price_per_pack !== editForm.old_base_price) {
+      await supabase.from('price_history').insert({
+        product_id: editForm.id,
+        price_type: 'selling',
+        old_price: editForm.old_base_price,
+        new_price: editForm.base_price_per_pack,
+        changed_by: authorName
+      });
+    }
+
+    if (newCostPrice !== editForm.old_cost_price) {
+      await supabase.from('price_history').insert({
+        product_id: editForm.id,
+        price_type: 'hpp',
+        old_price: editForm.old_cost_price,
+        new_price: newCostPrice,
+        changed_by: authorName
+      });
+    }
+
     showEditModal.value = false;
     fetchData();
   } else {
@@ -607,23 +684,44 @@ async function submitPackagingPurchase() {
   }
 }
 
+function calculateEffectiveEggCost() {
+  if (form.log_type !== 'arrival') return 0;
+  const totalCost = form.change * form.purchase_price;
+  const goodQty = form.change - (form.damaged || 0);
+  if (goodQty <= 0) return 0;
+  return Math.round(totalCost / goodQty);
+}
+
 async function submitAdjustment() {
   submitting.value = true;
   
   // 1. Determine direction
   let finalChange = form.change;
-  if (form.log_type === 'sorting_waste' && finalChange > 0) {
+  let effectiveEggCost = form.purchase_price;
+  let wasteAmount = form.damaged || 0;
+
+  if (form.log_type === 'arrival') {
+    if (wasteAmount > 0) {
+      finalChange = form.change - wasteAmount; // actual good eggs added to inventory
+      effectiveEggCost = calculateEffectiveEggCost(); // new HPP
+    }
+  } else if (form.log_type === 'sorting_waste' && finalChange > 0) {
     finalChange = -finalChange;
   }
 
   // 2. Insert Log
-  const finalNotes = form.supplier ? `[${form.supplier}] ${form.notes}` : form.notes;
+  const initialNotes = form.supplier ? `[${form.supplier}] ${form.notes}` : form.notes;
+  let finalNotes = initialNotes;
+  
+  if (form.log_type === 'arrival' && wasteAmount > 0) {
+    finalNotes = `${initialNotes} (Waste: ${wasteAmount} butir)`.trim();
+  }
 
   const { error: logError } = await supabase.from('stock_logs').insert({
     egg_type: form.egg_type,
     change: finalChange,
     log_type: form.log_type,
-    unit_price: form.log_type === 'arrival' ? form.purchase_price : 0,
+    unit_price: form.log_type === 'arrival' ? effectiveEggCost : 0,
     notes: finalNotes
   });
 
@@ -640,9 +738,9 @@ async function submitAdjustment() {
 
     // If arrival with price, update cost_per_egg and recalculate HPP
     if (form.log_type === 'arrival' && form.purchase_price > 0 && currentItem) {
-      updatePayload.cost_per_egg = form.purchase_price;
+      updatePayload.cost_per_egg = effectiveEggCost;
       // Recalculate total cost_price
-      updatePayload.cost_price = (form.purchase_price * 10) + 
+      updatePayload.cost_price = (effectiveEggCost * 10) + 
         (currentItem.cost_per_packaging || 0) + 
         (currentItem.cost_per_sticker || 0) + 
         (currentItem.cost_per_card || 0);
@@ -655,6 +753,7 @@ async function submitAdjustment() {
 
     showAdjustmentModal.value = false;
     form.change = 0;
+    form.damaged = 0;
     form.purchase_price = 0;
     form.supplier = '';
     form.notes = '';
@@ -1209,6 +1308,51 @@ watch(() => route.path, () => {
   color: var(--color-text-dim);
   text-transform: uppercase;
 }
+
+.history-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.ph-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-bottom: 1px dashed var(--glass-border);
+  font-size: 0.75rem;
+}
+
+.ph-row:last-child {
+  border-bottom: none;
+}
+
+.ph-type {
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.6rem;
+}
+
+.ph-type.selling { background: rgba(0, 255, 157, 0.1); color: var(--color-success); }
+.ph-type.hpp { background: rgba(255, 140, 0, 0.1); color: var(--color-primary); }
+
+.ph-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ph-old { text-decoration: line-through; color: var(--color-error); }
+.ph-arr { color: var(--color-text-dim); }
+.ph-new { color: white; font-weight: 700; }
+.ph-date { font-size: 0.6rem; }
+
 
 .form-group select, .form-group input, .form-group textarea {
   background: rgba(255, 255, 255, 0.05);
