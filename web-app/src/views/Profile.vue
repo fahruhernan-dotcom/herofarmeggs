@@ -6,6 +6,12 @@
         <h1 class="hero-font">Security Clearance</h1>
         <p class="text-dim">Validate identity and update system access credentials.</p>
       </div>
+      <div class="header-actions">
+        <div class="status-badge" :class="{ 'warning': authStore.loading }">
+          <span class="dot" :class="{ 'online pulse': !authStore.loading }"></span>
+          {{ authStore.loading ? 'SYNCING...' : 'ENCRYPTED CONNECTION' }}
+        </div>
+      </div>
     </header>
 
     <div class="profile-grid">
@@ -39,109 +45,158 @@
         </div>
       </section>
 
-      <!-- RIGHT: SECURITY TERMINAL -->
-      <section class="security-terminal glass-panel">
-        <div class="terminal-header">
-          <div class="t-line"></div>
-          <h3 class="panel-title"><LockIcon class="icon-sm" /> Update Credentials</h3>
-        </div>
-        
-        <form @submit.prevent="handleUpdatePassword" class="security-form">
-          <!-- OLD PASSWORD -->
-          <div class="form-group">
-            <label class="tactical-label">Current Authentication (Old Password)</label>
-            <div class="password-field">
-              <KeyIcon class="field-icon" />
-              <input 
-                :type="pwdState.showOld ? 'text' : 'password'" 
-                v-model="pwdForm.oldPassword" 
-                placeholder="Required for verification" 
-                class="premium-input"
-                required
-              />
-              <button type="button" class="eye-btn" @click="pwdState.showOld = !pwdState.showOld">
-                <EyeIcon v-if="!pwdState.showOld" class="icon-xs" />
-                <EyeOffIcon v-else class="icon-xs" />
+      <!-- RIGHT: CONFIGURATION AREA -->
+      <div class="terminal-stack">
+        <!-- IDENTITY TERMINAL -->
+        <section class="security-terminal glass-panel identity-terminal">
+          <div class="terminal-header">
+            <div class="t-line blue"></div>
+            <h3 class="panel-title"><UserIcon class="icon-sm" /> Personal Identity</h3>
+          </div>
+          
+          <form @submit.prevent="handleUpdateProfile" class="security-form">
+            <div class="form-group">
+              <label class="tactical-label">Public Identifier (Full Name)</label>
+              <div class="password-field">
+                <Edit3Icon class="field-icon" />
+                <input 
+                  type="text" 
+                  v-model="profileForm.fullName" 
+                  placeholder="Enter your name" 
+                  class="premium-input"
+                  required
+                />
+              </div>
+            </div>
+
+            <Transition name="fade">
+              <div v-if="profileMsg.error" class="tactical-msg error">
+                <div class="msg-accent"></div>
+                <AlertCircleIcon class="msg-icon" /> <span>{{ profileMsg.error }}</span>
+              </div>
+            </Transition>
+
+            <Transition name="fade">
+              <div v-if="profileMsg.success" class="tactical-msg success">
+                <div class="msg-accent"></div>
+                <CheckCircleIcon class="msg-icon" /> <span>{{ profileMsg.success }}</span>
+              </div>
+            </Transition>
+
+            <div class="form-actions">
+              <button type="submit" class="btn-tactical-glow secondary" :disabled="profileLoading">
+                <SaveIcon v-if="!profileLoading" class="icon-sm" />
+                <div v-else class="spinner-sm"></div>
+                <span>{{ profileLoading ? 'SYNCING IDENTITY...' : 'SAVE IDENTITY CHANGES' }}</span>
               </button>
             </div>
+          </form>
+        </section>
+
+        <!-- SECURITY TERMINAL -->
+        <section class="security-terminal glass-panel">
+          <div class="terminal-header">
+            <div class="t-line"></div>
+            <h3 class="panel-title"><LockIcon class="icon-sm" /> Securing Credentials</h3>
           </div>
-
-          <div class="divider-line"></div>
-
-          <!-- NEW PASSWORD -->
-          <div class="form-row">
+          
+          <form @submit.prevent="handleUpdatePassword" class="security-form">
+            <!-- OLD PASSWORD -->
             <div class="form-group">
-              <label class="tactical-label">New Access Key</label>
+              <label class="tactical-label">Current Authentication (Old Password)</label>
               <div class="password-field">
-                <ShieldIcon class="field-icon" />
+                <KeyIcon class="field-icon" />
                 <input 
-                  :type="pwdState.showNew ? 'text' : 'password'" 
-                  v-model="pwdForm.newPassword" 
-                  placeholder="Min. 6 characters" 
+                  :type="pwdState.showOld ? 'text' : 'password'" 
+                  v-model="pwdForm.oldPassword" 
+                  placeholder="Required for verification" 
                   class="premium-input"
                   required
                 />
-                <button type="button" class="eye-btn" @click="pwdState.showNew = !pwdState.showNew">
-                  <EyeIcon v-if="!pwdState.showNew" class="icon-xs" />
+                <button type="button" class="eye-btn" @click="pwdState.showOld = !pwdState.showOld">
+                  <EyeIcon v-if="!pwdState.showOld" class="icon-xs" />
                   <EyeOffIcon v-else class="icon-xs" />
                 </button>
               </div>
             </div>
 
-            <div class="form-group">
-              <label class="tactical-label">Confirm New Key</label>
-              <div class="password-field">
-                <CheckIcon class="field-icon" />
-                <input 
-                  :type="pwdState.showConfirm ? 'text' : 'password'" 
-                  v-model="pwdForm.confirmPassword" 
-                  placeholder="Repeat new key" 
-                  class="premium-input"
-                  required
-                />
-                <button type="button" class="eye-btn" @click="pwdState.showConfirm = !pwdState.showConfirm">
-                  <EyeIcon v-if="!pwdState.showConfirm" class="icon-xs" />
-                  <EyeOffIcon v-else class="icon-xs" />
-                </button>
+            <div class="divider-line"></div>
+
+            <!-- NEW PASSWORD -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="tactical-label">New Access Key</label>
+                <div class="password-field">
+                  <ShieldIcon class="field-icon" />
+                  <input 
+                    :type="pwdState.showNew ? 'text' : 'password'" 
+                    v-model="pwdForm.newPassword" 
+                    placeholder="Min. 6 characters" 
+                    class="premium-input"
+                    required
+                  />
+                  <button type="button" class="eye-btn" @click="pwdState.showNew = !pwdState.showNew">
+                    <EyeIcon v-if="!pwdState.showNew" class="icon-xs" />
+                    <EyeOffIcon v-else class="icon-xs" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="tactical-label">Confirm New Key</label>
+                <div class="password-field">
+                  <CheckIcon class="field-icon" />
+                  <input 
+                    :type="pwdState.showConfirm ? 'text' : 'password'" 
+                    v-model="pwdForm.confirmPassword" 
+                    placeholder="Repeat new key" 
+                    class="premium-input"
+                    required
+                  />
+                  <button type="button" class="eye-btn" @click="pwdState.showConfirm = !pwdState.showConfirm">
+                    <EyeIcon v-if="!pwdState.showConfirm" class="icon-xs" />
+                    <EyeOffIcon v-else class="icon-xs" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- STRENGTH INDICATOR -->
-          <div class="strength-meter" v-if="pwdForm.newPassword">
-            <div class="meter-bar" :style="{ width: strengthWidth, backgroundColor: strengthColor }"></div>
-            <span class="meter-label" :style="{ color: strengthColor }">{{ strengthText }}</span>
-          </div>
-
-          <Transition name="fade">
-            <div v-if="msg.error" class="tactical-msg error">
-              <div class="msg-accent"></div>
-              <AlertCircleIcon class="msg-icon" /> <span>{{ msg.error }}</span>
+            <!-- STRENGTH INDICATOR -->
+            <div class="strength-meter" v-if="pwdForm.newPassword">
+              <div class="meter-bar" :style="{ width: strengthWidth, backgroundColor: strengthColor }"></div>
+              <span class="meter-label" :style="{ color: strengthColor }">{{ strengthText }}</span>
             </div>
-          </Transition>
 
-          <Transition name="fade">
-            <div v-if="msg.success" class="tactical-msg success">
-              <div class="msg-accent"></div>
-              <CheckCircleIcon class="msg-icon" /> <span>{{ msg.success }}</span>
+            <Transition name="fade">
+              <div v-if="msg.error" class="tactical-msg error">
+                <div class="msg-accent"></div>
+                <AlertCircleIcon class="msg-icon" /> <span>{{ msg.error }}</span>
+              </div>
+            </Transition>
+
+            <Transition name="fade">
+              <div v-if="msg.success" class="tactical-msg success">
+                <div class="msg-accent"></div>
+                <CheckCircleIcon class="msg-icon" /> <span>{{ msg.success }}</span>
+              </div>
+            </Transition>
+
+            <div class="form-actions">
+              <button type="submit" class="btn-tactical-glow" :disabled="loading || !isFormValid">
+                <ZapIcon v-if="!loading" class="icon-sm" />
+                <div v-else class="spinner-sm"></div>
+                <span>{{ loading ? 'ENCRYPTING & SAVING...' : 'UPDATE SYSTEM ACCESS' }}</span>
+              </button>
             </div>
-          </Transition>
-
-          <div class="form-actions">
-            <button type="submit" class="btn-tactical-glow" :disabled="loading || !isFormValid">
-              <ZapIcon v-if="!loading" class="icon-sm" />
-              <div v-else class="spinner-sm"></div>
-              <span>{{ loading ? 'ENCRYPTING & SAVING...' : 'UPDATE SECURITY ACCESS' }}</span>
-            </button>
-          </div>
-        </form>
-      </section>
+          </form>
+        </section>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { supabase } from '../lib/supabase';
 import { 
@@ -155,11 +210,23 @@ import {
   KeyIcon,
   ShieldIcon,
   CheckIcon,
-  ZapIcon
+  ZapIcon,
+  SaveIcon,
+  Edit3Icon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
 const loading = ref(false);
+const profileLoading = ref(false);
+
+const profileForm = reactive({
+  fullName: ''
+});
+
+const profileMsg = reactive({
+  error: '',
+  success: ''
+});
 
 const pwdState = reactive({
   showOld: false,
@@ -176,6 +243,13 @@ const pwdForm = reactive({
 const msg = reactive({
   error: '',
   success: ''
+});
+
+onMounted(() => {
+  // Sync form with current data
+  if (authStore.profile) {
+    profileForm.fullName = authStore.profile.full_name || '';
+  }
 });
 
 const isFormValid = computed(() => {
@@ -207,6 +281,37 @@ const strengthText = computed(() => {
   if (strengthValue.value < 80) return 'MEDIUM';
   return 'STRONG';
 });
+
+async function handleUpdateProfile() {
+  if (!profileForm.fullName.trim()) return;
+  
+  profileLoading.value = true;
+  profileMsg.error = '';
+  profileMsg.success = '';
+
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: profileForm.fullName })
+      .eq('id', authStore.user?.id);
+
+    if (error) throw error;
+
+    // Refresh store profile data
+    await authStore.fetchProfile(authStore.user?.id || '');
+    
+    // Sync local form with new data
+    if (authStore.profile) {
+      profileForm.fullName = authStore.profile.full_name || '';
+    }
+    
+    profileMsg.success = 'Identity database synchronized. Name updated.';
+  } catch (err: any) {
+    profileMsg.error = err.message || 'Identity synchronization failed.';
+  } finally {
+    profileLoading.value = false;
+  }
+}
 
 async function handleUpdatePassword() {
   if (!isFormValid.value) return;
@@ -256,6 +361,47 @@ async function handleUpdatePassword() {
   display: grid;
   grid-template-columns: 380px 1fr;
   gap: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-badge {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-success);
+}
+
+.status-badge.warning {
+  color: #ffd700;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pulse {
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* LEFT PANEL: IDENTITY */
@@ -398,7 +544,11 @@ async function handleUpdatePassword() {
 }
 
 .t-line { width: 40px; height: 3px; background: var(--color-primary); border-radius: 2px; }
+.t-line.blue { background: #3ab0ff; }
 .panel-title { font-size: 1.3rem; font-weight: 800; color: white; display: flex; align-items: center; gap: 10px; }
+
+.terminal-stack { display: flex; flex-direction: column; gap: 24px; }
+.identity-terminal { padding-bottom: 32px; border-bottom: 1px dashed rgba(255,255,255,0.05); }
 
 .security-form { display: flex; flex-direction: column; gap: 32px; max-width: 700px; }
 
@@ -501,6 +651,18 @@ async function handleUpdatePassword() {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 10px 30px rgba(255, 140, 0, 0.2);
+}
+
+.btn-tactical-glow.secondary {
+  background: rgba(58, 176, 255, 0.1);
+  border: 1px solid #3ab0ff;
+  color: #3ab0ff;
+  box-shadow: 0 10px 30px rgba(58, 176, 255, 0.1);
+}
+
+.btn-tactical-glow.secondary:hover {
+  background: #3ab0ff;
+  color: black;
 }
 
 .btn-tactical-glow:hover:not(:disabled) {

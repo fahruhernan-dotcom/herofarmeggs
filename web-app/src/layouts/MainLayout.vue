@@ -29,7 +29,7 @@
     <main class="workspace">
       <router-view v-slot="{ Component }">
         <transition name="fade-slide" mode="out-in">
-          <component :is="Component" />
+          <component :is="Component" :key="$route.fullPath" />
         </transition>
       </router-view>
     </main>
@@ -49,15 +49,14 @@ import {
   LogOutIcon,
   ClipboardListIcon,
   TruckIcon,
-  SettingsIcon
+  SettingsIcon,
+  InstagramIcon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
 const router = useRouter();
 
 const navCards = computed(() => {
-  const role = authStore.profile?.role || 'staff';
-  
   const sections = [
     {
       label: 'Operations',
@@ -78,21 +77,21 @@ const navCards = computed(() => {
   ];
 
   // Admin Only Sections
-  if (role === 'admin') {
+  if (authStore.isAdmin) {
     sections.push({
       label: 'Management',
       links: [
         { label: 'Team Members', path: '/employees', icon: UsersIcon }
       ]
     });
-    
-    sections.push({
-      label: 'Brand Assets',
-      links: [
-        { label: 'Sticker Studio', path: '/stickers', icon: PackageIcon }
-      ]
-    });
   }
+
+  sections.push({
+    label: 'Creative',
+    links: [
+      { label: 'Instagram Content', path: 'https://drive.google.com/drive/u/7/folders/1SXW4vNSc6ju2w7PRnp70Fh-Q75OAfMWx?usp=sharing', icon: InstagramIcon }
+    ]
+  });
 
   sections.push({
     label: 'Account',

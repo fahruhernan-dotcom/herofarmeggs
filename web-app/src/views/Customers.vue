@@ -7,6 +7,10 @@
         <p class="text-dim">Manage your clients and their purchase history.</p>
       </div>
       <div class="header-actions">
+        <button class="btn-secondary" @click="recalculateAllStats" :disabled="syncing">
+          <RefreshCwIcon class="icon" :class="{ 'spin': syncing }" />
+          <span>SYNC ALL STATS</span>
+        </button>
         <button class="btn-primary" @click="showAddModal = true">
           <UserPlusIcon class="icon" />
           <span>REGISTER NEW CLIENT</span>
@@ -95,24 +99,83 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- VIEW HISTORY MODAL -->
+    <Teleport to="body">
+      <div v-if="showHistoryModal" class="modal-overlay" @click.self="showHistoryModal = false">
+        <div class="modal-card glass-panel animate-pop history-modal">
+          <div class="modal-header">
+            <div>
+              <h2 class="hero-font">Purchase History</h2>
+              <p class="text-dim">Tracking records for {{ selectedCustomer?.name }}</p>
+            </div>
+            <button class="btn-close" @click="showHistoryModal = false">×</button>
+          </div>
+
+          <div class="history-list mt-6">
+            <div v-if="loadingHistory" class="loading-state">
+              <RefreshCwIcon class="icon spin" />
+              <span>Fetching records...</span>
+            </div>
+            <div v-else-if="customerHistory.length === 0" class="empty-history">
+              No orders found for this customer.
+            </div>
+            <div v-else class="history-table-wrapper">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Order ID</th>
+                    <th>Status</th>
+                    <th class="text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="order in customerHistory" :key="order.id">
+                    <td class="date">{{ new Date(order.created_at).toLocaleDateString('id-ID') }}</td>
+                    <td class="id">#{{ order.id.slice(-6).toUpperCase() }}</td>
+                    <td>
+                      <span class="status-pill" :class="order.payment_status">
+                        {{ order.payment_status }}
+                      </span>
+                    </td>
+                    <td class="text-right amount">Rp {{ order.total_price.toLocaleString() }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="modal-actions mt-8">
+            <button class="btn-secondary" @click="showHistoryModal = false">CLOSE</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { supabase } from '../lib/supabase';
 import { 
   UserPlusIcon, 
   UsersIcon, 
   SearchIcon, 
-  Edit3Icon
+  Edit3Icon,
+  RefreshCwIcon
 } from 'lucide-vue-next';
 
 const customers = ref<any[]>([]);
 const searchQuery = ref('');
 const showAddModal = ref(false);
+const showHistoryModal = ref(false);
+const loadingHistory = ref(false);
+const syncing = ref(false);
 const submitting = ref(false);
 const editingId = ref<string | null>(null);
+const selectedCustomer = ref<any>(null);
+const customerHistory = ref<any[]>([]);
 
 const form = reactive({
   name: '',
@@ -157,45 +220,117 @@ function editCustomer(customer: any) {
 }
 
 async function submitCustomer() {
+  if (submitting.value) return;
   submitting.value = true;
   
-  const payload = {
-    name: form.name,
-    whatsapp_number: form.whatsapp_number,
-    address: form.address,
-    updated_at: new Date()
-  };
+  try {
+    const payload = {
+      name: form.name,
+      whatsapp_number: form.whatsapp_number,
+      address: form.address,
+      updated_at: new Date().toISOString()
+    };
 
-  let error;
-  if (editingId.value) {
-    const { error: e } = await supabase
-      .from('customers')
-      .update(payload)
-      .eq('id', editingId.value);
-    error = e;
-  } else {
-    const { error: e } = await supabase
-      .from('customers')
-      .insert(payload);
-    error = e;
-  }
+    let result;
+    if (editingId.value) {
+      result = await supabase
+        .from('customers')
+        .update(payload)
+        .eq('id', editingId.value);
+    } else {
+      result = await supabase
+        .from('customers')
+        .insert([payload]);
+    }
 
-  if (!error) {
+    if (result.error) throw result.error;
+
     closeModal();
-    fetchData();
-  } else {
-    alert('Error: ' + error.message);
+    await fetchData();
+  } catch (err: any) {
+    console.error('Save Error:', err);
+    alert('Failed to save customer: ' + (err.message || 'Unknown error'));
+  } finally {
+    submitting.value = false;
   }
-
-  submitting.value = false;
 }
 
-function viewHistory(customer: any) {
-  // Navigation to sales or show history modal
-  alert('History for ' + customer.name + ' coming soon in next update!');
+async function viewHistory(customer: any) {
+  selectedCustomer.value = customer;
+  showHistoryModal.value = true;
+  loadingHistory.value = true;
+  customerHistory.value = [];
+  
+  const { data } = await supabase
+    .from('sales')
+    .select('*')
+    .eq('customer_id', customer.id)
+    .order('created_at', { ascending: false });
+    
+  if (data) customerHistory.value = data;
+  loadingHistory.value = false;
 }
 
-onMounted(fetchData);
+async function recalculateAllStats() {
+  if (!confirm('This will scan all sales and update every customer\'s total orders and total spent. Continue?')) return;
+  
+  syncing.value = true;
+  try {
+    // 1. Get all sales
+    const { data: sales, error: salesError } = await supabase
+      .from('sales')
+      .select('customer_id, total_price, payment_status');
+    
+    if (salesError) throw salesError;
+    if (!sales) return;
+
+    // 2. Map totals
+    const statsMap: Record<string, { count: number, spent: number }> = {};
+    sales.forEach(s => {
+      const cid = s.customer_id;
+      if (!cid) return;
+      if (!statsMap[cid]) statsMap[cid] = { count: 0, spent: 0 };
+      
+      const stats = statsMap[cid];
+      if (s.payment_status !== 'cancelled') {
+        stats.count++;
+        if (s.payment_status === 'paid') {
+          stats.spent += (Number(s.total_price) || 0);
+        }
+      }
+    });
+
+    // 3. Update all customers in parallel for speed
+    const updatePromises = Object.entries(statsMap).map(([id, stats]) => {
+      return supabase.from('customers').update({
+        total_orders: stats.count,
+        total_spent: stats.spent,
+        updated_at: new Date().toISOString()
+      }).eq('id', id);
+    });
+
+    await Promise.all(updatePromises);
+
+    alert('Sync complete! All customer statistics have been updated from transaction data.');
+    await fetchData();
+  } catch (err: any) {
+    console.error('Sync Error:', err);
+    alert('Sync Error: ' + err.message);
+  } finally {
+    syncing.value = false;
+  }
+}
+
+let refreshInterval: any;
+
+onMounted(() => {
+  fetchData();
+  refreshInterval = setInterval(fetchData, 10000);
+});
+
+onUnmounted(() => {
+  clearInterval(refreshInterval);
+});
 </script>
 
 <style scoped>
@@ -424,4 +559,88 @@ onMounted(fetchData);
   from { opacity: 0; transform: scale(0.9) translateY(20px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
+
+/* HISTORY MODAL & UTILS */
+.history-modal {
+  max-width: 700px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.loading-state, .empty-history {
+  padding: 60px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-text-dim);
+}
+
+.history-table-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table th {
+  text-align: left;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  position: sticky;
+  top: 0;
+}
+
+.history-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 0.85rem;
+}
+
+.history-table .date { color: var(--color-text-dim); }
+.history-table .id { font-family: 'JetBrains Mono', monospace; color: var(--color-primary); }
+.history-table .amount { font-weight: 700; color: white; }
+
+.status-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.status-pill.paid { background: rgba(0, 255, 157, 0.1); color: var(--color-success); }
+.status-pill.pending { background: rgba(255, 170, 0, 0.1); color: #FFAA00; }
+.status-pill.cancelled { background: rgba(255, 66, 66, 0.1); color: var(--color-error); }
+
+.spin { animation: spin 1.2s linear infinite; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.mt-6 { margin-top: 24px; }
+.mt-8 { margin-top: 32px; }
+.text-right { text-align: right; }
+.w-full { width: 100%; }
 </style>

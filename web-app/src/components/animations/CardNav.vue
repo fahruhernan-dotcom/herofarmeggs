@@ -33,7 +33,6 @@
           v-for="(item, idx) in items"
           :key="`${item.label}-${idx}`"
           class="nav-card"
-          ref="cardElements"
           :style="{ backgroundColor: item.bgColor }"
         >
           <div class="nav-card-label">{{ item.label }}</div>
@@ -77,12 +76,23 @@ const isHamburgerOpen = ref(true);
 const isExpanded = ref(true);
 const navRef = ref<HTMLElement | null>(null);
 const contentRef = ref<HTMLElement | null>(null);
-const cardElements = ref<HTMLElement[]>([]);
+const cardsRef = ref<HTMLElement[]>([]);
 const tlRef = ref<gsap.core.Timeline | null>(null);
 const router = useRouter();
 
 const navigate = (path: string) => {
-  if (path) router.push(path);
+  if (path) {
+    if (path.startsWith('http')) {
+      window.open(path, '_blank');
+    } else {
+      // If navigating to the same path, add a refresh timestamp to force the :key to change
+      if (router.currentRoute.value.path === path) {
+        router.replace({ path, query: { refresh: Date.now() } });
+      } else {
+        router.push(path);
+      }
+    }
+  }
 };
 
 const calculateHeight = () => {
@@ -96,9 +106,7 @@ const createTimeline = () => {
   const navEl = navRef.value;
   if (!navEl) return null;
 
-  // Reset cards array before GSAP setup
-  const cards = cardElements.value;
-
+  const cards = getCards();
   const tl = gsap.timeline({ paused: true });
 
   tl.to(navEl, {
@@ -134,26 +142,67 @@ const toggleMenu = () => {
 };
 
 onMounted(() => {
-  // Initial animation states
-  gsap.set(navRef.value, { height: 80 });
-  gsap.set(cardElements.value, { y: 30, opacity: 0 });
+  nextTick(() => {
+    // Clear the array and let it repopulate
+    cardsRef.value = [];
+    
+    if (navRef.value) {
+      if (isExpanded.value) {
+        gsap.set(navRef.value, { height: 'auto' });
+        // repopulate cardsRef by forcing a re-render or just mapping the children
+        const cards = Array.from(contentRef.value?.children || []) as HTMLElement[];
+        if (cards.length) {
+          gsap.set(cards, { y: 0, opacity: 1 });
+        }
+      } else {
+        gsap.set(navRef.value, { height: 80 });
+      }
+    }
 
-  tlRef.value = createTimeline();
-  
-  if (isExpanded.value && tlRef.value) {
-    tlRef.value.progress(1);
-  }
+    tlRef.value = createTimeline();
+    if (isExpanded.value && tlRef.value) {
+      tlRef.value.progress(1);
+    }
+  });
 });
 
 onUnmounted(() => {
   if (tlRef.value) tlRef.value.kill();
 });
 
+// Capture card elements manually to be more reliable in v-for
+const getCards = () => {
+  if (!contentRef.value) return [];
+  return Array.from(contentRef.value.querySelectorAll('.nav-card')) as HTMLElement[];
+};
+
 watch(() => props.items, () => {
   nextTick(() => {
     if (tlRef.value) tlRef.value.kill();
-    tlRef.value = createTimeline();
-    if (isExpanded.value && tlRef.value) tlRef.value.progress(1);
+    
+    const cards = getCards();
+    
+    if (isExpanded.value) {
+      // If open, just ensure everything is visible and height fits
+      if (navRef.value) {
+        gsap.to(navRef.value, { 
+          height: 'auto', 
+          duration: 0.3, 
+          ease: 'power2.out' 
+        });
+      }
+      if (cards.length) {
+        gsap.set(cards, { y: 0, opacity: 1, clearProps: 'all' });
+      }
+      // Re-init timeline for future toggles
+      tlRef.value = createTimeline();
+      if (tlRef.value) tlRef.value.progress(1);
+    } else {
+      // If closed, keep it closed
+      if (navRef.value) gsap.set(navRef.value, { height: 80 });
+      if (cards.length) gsap.set(cards, { y: 30, opacity: 0 });
+      tlRef.value = createTimeline();
+    }
   });
 }, { deep: true });
 </script>

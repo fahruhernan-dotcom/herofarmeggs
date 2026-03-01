@@ -20,7 +20,6 @@
         :value="heroStock" 
         unit="Butir"
         subtext="Premium Grade A+"
-        :trend="12"
         :status="getDashboardStatus(heroStock)"
       />
       <StatsCard 
@@ -28,7 +27,6 @@
         :value="standardStock" 
         unit="Butir"
         subtext="Community Retail Grade"
-        :trend="-5"
         :status="getDashboardStatus(standardStock)"
       />
       <StatsCard 
@@ -39,21 +37,75 @@
         :status="getDashboardStatus(saltedStock)"
       />
       <StatsCard 
-        v-if="authStore.profile?.role === 'admin'"
-        label="Monthly Revenue" 
-        :value="'Rp ' + totalRevenue.toLocaleString()" 
+        v-if="authStore.isAdmin"
+        label="Revenue (This Month)" 
+        :value="'Rp ' + monthlyRevenue.toLocaleString()" 
         unit=""
-        subtext="Total processed income"
+        :subtext="revenueSubtext"
       />
     </section>
 
-    <!-- Activity & Charts Placeholder -->
+    <!-- Action Cards -->
+    <div class="action-cards">
+      <router-link to="/orders" class="action-card glass-panel" v-if="pendingOrdersCount > 0">
+        <div class="ac-icon pending-icon">
+          <ClockIcon />
+        </div>
+        <div class="ac-info">
+          <span class="ac-value">{{ pendingOrdersCount }}</span>
+          <span class="ac-label">Pending Orders</span>
+        </div>
+        <ArrowRightIcon class="ac-arrow" />
+      </router-link>
+      <router-link to="/orders" class="action-card glass-panel" v-if="onDeliveryCount > 0">
+        <div class="ac-icon delivery-icon">
+          <TruckIcon />
+        </div>
+        <div class="ac-info">
+          <span class="ac-value">{{ onDeliveryCount }}</span>
+          <span class="ac-label">On Delivery</span>
+        </div>
+        <ArrowRightIcon class="ac-arrow" />
+      </router-link>
+      <router-link to="/stock" class="action-card glass-panel" v-if="lowStockCount > 0">
+        <div class="ac-icon critical-icon">
+          <AlertTriangleIcon />
+        </div>
+        <div class="ac-info">
+          <span class="ac-value">{{ lowStockCount }}</span>
+          <span class="ac-label">Low Stock Items</span>
+        </div>
+        <ArrowRightIcon class="ac-arrow" />
+      </router-link>
+    </div>
+
+    <!-- Sales Summary & Activity -->
     <div class="content-grid">
       <div class="glass-panel main-chart">
-        <h4 class="panel-title">Sales Trend (Coming Soon)</h4>
-        <div class="chart-placeholder">
-          <div class="grid-lines"></div>
-          <p class="text-dim">Analytics engine initializing...</p>
+        <h4 class="panel-title">Sales Summary (Last 7 Days)</h4>
+        <div class="sales-summary-grid" v-if="last7DaysSales.length > 0">
+          <div class="day-bar-container" v-for="day in last7DaysSales" :key="day.date">
+            <div class="day-bar-wrapper">
+              <div 
+                class="day-bar" 
+                :style="{ height: day.percentage + '%' }"
+                :class="{ 'today': day.isToday }"
+              ></div>
+            </div>
+            <span class="day-label">{{ day.label }}</span>
+            <span class="day-value" v-if="day.count > 0">{{ day.count }}</span>
+          </div>
+        </div>
+        <div class="chart-placeholder" v-else>
+          <p class="text-dim">No sales data available for the past 7 days.</p>
+        </div>
+        <div class="chart-footer">
+          <span class="cf-stat">
+            <strong>{{ totalLast7Days }}</strong> orders in last 7 days
+          </span>
+          <span class="cf-stat">
+            <strong>Rp {{ revenueLast7Days.toLocaleString() }}</strong> revenue
+          </span>
         </div>
       </div>
 
@@ -72,10 +124,29 @@
           </div>
         </div>
       </div>
+
+      <div class="glass-panel top-customers">
+        <h4 class="panel-title">Top Customers (All Time)</h4>
+        <div class="top-customers-list">
+          <div v-if="topCustomers.length === 0" class="empty-state">
+            No customer data yet.
+          </div>
+          <div v-for="(cust, index) in topCustomers" :key="cust.id" class="tc-item">
+            <div class="tc-rank">#{{ index + 1 }}</div>
+            <div class="tc-info">
+              <p class="tc-name">{{ cust.name }}</p>
+              <p class="tc-meta">{{ cust.total_orders }} orders</p>
+            </div>
+            <div class="tc-spent">
+              Rp {{ (cust.total_spent || 0).toLocaleString() }}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- DANGER ZONE -->
-    <section v-if="authStore.profile?.role === 'admin'" class="danger-zone glass-panel mt-8">
+    <section v-if="authStore.isAdmin" class="danger-zone glass-panel mt-8">
       <div class="dz-header">
         <div>
           <h3 class="hero-font text-error">System Maintenance</h3>
@@ -129,19 +200,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import StatsCard from '../components/ui/StatsCard.vue';
-import { Trash2Icon, AlertTriangleIcon } from 'lucide-vue-next';
+import { 
+  Trash2Icon, 
+  AlertTriangleIcon, 
+  ClockIcon, 
+  TruckIcon, 
+  ArrowRightIcon 
+} from 'lucide-vue-next';
 
 const authStore = useAuthStore();
 const heroStock = ref(0);
 const standardStock = ref(0);
 const saltedStock = ref(0);
-const totalRevenue = ref(0);
 const logs = ref<any[]>([]);
 const currentTime = ref('');
+const allSales = ref<any[]>([]);
+const inventory = ref<any[]>([]);
+const customers = ref<any[]>([]);
 
 // Reset Logic
 const showResetModal = ref(false);
@@ -154,31 +233,114 @@ function updateClock() {
 }
 
 let clockInterval: any;
+let refreshInterval: any;
 
 async function fetchData() {
   // Fetch Stocks
   const { data: stocks } = await supabase.from('inventory').select('*');
   if (stocks) {
+    inventory.value = stocks;
     heroStock.value = stocks.find(s => s.id === 'hero_size')?.current_stock ?? 0;
     standardStock.value = stocks.find(s => s.id === 'standard_size')?.current_stock ?? 0;
     saltedStock.value = stocks.find(s => s.id === 'salted_egg')?.current_stock ?? 0;
   }
 
-  // Fetch Total Revenue
-  const { data: sales } = await supabase.from('sales').select('total_price');
-  if (sales) {
-    totalRevenue.value = sales.reduce((acc, curr) => acc + (curr.total_price || 0), 0);
-  }
+  // Fetch ALL sales with status info
+  const { data: sales } = await supabase
+    .from('sales')
+    .select('id, total_price, payment_status, fulfillment_status, created_at')
+    .order('created_at', { ascending: false });
+  if (sales) allSales.value = sales;
+
+  // Fetch customers for rankings
+  const { data: cust } = await supabase.from('customers').select('*');
+  if (cust) customers.value = cust;
 
   // Fetch Latest Logs
   const { data: latestLogs } = await supabase
     .from('stock_logs')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(5);
+    .limit(8);
   
   if (latestLogs) logs.value = latestLogs;
 }
+
+// ─── COMPUTED ───────────────────────
+
+// Monthly revenue: only PAID orders from THIS MONTH
+const monthlyRevenue = computed(() => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  return allSales.value
+    .filter(s => s.payment_status === 'paid' && new Date(s.created_at) >= startOfMonth)
+    .reduce((acc, s) => acc + (s.total_price || 0), 0);
+});
+
+const revenueSubtext = computed(() => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const paidCount = allSales.value.filter(
+    s => s.payment_status === 'paid' && new Date(s.created_at) >= startOfMonth
+  ).length;
+  return `${paidCount} paid order(s) this month`;
+});
+
+const pendingOrdersCount = computed(() => 
+  allSales.value.filter(s => s.payment_status === 'pending').length
+);
+
+const onDeliveryCount = computed(() => 
+  allSales.value.filter(s => (s.fulfillment_status || 'processing') === 'on_delivery').length
+);
+
+const lowStockCount = computed(() => 
+  inventory.value.filter(i => i.item_type !== 'packaging' && i.current_stock <= 20).length
+);
+
+// Last 7 days sales chart
+const last7DaysSales = computed(() => {
+  const days: { date: string; label: string; count: number; revenue: number; percentage: number; isToday: boolean }[] = [];
+  const today = new Date();
+  
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0] || '';
+    const dayLabel = d.toLocaleDateString('id-ID', { weekday: 'short' }) || '';
+    
+    const daySales = allSales.value.filter(s => {
+      if (!s.created_at) return false;
+      const sDate = new Date(s.created_at).toISOString().split('T')[0];
+      return sDate === dateStr && s.payment_status !== 'cancelled';
+    });
+    
+    days.push({
+      date: dateStr,
+      label: dayLabel,
+      count: daySales.length,
+      revenue: daySales.reduce((a, s) => a + (Number(s.total_price) || 0), 0),
+      percentage: 0,
+      isToday: i === 0
+    });
+  }
+  
+  const maxCount = Math.max(...days.map(d => d.count), 1);
+  days.forEach(d => {
+    d.percentage = Math.max(5, (d.count / maxCount) * 100);
+  });
+  
+  return days;
+});
+
+const totalLast7Days = computed(() => last7DaysSales.value.reduce((a, d) => a + d.count, 0));
+const revenueLast7Days = computed(() => last7DaysSales.value.reduce((a, d) => a + d.revenue, 0));
+
+const topCustomers = computed(() => {
+  return [...customers.value]
+    .sort((a, b) => (b.total_spent || 0) - (a.total_spent || 0))
+    .slice(0, 5);
+});
 
 function formatTime(dateStr: string) {
   return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -201,8 +363,6 @@ async function handleSystemReset() {
   reseting.value = true;
   
   try {
-    // 1. Delete Transactional Data (Order matters for Foreign Keys)
-    // Table 'sales' exists, but 'orders' does not (it's a view name/concept in UI)
     const { error: e1 } = await supabase.from('sale_items').delete().not('id', 'is', null);
     const { error: e2 } = await supabase.from('sales').delete().not('id', 'is', null);
     const { error: e3 } = await supabase.from('stock_logs').delete().not('id', 'is', null);
@@ -211,13 +371,11 @@ async function handleSystemReset() {
       console.error('Deletion Errors:', { e1, e2, e3 });
     }
 
-    // 2. Reset Customer Statistics (total_orders and total_spent)
     const { error: e4 } = await supabase.from('customers').update({ 
       total_orders: 0, 
       total_spent: 0
     }).not('id', 'is', null);
 
-    // 3. Reset Inventory to Zero State
     const { error: e5 } = await supabase.from('inventory').update({ 
       current_stock: 0,
       cost_per_egg: 0,
@@ -246,8 +404,8 @@ onMounted(() => {
   fetchData();
   updateClock();
   clockInterval = setInterval(updateClock, 1000);
+  refreshInterval = setInterval(fetchData, 10000); // Background refresh every 10s
 
-  // REAL-TIME UPDATES
   const inventorySubscription = supabase
     .channel('dashboard-updates')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
@@ -257,6 +415,7 @@ onMounted(() => {
 
   onUnmounted(() => {
     clearInterval(clockInterval);
+    clearInterval(refreshInterval);
     inventorySubscription.unsubscribe();
   });
 });
@@ -266,7 +425,7 @@ onMounted(() => {
 .dashboard-content {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 28px;
 }
 
 .workspace-header {
@@ -304,10 +463,56 @@ onMounted(() => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
 }
 
+/* ─── ACTION CARDS ──────────────── */
+.action-cards {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.action-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 24px;
+  min-width: 220px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  flex: 1;
+}
+
+.action-card:hover {
+  border-color: rgba(255, 140, 0, 0.3);
+}
+
+.ac-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ac-icon svg { width: 20px; height: 20px; }
+
+.pending-icon { background: rgba(255, 170, 0, 0.12); color: #FFAA00; }
+.delivery-icon { background: rgba(255, 140, 0, 0.12); color: var(--color-primary); }
+.critical-icon { background: rgba(255, 62, 62, 0.12); color: var(--color-error); }
+
+.ac-info { display: flex; flex-direction: column; flex: 1; }
+.ac-value { font-size: 1.4rem; font-weight: 800; }
+.ac-label { font-size: 0.75rem; color: var(--color-text-dim); font-weight: 600; }
+
+.ac-arrow { width: 16px; height: 16px; color: var(--color-text-dim); opacity: 0.5; }
+
+/* ─── CONTENT GRID ──────────────── */
 .content-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -322,16 +527,88 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
-.main-chart { padding: 32px; min-height: 400px; }
+.main-chart { padding: 32px; }
+
+/* ─── SALES SUMMARY BAR CHART ───── */
+.sales-summary-grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 200px;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+.day-bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.day-bar-wrapper {
+  height: 160px;
+  width: 100%;
+  max-width: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.day-bar {
+  width: 100%;
+  border-radius: 8px 8px 4px 4px;
+  background: rgba(255, 140, 0, 0.15);
+  border: 1px solid rgba(255, 140, 0, 0.2);
+  transition: height 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  min-height: 4px;
+}
+
+.day-bar.today {
+  background: linear-gradient(180deg, rgba(255, 140, 0, 0.4), rgba(255, 140, 0, 0.15));
+  border-color: rgba(255, 140, 0, 0.5);
+  box-shadow: 0 0 12px rgba(255, 140, 0, 0.15);
+}
+
+.day-label {
+  font-size: 0.65rem;
+  color: var(--color-text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.day-value {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--color-primary);
+}
 
 .chart-placeholder {
-  height: 100%;
+  height: 200px;
   display: flex;
   justify-content: center;
   align-items: center;
-  position: relative;
 }
 
+.chart-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.cf-stat {
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+}
+
+.cf-stat strong {
+  color: white;
+}
+
+/* ─── ACTIVITY FEED ─────────────── */
 .activity-feed { padding: 32px; }
 
 .feed-list {
@@ -368,7 +645,35 @@ onMounted(() => {
   font-style: italic;
 }
 
-/* Danger Zone Styles */
+/* ─── TOP CUSTOMERS ─────────────── */
+.top-customers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tc-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.tc-rank {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  opacity: 0.5;
+  width: 24px;
+}
+
+.tc-info { flex: 1; }
+.tc-name { font-size: 0.9rem; font-weight: 700; margin-bottom: 2px; }
+.tc-meta { font-size: 0.7rem; color: var(--color-text-dim); }
+.tc-spent { font-size: 0.85rem; font-weight: 800; color: var(--color-primary); }
+
+/* ─── DANGER ZONE ───────────────── */
 .danger-zone {
   padding: 32px;
   border-color: rgba(255, 66, 66, 0.2);
@@ -381,6 +686,8 @@ onMounted(() => {
 }
 
 .text-error { color: #ff4242; }
+.tc-meta { font-size: 0.7rem; color: var(--color-text-dim); }
+.tc-spent { font-size: 0.85rem; font-weight: 800; color: var(--color-primary); }
 .mt-8 { margin-top: 32px; }
 .mt-6 { margin-top: 24px; }
 .font-bold { font-weight: 700; }
@@ -409,7 +716,7 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-/* Modal Overflow Fix */
+/* ─── MODAL ─────────────────────── */
 .modal-overlay {
   position: fixed;
   top: 0;

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 
@@ -51,5 +51,11 @@ export const useAuthStore = defineStore('auth', () => {
         profile.value = null
     }
 
-    return { user, session, profile, loading, initialize, signOut }
+    const isAdmin = computed(() => {
+        // Super Admin hardcode
+        if (user.value?.email === 'fahruhernansakti@gmail.com') return true;
+        return profile.value?.role === 'admin';
+    });
+
+    return { user, session, profile, loading, initialize, signOut, isAdmin, fetchProfile }
 })

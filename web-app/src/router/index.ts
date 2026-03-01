@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { supabase } from '../lib/supabase'
 import MainLayout from '../layouts/MainLayout.vue'
 
 const router = createRouter({
@@ -58,12 +57,6 @@ const router = createRouter({
                     meta: { requiresAuth: true, requiresAdmin: true }
                 },
                 {
-                    path: 'stickers',
-                    name: 'stickers',
-                    component: () => import('../views/StickerDesign.vue'),
-                    meta: { requiresAuth: true, requiresAdmin: true }
-                },
-                {
                     path: 'profile',
                     name: 'profile',
                     component: () => import('../views/Profile.vue'),
@@ -99,8 +92,7 @@ router.beforeEach(async (to, _from, next) => {
 
     // 3. If trying to access admin page and user is NOT admin, redirect home
     if (to.meta.requiresAdmin) {
-        const isAdmin = authStore.profile?.role === 'admin';
-        if (!isAdmin) {
+        if (!authStore.isAdmin) {
             return next('/');
         }
     }

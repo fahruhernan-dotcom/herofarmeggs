@@ -16,20 +16,41 @@
 
     <div class="suppliers-grid">
       <div v-for="supplier in suppliers" :key="supplier.id" class="supplier-card glass-panel" :class="getCategoryClass(supplier.category)">
-        <!-- Vertical Accent Bar -->
         <div class="card-accent"></div>
-        
         <div class="card-header-premium">
-          <div class="vendor-avatar">
-            {{ supplier.name.charAt(0).toUpperCase() }}
+          <div class="header-main">
+            <div class="vendor-avatar">
+              {{ supplier.name.charAt(0).toUpperCase() }}
+            </div>
+            <div class="header-info">
+              <h3 class="name" :title="supplier.name">{{ supplier.name }}</h3>
+              <div class="service-chip">{{ supplier.category || 'General' }}</div>
+            </div>
           </div>
-          <div class="header-info">
-            <h3 class="name">{{ supplier.name }}</h3>
-            <div class="service-chip">{{ supplier.category || 'General' }}</div>
+          
+          <div class="header-actions">
+            <button class="btn-circular" @click="editSupplier(supplier)" title="Edit Vendor">
+              <Edit3Icon class="icon-sv" />
+            </button>
+            <button class="btn-circular del" @click="deleteSupplier(supplier)" title="Delete Vendor">
+              <Trash2Icon class="icon-sv" />
+            </button>
           </div>
         </div>
         
         <div class="card-body-elite">
+          <!-- MATERIALS PREVIEW -->
+          <div v-if="supplier.price_list?.length" class="materials-preview">
+            <div v-for="(item, idx) in supplier.price_list.slice(0, 2)" :key="idx" class="m-tag">
+              <span class="m-name">{{ item.item_name }}</span>
+              <span class="m-price">Rp {{ item.price.toLocaleString() }}</span>
+            </div>
+            <div v-if="supplier.price_list.length > 2" class="m-more">+{{ supplier.price_list.length - 2 }} more</div>
+          </div>
+          <div v-else class="materials-empty">No catalog defined</div>
+
+          <div class="info-divider"></div>
+
           <div class="info-row">
             <UserIcon class="icon-xs" />
             <span class="val">{{ supplier.contact_person || 'No Contact' }}</span>
@@ -45,13 +66,16 @@
         </div>
 
         <div class="card-actions-premium">
-          <button class="btn-action-main" @click="viewDeliveries(supplier)">
-            <HistoryIcon class="icon-xs" />
-            <span>VIEW DELIVERIES</span>
-          </button>
-          <button class="btn-action-icon" @click="editSupplier(supplier)" title="Edit Vendor">
-            <Edit3Icon class="icon-sm" />
-          </button>
+          <div class="action-btns-group">
+            <button class="btn-action-main secondary" @click="viewCatalog(supplier)">
+              <SparklesIcon class="icon-xs" />
+              <span>VIEW CATALOG</span>
+            </button>
+            <button class="btn-action-main" @click="viewDeliveries(supplier)">
+              <HistoryIcon class="icon-xs" />
+              <span>DELIVERIES</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -101,6 +125,58 @@
               />
             </div>
 
+            <div class="modal-divider"></div>
+
+            <!-- PRODUCT CATALOG SECTION -->
+            <div class="catalog-section">
+              <div class="section-header">
+                <div class="sh-left">
+                  <SparklesIcon class="icon-sh" />
+                  <h3 class="hero-font subtitle">Product Catalog</h3>
+                </div>
+                <button type="button" class="btn-add-item" @click="addPriceItem">
+                  <PlusIcon class="icon-xs" />
+                  <span>ADD ITEM</span>
+                </button>
+              </div>
+              <p class="section-desc">List raw materials and set current purchase prices.</p>
+
+              <div class="catalog-list">
+                <div v-for="(item, idx) in form.price_list" :key="idx" class="catalog-entry glass-panel">
+                  <div class="entry-main">
+                    <input 
+                      type="text" 
+                      v-model="item.item_name" 
+                      placeholder="Material Name (e.g. Standard Egg)" 
+                      class="input-clean"
+                    />
+                    <div class="entry-values">
+                      <div class="price-input-wrap">
+                        <span class="prefix">Rp</span>
+                        <input 
+                          type="number" 
+                          v-model.number="item.price" 
+                          placeholder="0" 
+                        />
+                      </div>
+                      <input 
+                        type="text" 
+                        v-model="item.unit" 
+                        placeholder="unit" 
+                        class="unit-input"
+                      />
+                    </div>
+                  </div>
+                  <button type="button" class="btn-remove-entry" @click="removePriceItem(idx)">
+                    <Trash2Icon class="icon-xs" />
+                  </button>
+                </div>
+                <div v-if="form.price_list.length === 0" class="catalog-empty-hint">
+                  No materials added to this vendor's catalog yet.
+                </div>
+              </div>
+            </div>
+
             <div class="modal-actions">
               <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
               <button type="submit" class="btn-primary" :disabled="submitting">
@@ -115,8 +191,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
 import { supabase } from '../lib/supabase';
+import { useRoute } from 'vue-router';
 import { 
   TruckIcon, 
   Edit3Icon, 
@@ -124,7 +201,10 @@ import {
   UserIcon,
   PhoneIcon,
   MapPinIcon,
-  HistoryIcon
+  HistoryIcon,
+  SparklesIcon,
+  PlusIcon,
+  Trash2Icon
 } from 'lucide-vue-next';
 import CustomDropdown from '../components/ui/CustomDropdown.vue';
 
@@ -148,7 +228,8 @@ const form = reactive({
   contact_person: '',
   phone: '',
   address: '',
-  category: ''
+  category: '',
+  price_list: [] as any[]
 });
 
 function getCategoryClass(cat: string) {
@@ -159,15 +240,26 @@ function getCategoryClass(cat: string) {
 }
 
 async function fetchData() {
-  const { data: vendorData } = await supabase
-    .from('suppliers')
-    .select('*')
-    .order('name');
-  
-  if (vendorData) suppliers.value = vendorData;
+  console.log('Fetching fresh data for Suppliers...');
+  try {
+    const { data: vendorData, error: vError } = await supabase
+      .from('suppliers')
+      .select('*')
+      .order('name');
+    
+    if (vError) {
+      console.error('Failed to fetch suppliers:', vError);
+      return;
+    }
+    
+    suppliers.value = vendorData || [];
+    console.log(`Loaded ${suppliers.value.length} vendors`);
 
-  const { data: invData } = await supabase.from('inventory').select('*');
-  if (invData) inventory.value = invData;
+    const { data: invData, error: iError } = await supabase.from('inventory').select('*');
+    if (!iError) inventory.value = invData || [];
+  } catch (err) {
+    console.error('Unexpected fetch error:', err);
+  }
 }
 
 function closeModal() {
@@ -178,6 +270,7 @@ function closeModal() {
   form.phone = '';
   form.address = '';
   form.category = '';
+  form.price_list = [];
 }
 
 function editSupplier(vendor: any) {
@@ -187,41 +280,106 @@ function editSupplier(vendor: any) {
   form.phone = vendor.phone || '';
   form.address = vendor.address || '';
   form.category = vendor.category || '';
+  form.price_list = Array.isArray(vendor.price_list) ? [...vendor.price_list] : [];
   showAddModal.value = true;
 }
 
 async function submitSupplier() {
+  if (submitting.value) return;
   submitting.value = true;
-  const payload = { ...form };
+  
+  // Clean payload from Reactive Proxy
+  const payload = JSON.parse(JSON.stringify(form));
+  console.log('Final Payload to Database:', payload);
+  try {
+    let result;
 
-  let error;
-  if (editingId.value) {
-    const { error: e } = await supabase
-      .from('suppliers')
-      .update(payload)
-      .eq('id', editingId.value);
-    error = e;
-  } else {
-    const { error: e } = await supabase
-      .from('suppliers')
-      .insert(payload);
-    error = e;
-  }
+    if (editingId.value) {
+      result = await supabase
+        .from('suppliers')
+        .update(payload)
+        .eq('id', editingId.value);
+    } else {
+      result = await supabase
+        .from('suppliers')
+        .insert(payload);
+    }
 
-  if (!error) {
-    closeModal();
-    fetchData();
-  } else {
-    alert('Error: ' + error.message);
+    if (result.error) {
+      console.error('Supabase Error:', result.error);
+      alert('Error: ' + result.error.message);
+    } else {
+      console.log('Supplier saved successfully');
+      closeModal();
+      fetchData();
+    }
+  } catch (err: any) {
+    console.error('Unexpected crash during save:', err);
+    alert('System Error: ' + err.message);
+  } finally {
+    submitting.value = false;
   }
-  submitting.value = false;
+}
+
+async function deleteSupplier(vendor: any) {
+  if (!confirm(`Are you sure you want to delete "${vendor.name}"? This action cannot be undone.`)) return;
+  
+  submitting.value = true;
+  try {
+    const { error } = await supabase
+      .from('suppliers')
+      .delete()
+      .eq('id', vendor.id);
+
+    if (error) {
+      alert('Error: ' + error.message);
+    } else {
+      fetchData();
+    }
+  } catch (err: any) {
+    alert('System Error: ' + err.message);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+function addPriceItem() {
+  form.price_list.push({ item_name: '', price: 0, unit: 'butir' });
+}
+
+function removePriceItem(index: number) {
+  form.price_list.splice(index, 1);
 }
 
 function viewDeliveries(vendor: any) {
   alert('History deliveries from ' + vendor.name + ' feature is coming soon!');
 }
 
-onMounted(fetchData);
+function viewCatalog(vendor: any) {
+  if (!vendor.price_list || vendor.price_list.length === 0) {
+    alert('No items in catalog for ' + vendor.name);
+    return;
+  }
+  const list = vendor.price_list.map((i: any) => `- ${i.item_name}: Rp ${i.price.toLocaleString()} / ${i.unit}`).join('\n');
+  alert(`Product Catalog - ${vendor.name}\n\n${list}`);
+}
+
+const route = useRoute();
+let refreshInterval: any;
+
+onMounted(() => {
+  fetchData();
+  refreshInterval = setInterval(fetchData, 10000);
+});
+
+onUnmounted(() => {
+  clearInterval(refreshInterval);
+});
+
+// Force refresh when route changes
+watch(() => route.path, () => {
+  fetchData();
+});
 </script>
 
 <style scoped>
@@ -258,12 +416,14 @@ onMounted(fetchData);
   overflow: hidden;
   transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
   min-height: 280px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .supplier-card:hover {
   transform: translateY(-8px);
-  border-color: rgba(255, 140, 0, 0.2);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  border-color: rgba(255, 140, 0, 0.3);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.5);
 }
 
 .card-accent {
@@ -273,37 +433,67 @@ onMounted(fetchData);
   width: 4px;
   height: 100%;
   background: var(--color-primary);
-  opacity: 0.5;
+  opacity: 0.3;
 }
 
 .accent-egg .card-accent { background: #FFD700; }
 .accent-pack .card-accent { background: #00D1FF; }
+.accent-general .card-accent { background: #7B61FF; }
+
+.supplier-card:hover .card-accent {
+  opacity: 1;
+}
 
 .card-header-premium {
   padding: 24px 32px;
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 16px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.02), transparent);
+}
+
+.header-main {
+  display: flex;
   align-items: center;
   gap: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  flex: 1;
+  min-width: 0;
 }
 
 .vendor-avatar {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
-  font-weight: 900;
+  font-size: 1.2rem;
+  font-weight: 800;
   color: var(--color-primary);
-  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
 }
 
-.header-info { display: flex; flex-direction: column; gap: 4px; }
-.name { font-size: 1.2rem; font-weight: 800; color: white; }
+.header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: white;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .service-chip {
   font-size: 0.6rem;
@@ -315,6 +505,44 @@ onMounted(fetchData);
   border-radius: 4px;
   width: fit-content;
   letter-spacing: 0.1em;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.btn-circular {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--color-text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-circular:hover {
+  background: white;
+  color: black;
+  border-color: white;
+  transform: scale(1.1);
+}
+
+.btn-circular.del:hover {
+  background: var(--color-error);
+  color: white;
+  border-color: var(--color-error);
+}
+
+.icon-sv {
+  width: 14px;
+  height: 14px;
 }
 
 .card-body-elite {
@@ -378,9 +606,8 @@ onMounted(fetchData);
   transition: all 0.3s ease;
 }
 
-.btn-action-icon:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+.action-secondary-group {
+  display: none;
 }
 
 .empty-state {
@@ -441,5 +668,226 @@ onMounted(fetchData);
 @keyframes popIn {
   from { opacity: 0; transform: scale(0.9) translateY(20px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* NEW: CATALOG STYLES */
+.header-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.catalog-badge {
+  font-size: 0.55rem;
+  font-weight: 900;
+  background: rgba(123, 97, 255, 0.1);
+  color: #7B61FF;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(123, 97, 255, 0.2);
+}
+
+.icon-xs-inline { width: 10px; height: 10px; }
+
+.materials-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.m-tag {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.m-name { font-size: 0.75rem; font-weight: 700; color: var(--color-text-dim); }
+.m-price { font-size: 0.75rem; font-weight: 800; color: var(--color-primary); }
+
+.m-more {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-text-dim);
+  text-align: center;
+  opacity: 0.6;
+}
+
+.materials-empty {
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+  opacity: 0.3;
+  font-style: italic;
+  padding: 12px 0;
+  text-align: center;
+}
+
+.info-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.05), transparent);
+  margin: 8px 0;
+}
+
+.action-btns-group {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-action-main.secondary {
+  border-color: rgba(123, 97, 255, 0.3);
+  color: #BBADFF;
+}
+
+.btn-action-main.secondary:hover {
+  background: #7B61FF;
+  color: white;
+}
+
+/* MODAL CATALOG */
+.modal-divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 10px 0;
+}
+
+.catalog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sh-left { display: flex; align-items: center; gap: 10px; }
+.icon-sh { width: 18px; height: 18px; color: var(--color-primary); }
+.subtitle { font-size: 1rem; margin: 0; }
+
+.btn-add-item {
+  background: rgba(255, 140, 0, 0.1);
+  border: 1px solid rgba(255, 140, 0, 0.2);
+  color: var(--color-primary);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-item:hover {
+  background: var(--color-primary);
+  color: black;
+}
+
+.section-desc { font-size: 0.75rem; color: var(--color-text-dim); }
+
+.catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.catalog-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.entry-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-clean {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+}
+
+.entry-values {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.price-input-wrap {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  padding: 4px 8px;
+  border-radius: 6px;
+  gap: 6px;
+}
+
+.price-input-wrap .prefix { font-size: 0.7rem; font-weight: 800; opacity: 0.5; }
+.price-input-wrap input {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  width: 80px !important;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+}
+
+.unit-input {
+  width: 60px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px dashed var(--glass-border) !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  font-size: 0.75rem !important;
+  text-align: center;
+}
+
+.btn-remove-entry {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 62, 62, 0.1);
+  border: 1px solid rgba(255, 62, 62, 0.2);
+  color: var(--color-error);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-remove-entry:hover {
+  background: var(--color-error);
+  color: white;
+}
+
+.catalog-empty-hint {
+  text-align: center;
+  padding: 20px;
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  opacity: 0.5;
+  border: 1px dashed var(--glass-border);
+  border-radius: 12px;
 }
 </style>

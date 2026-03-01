@@ -41,7 +41,7 @@
                 <span class="v-unit">butir</span>
               </h2>
               <div class="price-info">
-                <div class="retail-tag">
+                <div class="retail-tag clickable" @click="openEditProduct(item)" title="Click to Change Price">
                   <span class="rt-label">Retail</span>
                   <span class="rt-val">Rp {{ item.base_price_per_pack.toLocaleString('id-ID') }}</span>
                 </div>
@@ -186,6 +186,28 @@
             <div class="form-group">
               <label>Amount (Butir)</label>
               <input type="number" v-model.number="form.change" placeholder="e.g. 100" required />
+            </div>
+
+            <div v-if="form.log_type === 'arrival'" class="form-group price-arrival-group animate-slide">
+              <label>Purchase Price (Per Butir)</label>
+              <div class="price-input-wrapper">
+                <span class="prefix">Rp</span>
+                <input type="number" v-model.number="form.purchase_price" placeholder="e.g. 1500" />
+              </div>
+              <div v-if="suggestedPrices.length > 0" class="price-suggestions">
+                <span class="s-hint">From {{ form.supplier }} catalog:</span>
+                <div class="s-chips">
+                  <button 
+                    v-for="p in suggestedPrices" 
+                    :key="p.item_name"
+                    type="button"
+                    class="price-chip"
+                    @click="form.purchase_price = p.price"
+                  >
+                    {{ p.item_name }}: Rp {{ p.price }}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="form-group">
@@ -336,9 +358,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue';
+import { ref, onMounted, onUnmounted, reactive, computed, watch } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
+import { useRoute } from 'vue-router';
 import CustomDropdown from '../components/ui/CustomDropdown.vue';
 import { 
   PlusIcon, 
@@ -377,6 +400,20 @@ const supplierOptions = computed(() => suppliers.value.map(s => ({
   value: s.name
 })));
 
+const suggestedPrices = computed(() => {
+  if (!form.supplier || !form.egg_type) return [];
+  const supplier = suppliers.value.find(s => s.name === form.supplier);
+  if (!supplier || !Array.isArray(supplier.price_list)) return [];
+  
+  // Filter price list for items matching current egg type label keywords
+  const eggLabel = inventory.value.find(i => i.id === form.egg_type)?.label.toLowerCase() || '';
+  return supplier.price_list.filter((item: any) => 
+    item.item_name.toLowerCase().includes(eggLabel.split(' ')[0]) || 
+    eggLabel.includes(item.item_name.toLowerCase().split(' ')[0])
+  );
+});
+
+
 const operationTypeOptions = [
   { label: 'Stock Arrival (+)', value: 'arrival' },
   { label: 'Sorting Waste (-)', value: 'sorting_waste' },
@@ -387,9 +424,11 @@ const form = reactive({
   egg_type: 'hero_size',
   log_type: 'arrival',
   change: 0,
+  purchase_price: 0,
   supplier: '',
   notes: ''
 });
+
 
 const editForm = reactive({
   id: '',
@@ -426,11 +465,6 @@ async function fetchData() {
   if (sup) suppliers.value = sup;
 }
 
-function getStockStatus(stock: number) {
-  if (stock <= 20) return 'critical';
-  if (stock <= 25) return 'low';
-  return 'healthy';
-}
 
 function formatTime(date: string) {
   return new Date(date).toLocaleString('id-ID', { 
@@ -589,29 +623,63 @@ async function submitAdjustment() {
     egg_type: form.egg_type,
     change: finalChange,
     log_type: form.log_type,
+    unit_price: form.log_type === 'arrival' ? form.purchase_price : 0,
     notes: finalNotes
   });
+
 
   if (!logError) {
     // 3. Update Inventory (Atomic increment in real DB is better, but this works for internal use)
     const currentItem = inventory.value.find(i => i.id === form.egg_type);
     const newStock = (currentItem?.current_stock ?? 0) + finalChange;
     
+    const updatePayload: any = { 
+      current_stock: newStock, 
+      updated_at: new Date().toISOString() 
+    };
+
+    // If arrival with price, update cost_per_egg and recalculate HPP
+    if (form.log_type === 'arrival' && form.purchase_price > 0 && currentItem) {
+      updatePayload.cost_per_egg = form.purchase_price;
+      // Recalculate total cost_price
+      updatePayload.cost_price = (form.purchase_price * 10) + 
+        (currentItem.cost_per_packaging || 0) + 
+        (currentItem.cost_per_sticker || 0) + 
+        (currentItem.cost_per_card || 0);
+    }
+
     await supabase.from('inventory')
-      .update({ current_stock: newStock, updated_at: new Date() })
+      .update(updatePayload)
       .eq('id', form.egg_type);
+
 
     showAdjustmentModal.value = false;
     form.change = 0;
+    form.purchase_price = 0;
     form.supplier = '';
     form.notes = '';
     fetchData();
   }
 
+
   submitting.value = false;
 }
 
+const route = useRoute();
+
+let refreshInterval: any;
+
 onMounted(() => {
+  fetchData();
+  refreshInterval = setInterval(fetchData, 10000);
+});
+
+onUnmounted(() => {
+  clearInterval(refreshInterval);
+});
+
+// Force refresh data on route change
+watch(() => route.path, () => {
   fetchData();
 });
 </script>
@@ -956,7 +1024,98 @@ onMounted(() => {
 .btn-lite:hover { background: rgba(255, 255, 255, 0.1); }
 
 /* LOGS TABLE */
+.retail-tag.clickable {
+  cursor: pointer;
+  background: rgba(255, 140, 0, 0.1);
+  border: 1px dashed rgba(255, 140, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.retail-tag.clickable:hover {
+  background: var(--color-primary);
+  color: black;
+  transform: scale(1.05);
+  border-style: solid;
+}
+
+/* Price Arrival Group */
+.price-arrival-group {
+  margin-top: 8px;
+  padding: 16px;
+  background: rgba(255, 140, 0, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 140, 0, 0.1);
+}
+
+.price-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+.price-input-wrapper .prefix {
+  font-weight: 800;
+  color: var(--color-primary);
+  margin-right: 8px;
+}
+
+.price-input-wrapper input {
+  border: none !important;
+  background: transparent !important;
+  padding: 12px 0 !important;
+}
+
+.price-suggestions {
+  margin-top: 12px;
+}
+
+.s-hint {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.s-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.price-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.price-chip:hover {
+  background: var(--color-primary);
+  color: black;
+  border-color: var(--color-primary);
+}
+
+.animate-slide {
+  animation: slideDown 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .logs-section {
+
   padding: 32px;
 }
 

@@ -136,6 +136,31 @@
               </div>
             </div>
 
+            <!-- Payment Status Toggle -->
+            <div class="payment-toggle-group">
+              <label class="section-label">Payment Status</label>
+              <div class="toggle-options">
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  :class="{ active: form.paymentStatus === 'pending', pending: true }"
+                  @click="form.paymentStatus = 'pending'"
+                >
+                  <span class="toggle-dot pending"></span>
+                  Pending
+                </button>
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  :class="{ active: form.paymentStatus === 'paid', paid: true }"
+                  @click="form.paymentStatus = 'paid'"
+                >
+                  <span class="toggle-dot paid"></span>
+                  Paid
+                </button>
+              </div>
+            </div>
+
             <Transition name="fade">
               <div v-if="maxStock <= 0 || form.quantity > maxPacks" class="premium-warning glass-panel">
                 <AlertCircleIcon class="warn-icon" /> 
@@ -146,16 +171,74 @@
               </div>
             </Transition>
 
-            <button type="submit" class="btn-primary-glow w-full mt-4" :disabled="!isFormValid || maxStock <= 0">
-              <ZapIcon class="icon" />
-              <span>GENERATE PREVIEW</span>
-            </button>
+            <div class="action-row mt-4">
+              <button type="button" class="btn-secondary w-full" @click="addToCart" :disabled="!selectedEggType || form.quantity <= 0 || form.quantity > maxPacks">
+                <PlusIcon class="icon-sm" />
+                <span>ADD TO CART</span>
+              </button>
+              
+              <button type="submit" class="btn-primary-glow w-full" :disabled="!isFormValid">
+                <ZapIcon class="icon" />
+                <span>GENERATE PREVIEW</span>
+              </button>
+            </div>
           </div>
         </form>
       </section>
 
-      <!-- RIGHT: INVOICE PREVIEW -->
+      <!-- RIGHT: INVOICE PREVIEW & CART -->
       <section class="preview-area glass-panel">
+        <!-- Cart Section -->
+        <div class="cart-section" v-if="cart.length > 0 && !showPreview">
+          <div class="cart-header">
+            <h3 class="hero-font">Current Cart</h3>
+            <span class="cart-count">{{ cart.length }} items</span>
+          </div>
+          
+          <div class="cart-items">
+            <div v-for="(item, index) in cart" :key="item.id" class="cart-item glass-panel" :class="{ 'is-editing': editingIndex === index }">
+              <div class="item-info">
+                <span class="item-label">{{ item.label }}</span>
+                <span class="item-qty">{{ item.quantity }} Pack</span>
+              </div>
+              <div class="item-price-actions">
+                <div v-if="editingIndex === index" class="price-editor">
+                  <span class="prefix">Rp</span>
+                  <input 
+                    type="number" 
+                    v-model.number="editingPriceValue" 
+                    class="price-edit-input"
+                    @keyup.enter="savePriceEdit(index)"
+                  />
+                  <button class="btn-save-price" @click="savePriceEdit(index)">
+                    <CheckIcon class="icon-xs" />
+                  </button>
+                  <button class="btn-cancel-price" @click="editingIndex = null">
+                    <XIcon class="icon-xs" />
+                  </button>
+                </div>
+                <div v-else class="price-display">
+                  <span class="item-subtotal">Rp {{ item.subtotal.toLocaleString() }}</span>
+                  <span class="unit-price-hint">(@ Rp {{ item.price.toLocaleString() }})</span>
+                  <button class="btn-edit-price" @click="startEditPrice(index, item.price)" title="Override Price">
+                    <Edit3Icon class="icon-xs" />
+                  </button>
+                </div>
+                <button v-if="editingIndex !== index" class="btn-remove" @click="removeFromCart(index)">
+                  <Trash2Icon class="icon-xs" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cart-footer">
+            <div class="cart-total-row">
+              <span class="label">Total Order</span>
+              <span class="value">Rp {{ cartTotal.toLocaleString() }}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="invoice-container" v-if="showPreview">
           <div class="invoice-header">
             <div class="inv-brand">
@@ -163,8 +246,8 @@
               <span class="inv-tag">OFFICIAL INVOICE</span>
             </div>
             <div class="inv-meta">
-              <p>NO: #INV-{{ Date.now().toString().slice(-6) }}</p>
-              <p>DATE: {{ new Date().toLocaleDateString() }}</p>
+              <p>NO: #AWAITING-SAVING</p>
+              <p>DATE: {{ new Date().toLocaleDateString('id-ID') }}</p>
             </div>
           </div>
           
@@ -184,11 +267,11 @@
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>{{ selectedEggLabel }}</td>
-                  <td>{{ form.quantity }} Pack ({{ form.quantity * 10 }} Butir)</td>
-                  <td>{{ currentPrice.toLocaleString('id-ID') }}</td>
-                  <td>{{ currentTotal.toLocaleString('id-ID') }}</td>
+                <tr v-for="item in cart" :key="item.id">
+                  <td>{{ item.label }}</td>
+                  <td>{{ item.quantity }} Pack ({{ item.quantity * 10 }} Butir)</td>
+                  <td>{{ item.price.toLocaleString('id-ID') }}</td>
+                  <td>{{ item.subtotal.toLocaleString('id-ID') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -196,7 +279,7 @@
             <div class="inv-footer">
               <div class="total-row">
                 <span class="total-label">Grand Total</span>
-                <span class="total-value">Rp {{ currentTotal.toLocaleString('id-ID') }}</span>
+                <span class="total-value">Rp {{ cartTotal.toLocaleString('id-ID') }}</span>
               </div>
             </div>
           </div>
@@ -233,8 +316,13 @@ import {
   CheckCircleIcon,
   AlertCircleIcon,
   PlusIcon,
-  MinusIcon
+  MinusIcon,
+  Trash2Icon,
+  Edit3Icon,
+  CheckIcon,
+  XIcon
 } from 'lucide-vue-next';
+import { generateInvoiceHTML } from '../utils/invoiceTemplate';
 
 // 1. STATE
 const inventory = ref<any[]>([]);
@@ -242,6 +330,9 @@ const customers = ref<any[]>([]);
 const selectedEggType = ref('hero_size');
 const showPreview = ref(false);
 const loading = ref(false);
+const editingIndex = ref<number | null>(null);
+const editingPriceValue = ref(0);
+
 
 const customerSearch = ref('');
 const customerPhone = ref('');
@@ -250,7 +341,16 @@ const selectedCustomerId = ref<string | null>(null);
 
 const form = reactive({
   quantity: 1,
+  paymentStatus: 'paid' as 'paid' | 'pending',
 });
+
+const cart = ref<Array<{
+  id: string,
+  label: string,
+  quantity: number,
+  price: number,
+  subtotal: number
+}>>([]);
 
 // 2. FETCHING
 async function fetchData() {
@@ -286,7 +386,13 @@ const maxPacks = computed(() => Math.floor(maxStock.value / 10));
 const currentPrice = computed(() => inventory.value.find(i => i.id === selectedEggType.value)?.base_price_per_pack ?? 0);
 const currentTotal = computed(() => form.quantity * currentPrice.value);
 const sellableProducts = computed(() => inventory.value.filter(i => i.item_type !== 'packaging'));
-const isFormValid = computed(() => form.quantity > 0 && form.quantity <= maxPacks.value && customerSearch.value.trim().length > 0);
+
+const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.subtotal, 0));
+
+
+const isFormValid = computed(() => {
+  return cart.value.length > 0 && customerSearch.value.trim().length > 0;
+});
 
 // 4. METHODS
 function selectExistingCustomer(customer: any) {
@@ -296,19 +402,103 @@ function selectExistingCustomer(customer: any) {
   showCustResults.value = false;
 }
 
+function addToCart() {
+  if (!selectedEggType.value || form.quantity <= 0) return;
+  
+  const existing = cart.value.find(item => item.id === selectedEggType.value);
+  if (existing) {
+    existing.quantity += form.quantity;
+    existing.subtotal = existing.quantity * existing.price;
+  } else {
+    cart.value.push({
+      id: selectedEggType.value,
+      label: selectedEggLabel.value,
+      quantity: form.quantity,
+      price: currentPrice.value,
+      subtotal: currentTotal.value
+    });
+  }
+  
+  // Reset selection
+  selectedEggType.value = 'hero_size'; // Reset to a default or empty
+  form.quantity = 1;
+}
+
+function removeFromCart(index: number) {
+  cart.value.splice(index, 1);
+  if (editingIndex.value === index) editingIndex.value = null;
+}
+
+function startEditPrice(index: number, currentPrice: number) {
+  editingIndex.value = index;
+  editingPriceValue.value = currentPrice;
+}
+
+function savePriceEdit(index: number) {
+  if (editingPriceValue.value <= 0) return;
+  const item = cart.value[index];
+  if (item) {
+    item.price = editingPriceValue.value;
+    item.subtotal = item.quantity * item.price;
+  }
+  editingIndex.value = null;
+}
+
+
 function handlePreview() {
+  if (cart.value.length === 0) return;
   showPreview.value = true;
 }
 
+function printInvoice(saleId: string, customItems?: any[], customTotal?: number) {
+  const invoiceData = {
+    invoiceNo: `EP-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${String(saleId).slice(-3).toUpperCase()}`,
+    date: new Date().toLocaleDateString('id-ID'),
+    customerName: selectedCustomerName.value,
+    customerPhone: customerPhone.value,
+    items: customItems || cart.value.map(item => ({
+      description: item.label,
+      quantity: item.quantity,
+      unit: 'Pack',
+      price: item.price,
+      total: item.subtotal
+    })),
+    grandTotal: customTotal !== undefined ? customTotal : cartTotal.value
+  };
+
+  const html = generateInvoiceHTML(invoiceData);
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    // Wait for styles/fonts to load before printing
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  }
+}
+
 async function confirmSale() {
+  if (cart.value.length === 0) return;
+  
   loading.value = true;
   
+  // Capture snapshot for printing since cart will be cleared
+  const cartSnapshot = cart.value.map(item => ({
+    description: item.label,
+    quantity: item.quantity,
+    unit: 'Pack',
+    price: item.price,
+    total: item.subtotal
+  }));
+  const totalSnapshot = cartTotal.value;
+
   try {
     let finalCustomerId = selectedCustomerId.value;
 
-    // A. Auto-Register if it's a new name (and doesn't match an existing one exactly)
+    // A. Auto-Register if it's a new name
     if (!finalCustomerId && customerSearch.value) {
-      // Final check if name exists but wasn't selected
       const existing = customers.value.find(c => c.name.toLowerCase() === customerSearch.value.toLowerCase());
       if (existing) {
         finalCustomerId = existing.id;
@@ -329,60 +519,80 @@ async function confirmSale() {
       .from('sales')
       .insert({
         customer_id: finalCustomerId,
-        total_price: currentTotal.value,
-        payment_status: 'paid'
+        total_price: totalSnapshot,
+        payment_status: form.paymentStatus,
+        fulfillment_status: 'processing'
       })
       .select()
       .single();
 
     if (saleError) throw saleError;
 
-    // C. Create Sale Item
-    await supabase.from('sale_items').insert({
-      sale_id: sale.id,
-      egg_type: selectedEggType.value,
-      quantity: form.quantity,
-      unit_price: currentPrice.value,
-      subtotal: currentTotal.value
-    });
+    // C. Create Sale Items & Update Stock
+    for (const item of cartSnapshot) {
+      // Find original item id for database
+      const originalItem = cart.value.find(c => c.label === item.description);
+      const eggId = originalItem?.id;
 
-    // D. Update Inventory & Log
-    const quantityInButir = form.quantity * 10;
-    const newEggStock = maxStock.value - quantityInButir;
-    
-    // 1. Update Egg Stock
-    await supabase.from('inventory').update({ current_stock: newEggStock }).eq('id', selectedEggType.value);
-    await supabase.from('stock_logs').insert({
-      egg_type: selectedEggType.value,
-      change: -quantityInButir,
-      log_type: 'sale',
-      notes: `Sale to ${selectedCustomerName.value} (${form.quantity} Pack) (#${sale.id})`
-    });
+      await supabase.from('sale_items').insert({
+        sale_id: sale.id,
+        egg_type: eggId,
+        quantity: item.quantity,
+        unit_price: item.price,
+        subtotal: item.total
+      });
 
-    // 2. Update Packaging Materials Stock (Deduct 1 per Pack)
-    const supplies = ['packaging_standard', 'sticker_label', 'mini_card'];
-    for (const supplyId of supplies) {
-      const currentSupply = inventory.value.find(i => i.id === supplyId);
-      if (currentSupply) {
-        const newSupplyStock = Math.max(0, currentSupply.current_stock - form.quantity);
-        await supabase.from('inventory').update({ current_stock: newSupplyStock }).eq('id', supplyId);
+      // Update Egg Stock
+      const eggInInv = inventory.value.find(i => i.id === eggId);
+      if (eggInInv) {
+        const quantityInButir = item.quantity * 10;
+        const newEggStock = eggInInv.current_stock - quantityInButir;
+        await supabase.from('inventory').update({ current_stock: newEggStock }).eq('id', eggId);
         
         await supabase.from('stock_logs').insert({
-          egg_type: supplyId,
-          change: -form.quantity,
+          egg_type: eggId,
+          change: -quantityInButir,
           log_type: 'sale',
-          notes: `Auto-deduct for Sale #${sale.id} (${form.quantity} units)`
+          notes: `Sale #${sale.id} (${item.quantity} Pack)`
         });
       }
     }
 
-    alert('Transaction Successful!');
+    // D. Update Packaging Materials
+    const totalPacks = cartSnapshot.reduce((sum, i) => sum + i.quantity, 0);
+    const supplies = ['packaging_standard', 'sticker_label', 'mini_card'];
+    for (const supplyId of supplies) {
+      const currentSupply = inventory.value.find(i => i.id === supplyId);
+      if (currentSupply) {
+        const newSupplyStock = Math.max(0, currentSupply.current_stock - totalPacks);
+        await supabase.from('inventory').update({ current_stock: newSupplyStock }).eq('id', supplyId);
+      }
+    }
+
+    // E. Update Customer Stats
+    const currentCustomer = customers.value.find(c => c.id === finalCustomerId);
+    if (currentCustomer) {
+      const newOrders = (currentCustomer.total_orders || 0) + 1;
+      const newSpent = (currentCustomer.total_spent || 0) + totalSnapshot;
+      await supabase.from('customers')
+        .update({ total_orders: newOrders, total_spent: newSpent, updated_at: new Date().toISOString() })
+        .eq('id', finalCustomerId);
+    }
+
+    // Auto-Trigger Print with snapshot
+    printInvoice(sale.id, cartSnapshot, totalSnapshot);
+
+    // Reset state
     showPreview.value = false;
     form.quantity = 1;
+    form.paymentStatus = 'paid';
+    cart.value = [];
     customerSearch.value = '';
     customerPhone.value = '';
     selectedCustomerId.value = null;
     fetchData();
+
+    alert('Transaction Successful!');
   } catch (e: any) {
     alert('Error: ' + e.message);
   } finally {
@@ -831,4 +1041,318 @@ onMounted(fetchData);
 /* FADE TRANSITION */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* PAYMENT TOGGLE */
+.payment-toggle-group {
+  margin-top: 4px;
+}
+
+.toggle-options {
+  display: flex;
+  gap: 10px;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text-dim);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+  justify-content: center;
+}
+
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+}
+
+.toggle-btn.active.pending {
+  background: rgba(255, 170, 0, 0.1);
+  border-color: rgba(255, 170, 0, 0.4);
+  color: #FFAA00;
+}
+
+.toggle-btn.active.paid {
+  background: rgba(0, 255, 157, 0.08);
+  border-color: rgba(0, 255, 157, 0.35);
+  color: var(--color-success);
+}
+
+.toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.toggle-dot.pending { background: #FFAA00; box-shadow: 0 0 6px rgba(255, 170, 0, 0.5); }
+.toggle-dot.paid { background: var(--color-success); box-shadow: 0 0 6px rgba(0, 255, 157, 0.5); }
+
+/* CART STYLES */
+.cart-section {
+  padding: 24px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.cart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.cart-count {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  background: rgba(255, 140, 0, 0.1);
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.cart-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.cart-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-label { font-weight: 700; font-size: 0.95rem; color: white; }
+.item-qty { font-size: 0.75rem; color: var(--color-text-dim); }
+
+.item-price-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.item-subtotal { font-weight: 800; color: var(--color-primary); font-size: 0.95rem; }
+
+.item-price-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.price-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.unit-price-hint {
+  font-size: 0.65rem;
+  color: var(--color-text-dim);
+  font-weight: 700;
+}
+
+.price-editor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 140, 0, 0.1);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 140, 0, 0.2);
+}
+
+.price-edit-input {
+  width: 80px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-primary);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: right;
+  padding: 2px 4px;
+}
+
+.price-edit-input:focus {
+  outline: none;
+  border-bottom-width: 2px;
+}
+
+.btn-edit-price, .btn-save-price, .btn-cancel-price {
+  background: transparent;
+  border: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-edit-price:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.btn-save-price { color: var(--color-success); }
+.btn-save-price:hover { background: rgba(0, 255, 157, 0.1); }
+
+.btn-cancel-price { color: var(--color-error); }
+.btn-cancel-price:hover { background: rgba(255, 66, 66, 0.1); }
+
+.is-editing {
+  border-color: var(--color-primary) !important;
+  background: rgba(255, 140, 0, 0.05) !important;
+}
+
+.btn-remove {
+
+  background: rgba(255, 66, 66, 0.1);
+  border: 1px solid rgba(255, 66, 66, 0.2);
+  color: var(--color-error);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-remove:hover {
+  background: var(--color-error);
+  color: white;
+}
+
+.cart-footer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px dotted var(--glass-border);
+}
+
+.cart-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cart-total-row .label { font-size: 0.8rem; color: var(--color-text-dim); font-weight: 600; }
+.cart-total-row .value { font-size: 1.4rem; font-weight: 900; color: white; }
+
+.action-row {
+  display: flex;
+  gap: 16px;
+}
+
+.icon-xs { width: 14px; height: 14px; }
+.icon-sm { width: 18px; height: 18px; }
+
+.section-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.action-row {
+  display: flex;
+  gap: 16px;
+}
+
+.w-full {
+  width: 100%;
+}
+
+/* PREMIUM BUTTONS */
+.btn-primary, .btn-primary-glow, .btn-secondary {
+  border-radius: 12px;
+  padding: 14px 24px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  border: none;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  height: 54px;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+  box-shadow: 0 4px 15px rgba(255, 140, 0, 0.2);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #ff8c00;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 140, 0, 0.3);
+}
+
+.btn-primary-glow {
+  background: linear-gradient(135deg, var(--color-primary), #ffb800);
+  color: white;
+  box-shadow: 0 0 20px rgba(255, 140, 0, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary-glow:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(255, 140, 0, 0.45);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-primary:disabled, .btn-primary-glow:disabled, .btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-dim);
+  border: 1px solid var(--glass-border);
+}
 </style>
