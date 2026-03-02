@@ -55,7 +55,8 @@ import {
   ClipboardListIcon,
   TruckIcon,
   SettingsIcon,
-  InstagramIcon
+  InstagramIcon,
+  TrendingUpIcon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
@@ -88,6 +89,7 @@ const navCards = computed(() => {
     sections.push({
       label: 'Management',
       links: [
+        { label: 'Financial Terminal', path: '/financial', icon: TrendingUpIcon, premium: true },
         { label: 'Team Members', path: '/employees', icon: UsersIcon }
       ]
     });

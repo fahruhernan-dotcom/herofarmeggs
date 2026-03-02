@@ -534,13 +534,17 @@ async function confirmSale() {
       // Find original item id for database
       const originalItem = cart.value.find(c => c.label === item.description);
       const eggId = originalItem?.id;
+      
+      // Snapshot the current HPP (cost_price) at sale time for accurate financial reporting
+      const eggInInvForCost = inventory.value.find(i => i.id === eggId);
 
       await supabase.from('sale_items').insert({
         sale_id: sale.id,
         egg_type: eggId,
         quantity: item.quantity,
         unit_price: item.price,
-        subtotal: item.total
+        subtotal: item.total,
+        unit_cost: eggInInvForCost?.cost_price || 0
       });
 
       // Update Egg Stock

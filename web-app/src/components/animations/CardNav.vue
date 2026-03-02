@@ -42,6 +42,7 @@
                 v-for="(lnk, i) in item.links" 
                 :key="`${lnk.label}-${i}`" 
                 class="nav-card-link" 
+                :class="{ 'premium-link': lnk.premium }"
                 href="#"
                 @click.prevent="navigate(lnk.path)"
               >
@@ -348,5 +349,28 @@ watch(() => props.items, () => {
   width: 20px;
   height: 20px;
   color: var(--color-primary);
+}
+
+/* Premium Link Styling */
+.nav-card-link.premium-link {
+  color: white; /* Changed to white to match other text */
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+  animation: premiumPulse 3s infinite ease-in-out;
+}
+
+.nav-card-link.premium-link .nav-card-link-icon {
+  color: #f59e0b;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
+}
+
+@keyframes premiumPulse {
+  0%, 100% { 
+    opacity: 1; 
+    text-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+  }
+  50% { 
+    opacity: 0.8; 
+    text-shadow: 0 0 3px rgba(245, 158, 11, 0.1);
+  }
 }
 </style>

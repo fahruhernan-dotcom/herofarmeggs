@@ -57,6 +57,12 @@ const router = createRouter({
                     meta: { requiresAuth: true, requiresAdmin: true }
                 },
                 {
+                    path: 'financial',
+                    name: 'financial',
+                    component: () => import('../views/FinancialTerminal.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
                     path: 'profile',
                     name: 'profile',
                     component: () => import('../views/Profile.vue'),
