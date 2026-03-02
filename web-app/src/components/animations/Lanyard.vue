@@ -51,7 +51,6 @@ let pointer = new THREE.Vector2();
 // Physics & Interaction state
 let isDragging = false;
 let draggedOffset = new THREE.Vector3();
-let dragThreshold = 5.5; // Tension needed to trigger
 let currentTension = 0;
 
 // Physics bodies

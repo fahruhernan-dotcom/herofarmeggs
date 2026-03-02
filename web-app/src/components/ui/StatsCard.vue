@@ -2,16 +2,25 @@
   <div class="glass-panel stat-card" :class="status">
     <div class="card-glow"></div>
     <div class="card-content">
-      <div class="header">
-        <span class="label">{{ label }}</span>
-        <div v-if="trend !== undefined" class="trend" :class="trend >= 0 ? 'up' : 'down'">
-          {{ trend >= 0 ? '+' : '' }}{{ trend }}%
+      <div class="header-main">
+        <div class="value-container">
+          <h2 class="value">{{ value }}</h2>
+          <span class="unit" v-if="unit">{{ unit }}</span>
         </div>
+        
+        <!-- NEW GROWTH INDICATOR -->
+        <div v-if="trend !== undefined || trendStatus" class="growth-indicator">
+          <div v-if="trendStatus === 'new'" class="growth-pill new">
+            — Baru
+          </div>
+          <div v-else-if="trend !== undefined" class="growth-pill" :class="trend >= 0 ? 'up' : 'down'">
+            {{ trend >= 0 ? '↑' : '↓' }} {{ Math.abs(trend) }}%
+          </div>
+        </div>
+
+        <span class="label">{{ label }}</span>
       </div>
-      <div class="value-container">
-        <h2 class="value">{{ value }}</h2>
-        <span class="unit" v-if="unit">{{ unit }}</span>
-      </div>
+
       <div class="footer">
         <span class="subtext">{{ subtext }}</span>
         <div v-if="status === 'critical'" class="alert-icon">⚠️</div>
@@ -28,9 +37,11 @@ withDefaults(defineProps<{
   unit?: string;
   subtext?: string;
   trend?: number;
+  trendStatus?: 'up' | 'down' | 'new' | 'none';
   status?: 'healthy' | 'low' | 'critical';
 }>(), {
-  status: 'healthy'
+  status: 'healthy',
+  trendStatus: 'none'
 });
 </script>
 
@@ -52,19 +63,18 @@ withDefaults(defineProps<{
   height: 100%;
 }
 
-.header {
+.header-main {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  flex-direction: column;
 }
 
 .label {
   color: var(--color-text-dim);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-top: 4px;
 }
 
 .value-container {
@@ -74,38 +84,35 @@ withDefaults(defineProps<{
 }
 
 .value {
-  font-size: 2.4rem;
-  font-weight: 800;
+  font-size: 2.2rem;
+  font-weight: 900;
   color: white;
   line-height: 1;
 }
 
 .unit {
   color: var(--color-text-dim);
-  font-size: 1rem;
-}
-
-.footer {
-  margin-top: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.subtext {
-  font-size: 0.8rem;
-  color: var(--color-text-dim);
-}
-
-.trend {
-  font-size: 0.75rem;
-  padding: 4px 8px;
-  border-radius: 20px;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
-.trend.up { background: rgba(0, 255, 157, 0.1); color: var(--color-success); }
-.trend.down { background: rgba(255, 62, 62, 0.1); color: var(--color-error); }
+.growth-indicator {
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+.growth-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.growth-pill.up { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.growth-pill.down { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.growth-pill.new { background: rgba(255, 255, 255, 0.05); color: var(--color-text-dim); }
 
 /* Status Styles */
 .stat-card.critical { border-color: rgba(255, 66, 66, 0.5); box-shadow: inset 0 0 20px rgba(255, 66, 66, 0.05); }

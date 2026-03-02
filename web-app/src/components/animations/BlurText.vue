@@ -26,8 +26,9 @@ const isInView = ref(false);
 
 onMounted(() => {
   const observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry.isIntersecting) {
+    (entries) => {
+      const entry = entries[0];
+      if (entry && entry.isIntersecting) {
         isInView.value = true;
         observer.unobserve(entry.target);
       }

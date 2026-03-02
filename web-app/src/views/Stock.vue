@@ -498,7 +498,7 @@ async function fetchData() {
     .limit(20);
   if (logData) logs.value = logData;
 
-  const { data: sup } = await supabase.from('suppliers').select('*').order('name');
+  const { data: sup } = await supabase.from('suppliers').select('*').eq('is_deleted', false).order('name');
   if (sup) suppliers.value = sup;
 }
 
@@ -656,6 +656,14 @@ async function submitPackagingPurchase() {
       notes: purchaseNotes + supplierNote
     });
 
+    // Create Notification
+    await supabase.from('notifications').insert({
+      type: 'restock_done',
+      title: 'Stok Diperbarui',
+      message: `${packForm.label} ditambah ${goodQty} unit`,
+      link: '/stock'
+    });
+
     // 3. Proactive: Update Egg products HPP based on supply type
     if (packForm.id === 'packaging_standard') {
       await supabase.from('inventory').update({ cost_per_packaging: effectiveCost }).eq('item_type', 'egg');
@@ -724,6 +732,17 @@ async function submitAdjustment() {
     unit_price: form.log_type === 'arrival' ? effectiveEggCost : 0,
     notes: finalNotes
   });
+
+    // Create Notification if it was a restock (arrival)
+    if (!logError && form.log_type === 'arrival') {
+      const productLabel = inventory.value.find(i => i.id === form.egg_type)?.label || 'Produk';
+      await supabase.from('notifications').insert({
+        type: 'restock_done',
+        title: 'Stok Diperbarui',
+        message: `${productLabel} ditambah ${finalChange} unit`,
+        link: '/stock'
+      });
+    }
 
 
   if (!logError) {

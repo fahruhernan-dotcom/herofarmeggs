@@ -13,137 +13,177 @@
       </div>
     </header>
 
-    <!-- Stats Grid -->
-    <section class="stats-grid">
-      <StatsCard 
-        label="Hero Size Availability" 
-        :value="heroStock" 
-        unit="Butir"
-        :subtext="`Physical: ${heroStock + reservedHero} | Reserved: ${reservedHero}`"
-        :status="getDashboardStatus(heroStock)"
-      />
-      <StatsCard 
-        label="Standard Size Availability" 
-        :value="standardStock" 
-        unit="Butir"
-        :subtext="`Physical: ${standardStock + reservedStandard} | Reserved: ${reservedStandard}`"
-        :status="getDashboardStatus(standardStock)"
-      />
-      <StatsCard 
-        label="Telur Asin Availability" 
-        :value="saltedStock" 
-        unit="Butir"
-        :subtext="`Physical: ${saltedStock + reservedSalted} | Reserved: ${reservedSalted}`"
-        :status="getDashboardStatus(saltedStock)"
-      />
-      <StatsCard 
-        v-if="authStore.isAdmin"
-        label="Revenue (This Month)" 
-        :value="'Rp ' + monthlyRevenue.toLocaleString()" 
-        unit=""
-        :subtext="revenueSubtext"
-      />
+    <!-- Premium Widgets Grid (2x3) -->
+    <section class="premium-grid">
+      <!-- WIDGET 1: REVENUE STATUS -->
+      <div class="glass-panel widget animate-fade-up" style="--delay: 1">
+        <div class="widget-header">
+          <div class="wh-left">
+            <h4 class="widget-title">Pendapatan</h4>
+            <div v-if="revenueWidget.growth.status !== 'none'" 
+                 class="growth-pill" :class="revenueWidget.growth.status">
+              {{ revenueWidget.growth.status === 'up' ? '↑' : '↓' }} 
+              {{ revenueWidget.growth.val }}% 
+              <span class="text-xs opacity-70 ml-1">dari bulan lalu</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-container donut">
+          <Doughnut :data="revenueWidget.chartData" :options="{ cutout: '75%', plugins: { legend: { display: false } } }" />
+          <div class="chart-center">
+            <span class="cc-val">{{ revenueWidget.current.count }}</span>
+            <span class="cc-label">Orders</span>
+          </div>
+        </div>
+        <div class="legend-detailed">
+          <div class="legend-item">
+            <span class="dot lunas"></span>
+            <span class="label">Lunas</span>
+            <span class="val">Rp {{ revenueWidget.current.paid.toLocaleString() }}</span>
+          </div>
+          <div class="legend-item">
+            <span class="dot pending"></span>
+            <span class="label">Pending</span>
+            <span class="val">Rp {{ revenueWidget.current.pending.toLocaleString() }}</span>
+          </div>
+          <div class="legend-item">
+            <span class="dot void"></span>
+            <span class="label">Void</span>
+            <span class="val">Rp {{ revenueWidget.current.void.toLocaleString() }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WIDGET 2: TOP CUSTOMERS -->
+      <div class="glass-panel widget animate-fade-up" style="--delay: 2">
+        <div class="widget-header">
+          <div class="wh-left">
+            <h4 class="widget-title">Top Pelanggan</h4>
+            <span class="badge-mini">Bulan Ini</span>
+          </div>
+          <router-link to="/customers" class="link-more">Lihat Semua <ChevronRightIcon class="icon-xs" /></router-link>
+        </div>
+        <div class="chart-container bar">
+          <Bar :data="topCustomersWidget.chartData" :options="{ 
+            indexAxis: 'y', 
+            plugins: { legend: { display: false } },
+            scales: { x: { display: false }, y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } } } }
+          }" />
+        </div>
+      </div>
+
+      <!-- WIDGET 3: REALTIME STOK -->
+      <div class="glass-panel widget animate-fade-up" style="--delay: 3">
+        <div class="widget-header">
+          <div class="wh-left">
+            <h4 class="widget-title">Status Stok</h4>
+            <div class="live-dot pulse"></div>
+          </div>
+        </div>
+        <div class="stock-visual-grid">
+          <div v-for="item in eggInventory" :key="item.id" class="sv-row">
+            <div class="sv-info">
+              <span class="sv-name">{{ item.label }}</span>
+              <span class="sv-pill" :class="getDashboardStatus(item.current_stock)">
+                {{ item.current_stock }} Butir
+              </span>
+            </div>
+            <div class="sv-progress-bg">
+              <div class="sv-progress-fill" 
+                   :class="getDashboardStatus(item.current_stock)"
+                   :style="{ width: Math.min((item.current_stock / 100) * 100, 100) + '%' }">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="supply-summary">
+          <div v-for="s in packagingInventory" :key="s.id" class="supply-badge">
+            <span class="sb-label">{{ s.label.split(' ')[0] }}</span>
+            <span class="sb-val">{{ s.current_stock }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WIDGET 4: CASH FLOW 30 HARI -->
+      <div class="glass-panel widget animate-fade-up" style="--delay: 4">
+        <div class="widget-header">
+          <div class="wh-left">
+            <h4 class="widget-title">Arus Kas</h4>
+            <span class="text-xs opacity-60">30 Hari Terakhir</span>
+          </div>
+          <div class="net-summary" :class="cashFlowWidget.net >= 0 ? 'plus' : 'minus'">
+            Net: Rp {{ cashFlowWidget.net.toLocaleString() }}
+          </div>
+        </div>
+        <div class="chart-container line">
+          <Line :data="cashFlowWidget.chartData" :options="{ 
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }, 
+            scales: { 
+              x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } },
+              y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 }, callback: (v: any) => v >= 1000000 ? (v/1000000)+'Jt' : (v/1000)+'Rb' } }
+            }
+          }" />
+        </div>
+      </div>
+
+      <!-- WIDGET 5: PENJUALAN PER PRODUK -->
+      <div class="glass-panel widget animate-fade-up" style="--delay: 5">
+        <div class="widget-header">
+          <div class="wh-left">
+            <h4 class="widget-title">Komposisi Penjualan</h4>
+          </div>
+          <div class="period-select">Bulan Ini</div>
+        </div>
+        <div class="chart-container donut-mini">
+          <Doughnut :data="salesProductWidget.chartData" :options="{ cutout: '70%', plugins: { legend: { display: false } } }" />
+          <div class="chart-center">
+            <span class="cc-val-sm">{{ salesProductWidget.total }}</span>
+            <span class="cc-label-xs">Packs</span>
+          </div>
+        </div>
+        <div class="legend-grid">
+          <div v-for="(val, label) in { 'Hero': salesProductWidget.heroCount, 'Standard': salesProductWidget.standardCount, 'Salted': salesProductWidget.saltedCount }" :key="label" class="lg-item">
+            <span class="lg-val">{{ val }}</span>
+            <span class="lg-label">{{ label }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WIDGET 6: PIUTANG / AGING -->
+      <div class="glass-panel widget animate-fade-up" style="--delay: 6">
+        <div class="widget-header">
+          <div class="wh-left">
+            <h4 class="widget-title">Piutang</h4>
+            <div v-if="piutangWidget.overdue.count > 0" class="badge-error animate-pulse">! Overdue</div>
+          </div>
+          <router-link to="/financial" class="link-more">Semua Piutang <ChevronRightIcon class="icon-xs" /></router-link>
+        </div>
+        <div class="aging-buckets">
+          <div class="bucket-row green">
+            <span class="b-label">Lunas</span>
+            <div class="b-bar"><div class="b-fill" style="width: 100%"></div></div>
+            <span class="b-val">Rp {{ piutangWidget.paid.total.toLocaleString() }}</span>
+          </div>
+          <div class="bucket-row amber">
+            <span class="b-label">0-7 h</span>
+            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min((piutangWidget.week1.total / 10000000) * 100, 100) + '%' }"></div></div>
+            <span class="b-val">Rp {{ piutangWidget.week1.total.toLocaleString() }}</span>
+          </div>
+          <div class="bucket-row orange">
+            <span class="b-label">8-14 h</span>
+            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min((piutangWidget.week2.total / 10000000) * 100, 100) + '%' }"></div></div>
+            <span class="b-val">Rp {{ piutangWidget.week2.total.toLocaleString() }}</span>
+          </div>
+          <div class="bucket-row red" :class="{ 'pulse': piutangWidget.overdue.count > 0 }">
+            <span class="b-label">15+ h</span>
+            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min((piutangWidget.overdue.total / 10000000) * 100, 100) + '%' }"></div></div>
+            <span class="b-val">Rp {{ piutangWidget.overdue.total.toLocaleString() }}</span>
+          </div>
+        </div>
+      </div>
     </section>
-
-    <!-- Action Cards -->
-    <div class="action-cards">
-      <router-link to="/orders" class="action-card glass-panel" v-if="pendingOrdersCount > 0">
-        <div class="ac-icon pending-icon">
-          <ClockIcon />
-        </div>
-        <div class="ac-info">
-          <span class="ac-value">{{ pendingOrdersCount }}</span>
-          <span class="ac-label">Pending Orders</span>
-        </div>
-        <ArrowRightIcon class="ac-arrow" />
-      </router-link>
-      <router-link to="/orders" class="action-card glass-panel" v-if="onDeliveryCount > 0">
-        <div class="ac-icon delivery-icon">
-          <TruckIcon />
-        </div>
-        <div class="ac-info">
-          <span class="ac-value">{{ onDeliveryCount }}</span>
-          <span class="ac-label">On Delivery</span>
-        </div>
-        <ArrowRightIcon class="ac-arrow" />
-      </router-link>
-      <router-link to="/stock" class="action-card glass-panel" v-if="lowStockCount > 0">
-        <div class="ac-icon critical-icon">
-          <AlertTriangleIcon />
-        </div>
-        <div class="ac-info">
-          <span class="ac-value">{{ lowStockCount }}</span>
-          <span class="ac-label">Low Stock Items</span>
-        </div>
-        <ArrowRightIcon class="ac-arrow" />
-      </router-link>
-    </div>
-
-    <!-- Sales Summary & Activity -->
-    <div class="content-grid">
-      <div class="glass-panel main-chart">
-        <h4 class="panel-title">Sales Summary (Last 7 Days)</h4>
-        <div class="sales-summary-grid" v-if="last7DaysSales.length > 0">
-          <div class="day-bar-container" v-for="day in last7DaysSales" :key="day.date">
-            <div class="day-bar-wrapper">
-              <div 
-                class="day-bar" 
-                :style="{ height: day.percentage + '%' }"
-                :class="{ 'today': day.isToday }"
-              ></div>
-            </div>
-            <span class="day-label">{{ day.label }}</span>
-            <span class="day-value" v-if="day.count > 0">{{ day.count }}</span>
-          </div>
-        </div>
-        <div class="chart-placeholder" v-else>
-          <p class="text-dim">No sales data available for the past 7 days.</p>
-        </div>
-        <div class="chart-footer">
-          <span class="cf-stat">
-            <strong>{{ totalLast7Days }}</strong> orders in last 7 days
-          </span>
-          <span class="cf-stat">
-            <strong>Rp {{ revenueLast7Days.toLocaleString() }}</strong> revenue
-          </span>
-        </div>
-      </div>
-
-      <div class="glass-panel activity-feed">
-        <h4 class="panel-title">Recent Logs</h4>
-        <div class="feed-list">
-          <div v-if="logs.length === 0" class="empty-state">
-            No recent activity recorded.
-          </div>
-          <div v-for="log in logs" :key="log.id" class="feed-item">
-            <div class="log-indicator" :class="log.log_type"></div>
-            <div class="log-info">
-              <p class="log-text"><strong>{{ log.change > 0 ? '+' : '' }}{{ log.change }}</strong> {{ log.egg_type.replace('_', ' ') }}</p>
-              <p class="log-meta">{{ formatTime(log.created_at) }} • {{ log.log_type }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="glass-panel top-customers">
-        <h4 class="panel-title">Top Customers (All Time)</h4>
-        <div class="top-customers-list">
-          <div v-if="topCustomers.length === 0" class="empty-state">
-            No customer data yet.
-          </div>
-          <div v-for="(cust, index) in topCustomers" :key="cust.id" class="tc-item">
-            <div class="tc-rank">#{{ index + 1 }}</div>
-            <div class="tc-info">
-              <p class="tc-name">{{ cust.name }}</p>
-              <p class="tc-meta">{{ cust.total_orders }} orders</p>
-            </div>
-            <div class="tc-spent">
-              Rp {{ (cust.total_spent || 0).toLocaleString() }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- DANGER ZONE -->
     <section v-if="authStore.isAdmin" class="danger-zone glass-panel mt-8">
@@ -169,40 +209,53 @@
           </div>
 
           <div class="reset-stepper">
-            <!-- STEP 1: WARNING -->
+            <!-- STEP 1: IMPACT ASSESSMENT -->
             <div v-if="resetStep === 1" class="reset-step animate-slide">
-              <div class="warning-box">
-                <AlertTriangleIcon class="icon-lg text-error" />
-                <p>This action will permanently wipe all Sales, Orders, and Stock Logs. Inventory and Customer profiles will be reset to zero.</p>
+              <div class="impact-box">
+                <AlertOctagonIcon class="icon-lg text-error" />
+                <h4 class="font-bold mt-2">Analisis Dampak</h4>
+                <div class="impact-stats">
+                  <div class="is-item"><span>Transaksi Sales</span> <strong>{{ impactCounts.sales }}</strong></div>
+                  <div class="is-item"><span>Pelanggan</span> <strong>{{ impactCounts.customers }}</strong></div>
+                  <div class="is-item"><span>Log Stok</span> <strong>{{ impactCounts.logs }}</strong></div>
+                  <div class="is-item"><span>Entri Keuangan</span> <strong>{{ impactCounts.finance }}</strong></div>
+                </div>
+                <p class="text-xs text-dim mt-4 italic">Semua data di atas akan dihapus permanen.</p>
               </div>
-              <button class="btn-primary w-full mt-6" @click="resetStep = 2">BEGIN RESET PROCESS</button>
+              <div class="modal-actions mt-6">
+                <button class="btn-secondary" @click="closeResetModal">BATAL</button>
+                <button class="btn-primary" @click="resetStep = 2">LANJUT KE BACKUP →</button>
+              </div>
             </div>
 
-            <!-- STEP 2: BACKUP -->
+            <!-- STEP 2: MANDATORY BACKUP -->
             <div v-if="resetStep === 2" class="reset-step animate-slide">
-              <div class="backup-box glass-panel">
-                <DownloadIcon class="icon-lg text-primary" />
-                <h4 class="font-bold mt-4">Security Requirement</h4>
-                <p class="text-dim text-sm">You must export a full backup before the reset option becomes available.</p>
+              <div class="backup-box glass-panel amber">
+                <AlertTriangleIcon class="icon-lg text-amber" />
+                <h4 class="font-bold mt-2">Backup Wajib</h4>
+                <p class="text-sm text-dim">Anda HARUS mengunduh backup sebelum melanjutkan.</p>
                 <button class="btn-primary-glow mt-6" @click="exportBackupData">
-                  <FileJsonIcon class="icon-sm" />
-                  <span>EXPORT BACKUP JSON</span>
+                  <DownloadIcon class="icon-sm" />
+                  <span>⬇ UNDUH BACKUP JSON</span>
                 </button>
               </div>
-              <div v-if="backupStatus === 'downloaded'" class="confirm-backup-row mt-6">
+              <div v-if="backupStatus === 'downloaded'" class="confirm-backup-row mt-6 animate-fade-in">
                 <label class="checkbox-container">
                   <input type="checkbox" v-model="backupDownloaded" />
                   <span class="checkmark"></span>
-                  <span class="cb-label">I have safely stored the backup file.</span>
+                  <span class="cb-label">✓ Saya sudah menyimpan file backup dengan aman</span>
                 </label>
               </div>
-              <button class="btn-secondary w-full mt-6" v-if="backupDownloaded" @click="resetStep = 3">PROCEED TO FINAL STEP</button>
+              <div class="modal-actions mt-6">
+                <button class="btn-secondary" @click="resetStep = 1">KEMBALI</button>
+                <button class="btn-primary" :disabled="!backupDownloaded" @click="resetStep = 3">TAHAP AKHIR</button>
+              </div>
             </div>
 
             <!-- STEP 3: FINAL CONFIRM -->
             <div v-if="resetStep === 3" class="reset-step animate-slide">
               <div class="form-group">
-                <label>TYPE <span class="text-error font-bold">RESET SYSTEM</span> TO WIPE DATA</label>
+                <label>Ketik <span class="text-error font-bold">RESET HERO FARM</span> untuk konfirmasi</label>
                 <input 
                   type="text" 
                   v-model="resetConfirmation" 
@@ -211,13 +264,13 @@
                 />
               </div>
               <div class="modal-actions mt-8">
-                <button class="btn-secondary" @click="resetStep = 2">BACK</button>
+                <button class="btn-secondary" @click="resetStep = 2">KEMBALI</button>
                 <button 
                   class="btn-error" 
-                  :disabled="resetConfirmation !== 'RESET SYSTEM' || reseting"
+                  :disabled="resetConfirmation !== 'RESET HERO FARM' || reseting"
                   @click="handleSystemReset"
                 >
-                  {{ reseting ? 'WIPING DATA...' : 'PERMANENTLY RESET DATA' }}
+                  {{ reseting ? 'WIPING DATA...' : 'KONFIRMASI RESET' }}
                 </button>
               </div>
             </div>
@@ -229,19 +282,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
-import StatsCard from '../components/ui/StatsCard.vue';
+// import StatsCard from '../components/ui/StatsCard.vue';
+
 import { 
   Trash2Icon, 
   AlertTriangleIcon, 
-  ClockIcon, 
-  TruckIcon, 
-  ArrowRightIcon,
   DownloadIcon,
-  FileJsonIcon
+  AlertOctagonIcon,
+  ChevronRightIcon
 } from 'lucide-vue-next';
+import { 
+  Chart as ChartJS, 
+  Title, Tooltip, Legend, ArcElement, 
+  CategoryScale, LinearScale, PointElement, 
+  LineElement, BarElement, Filler 
+} from 'chart.js';
+import { Doughnut, Line, Bar } from 'vue-chartjs';
+
+ChartJS.register(
+  Title, Tooltip, Legend, ArcElement, 
+  CategoryScale, LinearScale, PointElement, 
+  LineElement, BarElement, Filler
+);
 
 const authStore = useAuthStore();
 const heroStock = ref(0);
@@ -249,9 +314,209 @@ const standardStock = ref(0);
 const saltedStock = ref(0);
 const logs = ref<any[]>([]);
 const currentTime = ref('');
+const customers = ref<any[]>([]);
+const financeEntries = ref<any[]>([]);
 const allSales = ref<any[]>([]);
 const inventory = ref<any[]>([]);
-const customers = ref<any[]>([]);
+
+// NEW: Impact counts for Reset
+const impactCounts = reactive({
+  sales: 0,
+  customers: 0,
+  logs: 0,
+  finance: 0
+});
+
+// ─── HELPER: GROWTH CALCULATION ────────────────
+function calculateGrowth(current: number, previous: number) {
+  if (previous === 0) return current > 0 ? { val: 100, status: 'new' } : { val: 0, status: 'none' };
+  const diff = ((current - previous) / previous) * 100;
+  return { val: Math.abs(diff).toFixed(1), status: diff >= 0 ? 'up' : 'down' };
+}
+
+function getPeriodStats(salesArr: any[], offsetMonths = 0) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - offsetMonths, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() - offsetMonths + 1, 0, 23, 59, 59);
+  
+  const filtered = salesArr.filter((s: any) => {
+    if (!s.created_at) return false;
+    const d = new Date(s.created_at);
+    return d >= start && d <= end;
+  });
+
+  return {
+    total: filtered.reduce((acc: number, s: any) => acc + (s.total_price || 0), 0),
+    count: filtered.length,
+    paid: filtered.filter((s: any) => s.payment_status === 'paid').reduce((acc: number, s: any) => acc + (s.total_price || 0), 0),
+    pending: filtered.filter((s: any) => s.payment_status === 'pending').reduce((acc: number, s: any) => acc + (s.total_price || 0), 0),
+    void: filtered.filter((s: any) => s.payment_status === 'voided').reduce((acc: number, s: any) => acc + (s.total_price || 0), 0),
+    items: filtered.flatMap((s: any) => s.sale_items || [])
+  };
+}
+
+// ─── WIDGET 3: REALTIME STOK ────────────────
+const eggInventory = computed(() => inventory.value.filter((i: any) => i.item_type !== 'packaging'));
+const packagingInventory = computed(() => inventory.value.filter((i: any) => i.item_type === 'packaging'));
+
+// ─── WIDGET 1: REVENUE STATUS ────────────────
+const revenueWidget = computed(() => {
+  const current = getPeriodStats(allSales.value, 0);
+  const previous = getPeriodStats(allSales.value, 1);
+  const growth = calculateGrowth(current.paid, previous.paid);
+  
+  return {
+    current,
+    growth,
+    chartData: {
+      labels: ['Lunas', 'Pending', 'Void'],
+      datasets: [{
+        data: [current.paid, current.pending, current.void],
+        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    }
+  };
+});
+
+// ─── WIDGET 2: TOP CUSTOMERS (THIS MONTH) ────
+const topCustomersWidget = computed(() => {
+  // Aggregate by customer_id
+  const customerMap: Record<string, { name: string, total: number }> = {};
+  allSales.value.filter((s: any) => {
+    if (!s.created_at) return false;
+    const d = new Date(s.created_at);
+    return d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear();
+  }).forEach((s: any) => {
+    const cust = (customers.value || []).find((c: any) => c?.id === s.customer_id);
+    if (!s.customer_id || !cust) return;
+    if (!customerMap[s.customer_id]) {
+      customerMap[s.customer_id] = { name: cust.name, total: 0 };
+    }
+    const entry = customerMap[s.customer_id];
+    if (entry) entry.total += (s.total_price || 0);
+  });
+
+  const sorted = Object.values(customerMap)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+  return {
+    chartData: {
+      labels: sorted.map(c => c.name),
+      datasets: [{
+        label: 'Total Belanja (Rp)',
+        data: sorted.map(c => c.total),
+        backgroundColor: 'rgba(245, 158, 11, 0.8)',
+        borderRadius: 5,
+        borderWidth: 0,
+        barThickness: 12
+      }]
+    }
+  };
+});
+
+// ─── WIDGET 4: CASH FLOW (30 DAYS) ──────────
+const cashFlowWidget = computed(() => {
+  const dates = [];
+  const income = [];
+  const expense = [];
+  const today = new Date();
+  
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    dates.push(d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }));
+    
+    const dayFin = financeEntries.value.filter((f: any) => f.entry_date === dateStr);
+    income.push(dayFin.filter((f: any) => f.entry_type === 'income').reduce((a: number, f: any) => a + Number(f.amount), 0));
+    expense.push(dayFin.filter((f: any) => f.entry_type === 'expense').reduce((a: number, f: any) => a + Number(f.amount), 0));
+  }
+
+  const net = income.reduce((a: number, b: number) => a + b, 0) - expense.reduce((a: number, b: number) => a + b, 0);
+
+  return {
+    net,
+    chartData: {
+      labels: dates,
+      datasets: [
+        {
+          label: 'Pemasukan',
+          data: income,
+          borderColor: '#14b8a6',
+          backgroundColor: 'rgba(20, 184, 166, 0.1)',
+          fill: true,
+          tension: 0.4
+        },
+        {
+          label: 'Pengeluaran',
+          data: expense,
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          fill: true,
+          tension: 0.4
+        }
+      ]
+    }
+  };
+});
+
+// ─── WIDGET 5: SALES PER PRODUCT ────────────
+const salesProductWidget = computed(() => {
+  const current = getPeriodStats(allSales.value, 0);
+  const items = current.items;
+  
+  const heroCount = items.filter((i: any) => i.egg_type === 'hero_size').reduce((a: number, i: any) => a + i.quantity, 0);
+  const standardCount = items.filter((i: any) => i.egg_type === 'standard_size').reduce((a: number, i: any) => a + i.quantity, 0);
+  const saltedCount = items.filter((i: any) => i.egg_type === 'salted_egg').reduce((a: number, i: any) => a + i.quantity, 0);
+  const total = heroCount + standardCount + saltedCount;
+
+  return {
+    total,
+    heroCount, standardCount, saltedCount,
+    chartData: {
+      labels: ['Hero Egg', 'Standard Egg', 'Salted Egg'],
+      datasets: [{
+        data: [heroCount, standardCount, saltedCount],
+        backgroundColor: ['#fcc419', '#339af0', '#be4bdb'],
+        borderWidth: 0
+      }]
+    }
+  };
+});
+
+// ─── WIDGET 6: PIUTANG AGING ────────────────
+const piutangWidget = computed(() => {
+  const pendingSales = allSales.value.filter(s => s.payment_status === 'pending');
+  const now = new Date();
+  
+  const buckets = {
+    paid: { count: allSales.value.filter(s => s.payment_status === 'paid').length, total: allSales.value.filter(s => s.payment_status === 'paid').reduce((a, s) => a + (s.total_price || 0), 0) },
+    week1: { count: 0, total: 0 }, // 0-7 days
+    week2: { count: 0, total: 0 }, // 8-14 days
+    overdue: { count: 0, total: 0 } // 15+ days
+  };
+
+  pendingSales.forEach((s: any) => {
+    const created = new Date(s.created_at);
+    const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 3600 * 24));
+    
+    if (diffDays <= 7) { 
+      buckets.week1.count++; 
+      buckets.week1.total += (s.total_price || 0); 
+    } else if (diffDays <= 14) { 
+      buckets.week2.count++; 
+      buckets.week2.total += (s.total_price || 0); 
+    } else { 
+      buckets.overdue.count++; 
+      buckets.overdue.total += (s.total_price || 0); 
+    }
+  });
+
+  return buckets;
+});
 
 // Reset Logic
 const showResetModal = ref(false);
@@ -279,137 +544,45 @@ async function fetchData() {
     saltedStock.value = stocks.find(s => s.id === 'salted_egg')?.current_stock ?? 0;
   }
 
-  // Fetch ALL sales with status info
+  // Fetch ALL sales
   const { data: sales } = await supabase
     .from('sales')
-    .select('id, total_price, payment_status, fulfillment_status, stock_reserved, created_at, sale_items(egg_type, quantity)')
+    .select('*, sale_items(*)')
     .order('created_at', { ascending: false });
   if (sales) allSales.value = sales;
 
-  // Fetch customers for rankings
-  const { data: cust } = await supabase.from('customers').select('*');
+  // Fetch customers
+  const { data: cust } = await supabase.from('customers').select('*').eq('is_deleted', false);
   if (cust) customers.value = cust;
 
-  // Fetch Latest Logs
+  // Fetch Finance
+  const { data: fin } = await supabase.from('finance_entries').select('*').order('entry_date', { ascending: false });
+  if (fin) financeEntries.value = fin;
+
+  // Fetch Logs
   const { data: latestLogs } = await supabase
     .from('stock_logs')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(8);
-  
   if (latestLogs) logs.value = latestLogs;
+
+  // Fetch Impact Counts (for Reset)
+  if (authStore.isAdmin) {
+    const { count: sCount } = await supabase.from('sales').select('*', { count: 'exact', head: true });
+    const { count: cCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
+    const { count: lCount } = await supabase.from('stock_logs').select('*', { count: 'exact', head: true });
+    const { count: fCount } = await supabase.from('finance_entries').select('*', { count: 'exact', head: true });
+    impactCounts.sales = sCount || 0;
+    impactCounts.customers = cCount || 0;
+    impactCounts.logs = lCount || 0;
+    impactCounts.finance = fCount || 0;
+  }
 }
 
 // ─── COMPUTED ───────────────────────
 
 // Monthly revenue: only PAID orders from THIS MONTH
-const monthlyRevenue = computed(() => {
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  return allSales.value
-    .filter(s => s.payment_status === 'paid' && new Date(s.created_at) >= startOfMonth)
-    .reduce((acc, s) => acc + (s.total_price || 0), 0);
-});
-
-const revenueSubtext = computed(() => {
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const paidCount = allSales.value.filter(
-    s => s.payment_status === 'paid' && new Date(s.created_at) >= startOfMonth
-  ).length;
-  return `${paidCount} paid order(s) this month`;
-});
-
-const pendingOrdersCount = computed(() => 
-  allSales.value.filter(s => s.payment_status === 'pending').length
-);
-
-const onDeliveryCount = computed(() => 
-  allSales.value.filter(s => (s.fulfillment_status || 'processing') === 'on_delivery').length
-);
-
-const lowStockCount = computed(() => 
-  inventory.value.filter(i => i.item_type !== 'packaging' && i.current_stock <= 20).length
-);
-
-const reservedHero = computed(() => {
-  let count = 0;
-  allSales.value.filter(s => s.stock_reserved).forEach(s => {
-    s.sale_items?.forEach((i: any) => {
-      if (i.egg_type === 'hero_size') count += (i.quantity || 0) * 10;
-    });
-  });
-  return count;
-});
-
-const reservedStandard = computed(() => {
-  let count = 0;
-  allSales.value.filter(s => s.stock_reserved).forEach(s => {
-    s.sale_items?.forEach((i: any) => {
-      if (i.egg_type === 'standard_size') count += (i.quantity || 0) * 10;
-    });
-  });
-  return count;
-});
-
-const reservedSalted = computed(() => {
-  let count = 0;
-  allSales.value.filter(s => s.stock_reserved).forEach(s => {
-    s.sale_items?.forEach((i: any) => {
-      if (i.egg_type === 'salted_egg') count += (i.quantity || 0) * 10;
-    });
-  });
-  return count;
-});
-
-// Last 7 days sales chart
-const last7DaysSales = computed(() => {
-  const days: { date: string; label: string; count: number; revenue: number; percentage: number; isToday: boolean }[] = [];
-  const today = new Date();
-  
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0] || '';
-    const dayLabel = d.toLocaleDateString('id-ID', { weekday: 'short' }) || '';
-    
-    const daySales = allSales.value.filter(s => {
-      if (!s.created_at) return false;
-      const sDate = new Date(s.created_at).toISOString().split('T')[0];
-      return sDate === dateStr && s.payment_status !== 'cancelled';
-    });
-    
-    days.push({
-      date: dateStr,
-      label: dayLabel,
-      count: daySales.length,
-      revenue: daySales.reduce((a, s) => a + (Number(s.total_price) || 0), 0),
-      percentage: 0,
-      isToday: i === 0
-    });
-  }
-  
-  const maxCount = Math.max(...days.map(d => d.count), 1);
-  days.forEach(d => {
-    d.percentage = Math.max(5, (d.count / maxCount) * 100);
-  });
-  
-  return days;
-});
-
-const totalLast7Days = computed(() => last7DaysSales.value.reduce((a, d) => a + d.count, 0));
-const revenueLast7Days = computed(() => last7DaysSales.value.reduce((a, d) => a + d.revenue, 0));
-
-const topCustomers = computed(() => {
-  return [...customers.value]
-    .sort((a, b) => (b.total_spent || 0) - (a.total_spent || 0))
-    .slice(0, 5);
-});
-
-function formatTime(dateStr: string) {
-  return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-}
-
 function getDashboardStatus(stock: number) {
   if (stock <= 20) return 'critical';
   if (stock <= 25) return 'low';
@@ -430,12 +603,14 @@ async function exportBackupData() {
     const { data: sales } = await supabase.from('sales').select('*, sale_items(*)');
     const { data: customers } = await supabase.from('customers').select('*');
     const { data: stockLogs } = await supabase.from('stock_logs').select('*');
+    const { data: finance } = await supabase.from('finance_entries').select('*');
     
     const backupData = {
       exported_at: new Date().toISOString(),
       sales: sales || [],
       customers: customers || [],
-      stock_logs: stockLogs || []
+      stock_logs: stockLogs || [],
+      finance_entries: finance || []
     };
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -461,7 +636,7 @@ async function exportBackupData() {
 }
 
 async function handleSystemReset() {
-  if (resetConfirmation.value !== 'RESET SYSTEM') return;
+  if (resetConfirmation.value !== 'RESET HERO FARM') return;
   
   reseting.value = true;
   
@@ -469,9 +644,10 @@ async function handleSystemReset() {
     const { error: e1 } = await supabase.from('sale_items').delete().not('id', 'is', null);
     const { error: e2 } = await supabase.from('sales').delete().not('id', 'is', null);
     const { error: e3 } = await supabase.from('stock_logs').delete().not('id', 'is', null);
+    const { error: e6 } = await supabase.from('finance_entries').delete().not('id', 'is', null);
 
-    if (e1 || e2 || e3) {
-      console.error('Deletion Errors:', { e1, e2, e3 });
+    if (e1 || e2 || e3 || e6) {
+      console.error('Deletion Errors:', { e1, e2, e3, e6 });
     }
 
     const { error: e4 } = await supabase.from('customers').update({ 
@@ -491,7 +667,7 @@ async function handleSystemReset() {
     if (e4 || e5) {
       alert(`Customer/Inventory Reset Issue: ${e4?.message || e5?.message}`);
     } else {
-      alert('SYSTEM RESET SUCCESSFUL: Orders, sales, and logs have been cleared. Customer stats and inventory levels are now zero.');
+      alert('Sistem berhasil direset. Semua transaksi, logs, dan entri keuangan telah dihapus.');
     }
 
     closeResetModal();
@@ -525,256 +701,283 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.dashboard-content {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
-
-.workspace-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-
-.text-dim { color: var(--color-text-dim); }
-
-.time-widget {
-  padding: 12px 20px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  background: var(--color-success);
-  border-radius: 50%;
-  box-shadow: 0 0 10px var(--color-success);
-}
-
-.pulse { animation: pulse-glow 2s infinite; }
-
-@keyframes pulse-glow {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.5); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-.stats-grid {
+/* ─── PREMIUM GRID ──────────────── */
+.premium-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-}
-
-/* ─── ACTION CARDS ──────────────── */
-.action-cards {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.action-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 24px;
-  min-width: 220px;
-  text-decoration: none;
-  color: inherit;
-  cursor: pointer;
-  flex: 1;
-}
-
-.action-card:hover {
-  border-color: rgba(255, 140, 0, 0.3);
-}
-
-.ac-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.ac-icon svg { width: 20px; height: 20px; }
-
-.pending-icon { background: rgba(255, 170, 0, 0.12); color: #FFAA00; }
-.delivery-icon { background: rgba(255, 140, 0, 0.12); color: var(--color-primary); }
-.critical-icon { background: rgba(255, 62, 62, 0.12); color: var(--color-error); }
-
-.ac-info { display: flex; flex-direction: column; flex: 1; }
-.ac-value { font-size: 1.4rem; font-weight: 800; }
-.ac-label { font-size: 0.75rem; color: var(--color-text-dim); font-weight: 600; }
-
-.ac-arrow { width: 16px; height: 16px; color: var(--color-text-dim); opacity: 0.5; }
-
-/* ─── CONTENT GRID ──────────────── */
-.content-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   gap: 24px;
 }
 
-.panel-title {
-  margin-bottom: 24px;
-  font-size: 1rem;
-  letter-spacing: 0.05em;
-  color: var(--color-text-dim);
-  text-transform: uppercase;
-}
-
-.main-chart { padding: 32px; }
-
-/* ─── SALES SUMMARY BAR CHART ───── */
-.sales-summary-grid {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  height: 200px;
-  gap: 12px;
-  padding: 0 8px;
-}
-
-.day-bar-container {
+.widget {
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
+  gap: 20px;
+  min-height: 380px;
+  transition: transform 0.3s ease, border-color 0.3s ease;
 }
 
-.day-bar-wrapper {
-  height: 160px;
-  width: 100%;
-  max-width: 48px;
+.widget:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.widget-header {
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
-.day-bar {
-  width: 100%;
-  border-radius: 8px 8px 4px 4px;
-  background: rgba(255, 140, 0, 0.15);
-  border: 1px solid rgba(255, 140, 0, 0.2);
-  transition: height 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-  min-height: 4px;
-}
-
-.day-bar.today {
-  background: linear-gradient(180deg, rgba(255, 140, 0, 0.4), rgba(255, 140, 0, 0.15));
-  border-color: rgba(255, 140, 0, 0.5);
-  box-shadow: 0 0 12px rgba(255, 140, 0, 0.15);
-}
-
-.day-label {
-  font-size: 0.65rem;
-  color: var(--color-text-dim);
-  font-weight: 600;
+.widget-title {
+  font-size: 0.9rem;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-dim);
 }
 
-.day-value {
+.growth-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
   font-size: 0.7rem;
   font-weight: 800;
-  color: var(--color-primary);
+  margin-top: 6px;
 }
 
-.chart-placeholder {
-  height: 200px;
+.growth-pill.up { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.growth-pill.down { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+.badge-mini {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--color-text-dim);
+}
+
+/* ─── CHART CONTAINERS ──────────── */
+.chart-container {
+  flex: 1;
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-.chart-footer {
+.chart-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.cc-val { font-size: 2.2rem; font-weight: 900; line-height: 1; }
+.cc-label { font-size: 0.7rem; color: var(--color-text-dim); text-transform: uppercase; }
+.cc-val-sm { font-size: 1.6rem; font-weight: 900; line-height: 1; }
+.cc-label-xs { font-size: 10px; color: var(--color-text-dim); }
+
+/* ─── LEGENDS ───────────────────── */
+.legend-detailed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.cf-stat {
-  font-size: 0.75rem;
-  color: var(--color-text-dim);
-}
-
-.cf-stat strong {
-  color: white;
-}
-
-/* ─── ACTIVITY FEED ─────────────── */
-.activity-feed { padding: 32px; }
-
-.feed-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.feed-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.log-indicator {
-  width: 4px;
-  height: 32px;
-  border-radius: 2px;
-}
-
-.log-indicator.arrival { background: var(--color-success); }
-.log-indicator.sorting_waste { background: var(--color-error); }
-.log-indicator.sale { background: var(--color-primary); }
-
-.log-text { font-size: 0.9rem; margin-bottom: 4px; }
-.log-meta { font-size: 0.7rem; color: var(--color-text-dim); }
-
-.empty-state {
-  text-align: center;
-  padding: 40px;
-  color: var(--color-text-dim);
-  font-style: italic;
-}
-
-/* ─── TOP CUSTOMERS ─────────────── */
-.top-customers-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.tc-item {
+.legend-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--glass-border);
+  gap: 12px;
+  font-size: 0.8rem;
 }
 
-.tc-rank {
-  font-size: 0.9rem;
-  font-weight: 800;
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot.lunas { background: #10b981; box-shadow: 0 0 8px #10b981; }
+.dot.pending { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.dot.void { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+.legend-item .label { flex: 1; color: var(--color-text-dim); }
+.legend-item .val { font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+.link-more {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
   color: var(--color-primary);
-  opacity: 0.5;
-  width: 24px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: opacity 0.3s;
 }
 
-.tc-info { flex: 1; }
-.tc-name { font-size: 0.9rem; font-weight: 700; margin-bottom: 2px; }
-.tc-meta { font-size: 0.7rem; color: var(--color-text-dim); }
-.tc-spent { font-size: 0.85rem; font-weight: 800; color: var(--color-primary); }
+.link-more:hover { opacity: 0.8; }
+
+/* ─── STOCK GRID ────────────────── */
+.stock-visual-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sv-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sv-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sv-name { font-size: 0.85rem; font-weight: 600; }
+.sv-pill {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sv-pill.healthy { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.sv-pill.low { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.sv-pill.critical { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+.sv-progress-bg {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sv-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s ease;
+}
+
+.sv-progress-fill.healthy { background: #10b981; }
+.sv-progress-fill.low { background: #f59e0b; }
+.sv-progress-fill.critical { background: #ef4444; animation: progress-pulse 2s infinite; }
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #10b981;
+}
+
+.supply-summary {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.supply-badge {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.sb-label { font-size: 9px; color: var(--color-text-dim); text-transform: uppercase; }
+.sb-val { font-size: 0.9rem; font-weight: 800; }
+
+/* ─── CASH FLOW ─────────────────── */
+.net-summary {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.net-summary.plus { background: rgba(20, 184, 166, 0.1); color: #14b8a6; }
+.net-summary.minus { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+/* ─── LEGEND GRID ────────────────── */
+.legend-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: auto;
+}
+
+.lg-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.lg-val { font-size: 1rem; font-weight: 900; }
+.lg-label { font-size: 9px; color: var(--color-text-dim); }
+
+/* ─── AGING BUCKETS ──────────────── */
+.aging-buckets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.bucket-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.b-label { font-size: 11px; font-weight: 700; width: 50px; color: var(--color-text-dim); }
+.b-bar { flex: 1; height: 8px; background: rgba(255, 255, 255, 0.03); border-radius: 4px; overflow: hidden; }
+.b-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+.b-val { font-size: 11px; font-weight: 700; width: 90px; text-align: right; }
+
+.bucket-row.green .b-fill { background: #10b981; }
+.bucket-row.amber .b-fill { background: #f59e0b; }
+.bucket-row.orange .b-fill { background: #f97316; }
+.bucket-row.red .b-fill { background: #ef4444; }
+
+.bucket-row.red.pulse .b-fill { animation: progress-pulse 1.5s infinite; }
+
+.badge-error { font-size: 10px; font-weight: 800; background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 8px; border-radius: 4px; }
+
+/* ANIMATIONS */
+.animate-fade-up {
+  opacity: 0;
+  animation: fadeUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: calc(var(--delay) * 100ms);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 1200px) {
+  .premium-grid { grid-template-columns: 1fr; }
+}
+
+.wh-left { display: flex; flex-direction: column; gap: 4px; }
+.wh-left .widget-title { margin-bottom: 0; }
+
 
 /* ─── DANGER ZONE ───────────────── */
 .danger-zone {
@@ -921,4 +1124,60 @@ onMounted(() => {
   from { opacity: 0; transform: scale(0.9) translateY(20px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
+
+/* RESET STYLES */
+.impact-box {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 24px;
+  border-radius: 16px;
+  margin-bottom: 24px;
+}
+
+.impact-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.is-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.is-item span { font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; }
+.is-item strong { font-size: 1.4rem; color: #ef4444; }
+
+.modal-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.modal-actions button { flex: 1; max-width: 200px; }
+
+.backup-box.amber {
+  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.text-amber { color: #f59e0b; }
+
+.animate-fade-in { animation: fadeIn 0.4s ease forwards; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 24px 0;
+}
+
+.form-group label { font-size: 0.8rem; color: var(--color-text-dim); }
 </style>

@@ -27,6 +27,14 @@
 
     <!-- Main Content Area -->
     <main class="workspace">
+      <!-- Top Bar with Notifications -->
+      <header class="workspace-top-bar">
+        <div class="search-placeholder"></div>
+        <div class="top-bar-actions">
+          <NotificationBell />
+        </div>
+      </header>
+
       <router-view v-slot="{ Component }">
         <transition name="fade-slide" mode="out-in">
           <component :is="Component" :key="$route.fullPath" />
@@ -34,18 +42,18 @@
       </router-view>
     </main>
 
-    <!-- Global Toasts -->
-    <GlobalToast ref="globalToast" />
+    <CriticalStockToast />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 import { supabase } from '../lib/supabase';
 import CardNav from '../components/animations/CardNav.vue';
-import GlobalToast from '../components/ui/GlobalToast.vue';
+import NotificationBell from '../components/NotificationBell.vue';
+import CriticalStockToast from '../components/CriticalStockToast.vue';
 import { 
   LayoutDashboardIcon, 
   PackageIcon, 
@@ -54,18 +62,30 @@ import {
   LogOutIcon,
   ClipboardListIcon,
   TruckIcon,
-  SettingsIcon,
   InstagramIcon,
-  TrendingUpIcon
+  TrendingUpIcon,
+  SettingsIcon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
 const router = useRouter();
-const globalToast = ref<InstanceType<typeof GlobalToast> | null>(null);
 let inventorySubscription: any = null;
 
-const navCards = computed(() => {
-  const sections = [
+interface NavLink {
+  label: string;
+  path: string;
+  icon: any;
+  premium?: boolean;
+  badge?: string;
+}
+
+interface NavSection {
+  label: string;
+  links: NavLink[];
+}
+
+const navCards = computed<NavSection[]>(() => {
+  const sections: NavSection[] = [
     {
       label: 'Operations',
       links: [
@@ -89,7 +109,7 @@ const navCards = computed(() => {
     sections.push({
       label: 'Management',
       links: [
-        { label: 'Financial Terminal', path: '/financial', icon: TrendingUpIcon, premium: true },
+        { label: 'Financial Terminal', path: '/financial', icon: TrendingUpIcon, premium: true, badge: 'NEW' },
         { label: 'Team Members', path: '/employees', icon: UsersIcon }
       ]
     });
@@ -119,34 +139,7 @@ async function handleLogout() {
 
 onMounted(() => {
   // Setup Realtime Subscription for Inventory Alerts
-  inventorySubscription = supabase
-    .channel('public:inventory')
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inventory' }, payload => {
-      const { new: newRec, old: oldRec } = payload;
-      
-      // Stock dropped condition
-      if (newRec.stock_quantity < oldRec.stock_quantity) {
-        
-        // Critical Threshold for Eggs
-        if (newRec.name.includes('Telur Hero') && newRec.stock_quantity <= 150 && oldRec.stock_quantity > 150) {
-          globalToast.value?.addToast({
-            type: 'error',
-            title: 'CRITICAL STOCK ALERT',
-            message: `Hero Eggs running low! Only ${newRec.stock_quantity} trays remaining.`
-          });
-        }
-        
-        // Warning Threshold for Packaging
-        if (newRec.name.includes('Paper Box') && newRec.stock_quantity <= 500 && oldRec.stock_quantity > 500) {
-          globalToast.value?.addToast({
-            type: 'warning',
-            title: 'Supply Warning',
-            message: `Packaging boxes below 500 units (${newRec.stock_quantity} left). Time to restock.`
-          });
-        }
-      }
-    })
-    .subscribe();
+  // Legacy inventory subscription removed - now handled by notifications table + PG Triggers
 });
 
 onUnmounted(() => {
@@ -217,7 +210,15 @@ onUnmounted(() => {
 }
 
 .user-name { font-weight: 600; font-size: 0.9rem; }
-.user-email { font-size: 0.75rem; color: var(--color-text-dim); }
+.user-email {
+  font-size: 13px;
+  color: var(--color-text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 .btn-logout {
   display: flex;
@@ -252,8 +253,27 @@ onUnmounted(() => {
   flex-direction: column;
   z-index: 10;
   overflow-y: auto;
-  padding: 40px;
+  padding: 0 40px 40px; /* Reduced top padding for header */
   scroll-behavior: smooth;
+}
+
+.workspace-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 0;
+  background: transparent;
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin-bottom: 16px;
+}
+
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 /* Page Transitions */

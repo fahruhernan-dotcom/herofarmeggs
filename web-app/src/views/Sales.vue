@@ -357,7 +357,7 @@ async function fetchData() {
   const { data: inv } = await supabase.from('inventory').select('*');
   if (inv) inventory.value = inv;
 
-  const { data: cust } = await supabase.from('customers').select('*').order('name');
+  const { data: cust } = await supabase.from('customers').select('*').eq('is_deleted', false).order('name');
   if (cust) customers.value = cust;
 }
 
@@ -514,90 +514,55 @@ async function confirmSale() {
       }
     }
 
-    // B. Create Sale Record
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        customer_id: finalCustomerId,
-        total_price: totalSnapshot,
-        payment_status: form.paymentStatus,
-        fulfillment_status: 'processing',
-        stock_reserved: true
-      })
-      .select()
-      .single();
-
-    if (saleError) throw saleError;
-
-    // C. Create Sale Items & Update Stock
-    for (const item of cartSnapshot) {
-      // Find original item id for database
-      const originalItem = cart.value.find(c => c.label === item.description);
-      const eggId = originalItem?.id;
-      
-      // Snapshot the current HPP (cost_price) at sale time for accurate financial reporting
-      const eggInInvForCost = inventory.value.find(i => i.id === eggId);
-
-      await supabase.from('sale_items').insert({
-        sale_id: sale.id,
-        egg_type: eggId,
+    // B. Execute Atomic Transaction via RPC
+    const rpcPayload = {
+      p_customer_id: finalCustomerId,
+      p_items: cart.value.map(item => ({
+        egg_type: item.id,
         quantity: item.quantity,
-        unit_price: item.price,
-        subtotal: item.total,
-        unit_cost: eggInInvForCost?.cost_price || 0
-      });
+        price: item.price,
+        subtotal: item.subtotal,
+        label: item.label
+      })),
+      p_payment_status: form.paymentStatus
+    };
 
-      // Update Egg Stock
-      const eggInInv = inventory.value.find(i => i.id === eggId);
-      if (eggInInv) {
-        const quantityInButir = item.quantity * 10;
-        const newEggStock = eggInInv.current_stock - quantityInButir;
-        await supabase.from('inventory').update({ current_stock: newEggStock }).eq('id', eggId);
-        
-        await supabase.from('stock_logs').insert({
-          egg_type: eggId,
-          change: -quantityInButir,
-          log_type: 'sale',
-          notes: `Sale #${sale.id.toString().substring(0,6).toUpperCase()} (${item.quantity} Pack)`
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('validate_and_create_sale', rpcPayload);
+
+    if (rpcError) throw rpcError;
+    if (rpcResult?.error) {
+      alert(rpcResult.error);
+      return;
+    }
+
+    const saleId = rpcResult.sale_id;
+    const invoiceNumber = `EP-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${String(saleId).slice(-3).toUpperCase()}`;
+
+    // Create Notification
+    await supabase.from('notifications').insert({
+      type: 'sale_created',
+      title: 'Penjualan Baru',
+      message: `Invoice ${invoiceNumber} - ${selectedCustomerName.value}`,
+      link: '/sales'
+    });
+
+    // C. Handle Price Overrides Audit (Client-side for now to keep RPC clean of Auth complexity)
+    for (const item of cart.value) {
+      const eggInInv = inventory.value.find(i => i.id === item.id);
+      if (eggInInv && item.price !== eggInInv.base_price_per_pack) {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from('price_overrides').insert({
+          sale_id: saleId,
+          product_id: item.id,
+          original_price: eggInInv.base_price_per_pack,
+          override_price: item.price,
+          override_by: user?.email || 'Unknown'
         });
-
-        // Price Override Audit
-        if (item.price !== eggInInv.base_price_per_pack) {
-          const uemail = await supabase.auth.getUser().then(r => r.data.user?.email || 'Unknown');
-          await supabase.from('price_overrides').insert({
-            sale_id: sale.id,
-            product_id: eggId,
-            original_price: eggInInv.base_price_per_pack,
-            override_price: item.price,
-            override_by: uemail
-          });
-        }
       }
-    }
-
-    // D. Update Packaging Materials
-    const totalPacks = cartSnapshot.reduce((sum, i) => sum + i.quantity, 0);
-    const supplies = ['packaging_standard', 'sticker_label', 'mini_card'];
-    for (const supplyId of supplies) {
-      const currentSupply = inventory.value.find(i => i.id === supplyId);
-      if (currentSupply) {
-        const newSupplyStock = Math.max(0, currentSupply.current_stock - totalPacks);
-        await supabase.from('inventory').update({ current_stock: newSupplyStock }).eq('id', supplyId);
-      }
-    }
-
-    // E. Update Customer Stats
-    const currentCustomer = customers.value.find(c => c.id === finalCustomerId);
-    if (currentCustomer) {
-      const newOrders = (currentCustomer.total_orders || 0) + 1;
-      const newSpent = (currentCustomer.total_spent || 0) + totalSnapshot;
-      await supabase.from('customers')
-        .update({ total_orders: newOrders, total_spent: newSpent, updated_at: new Date().toISOString() })
-        .eq('id', finalCustomerId);
     }
 
     // Auto-Trigger Print with snapshot
-    printInvoice(sale.id, cartSnapshot, totalSnapshot);
+    printInvoice(saleId, cartSnapshot, totalSnapshot);
 
     // Reset state
     showPreview.value = false;

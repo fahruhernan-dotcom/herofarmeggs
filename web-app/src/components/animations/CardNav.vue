@@ -48,7 +48,8 @@
               >
                 <component :is="lnk.icon" class="nav-card-link-icon" v-if="lnk.icon" />
                 <ArrowUpRightIcon class="nav-card-link-icon" v-else />
-                {{ lnk.label }}
+                <span class="link-label">{{ lnk.label }}</span>
+                <span v-if="lnk.badge" class="link-badge">{{ lnk.badge }}</span>
               </a>
             </template>
           </div>
@@ -342,7 +343,28 @@ watch(() => props.items, () => {
 }
 
 .nav-card-link:hover {
-  opacity: 0.7;
+  opacity: 1;
+}
+
+.nav-card-link:hover .link-label {
+  transform: translateX(4px);
+  color: var(--color-primary);
+}
+
+.link-label {
+  transition: all 0.3s ease;
+}
+
+.link-badge {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 4px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  margin-left: auto;
+  box-shadow: 0 0 10px rgba(255, 140, 0, 0.4);
 }
 
 .nav-card-link-icon {
@@ -363,14 +385,23 @@ watch(() => props.items, () => {
   filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
 }
 
+.nav-card-link.premium-link:hover {
+  text-shadow: 0 0 15px rgba(245, 158, 11, 0.8);
+}
+
+.nav-card-link.premium-link:hover .nav-card-link-icon {
+  filter: drop-shadow(0 0 12px rgba(245, 158, 11, 1));
+  transform: scale(1.1);
+}
+
 @keyframes premiumPulse {
   0%, 100% { 
     opacity: 1; 
     text-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
   }
   50% { 
-    opacity: 0.8; 
-    text-shadow: 0 0 3px rgba(245, 158, 11, 0.1);
+    opacity: 0.9; 
+    text-shadow: 0 0 4px rgba(245, 158, 11, 0.2);
   }
 }
 </style>
