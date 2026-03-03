@@ -6,6 +6,18 @@
         <p class="text-dim">Real-time monitoring of Hero Farm standards.</p>
       </div>
       <div class="header-actions">
+        <div class="net-position-banner glass-panel" :class="{ 'warning': netPosition < 0 }">
+           <div class="np-info">
+             <span class="np-label">Profit Net Position</span>
+             <span class="np-val" :class="netPosition >= 0 ? 'text-green' : 'text-red'">
+               {{ netPosition >= 0 ? '+' : '' }}Rp {{ netPosition.toLocaleString('id-ID') }}
+             </span>
+           </div>
+           <div v-if="netPosition < 0" class="np-warning pulse">
+             <AlertTriangleIcon class="icon-xs" />
+             <span>Hati-Hati Arus Kas</span>
+           </div>
+        </div>
         <div class="time-widget glass-panel">
           <span class="dot pulse"></span>
           {{ currentTime }}
@@ -14,7 +26,10 @@
     </header>
 
     <!-- Premium Widgets Grid (2x3) -->
-    <section class="premium-grid">
+    <section class="premium-grid" v-if="loading">
+      <SkeletonLoader v-for="i in 6" :key="i" type="card" height="380px" />
+    </section>
+    <section class="premium-grid" v-else>
       <!-- WIDGET 1: REVENUE STATUS -->
       <div class="glass-panel widget animate-fade-up" style="--delay: 1">
         <div class="widget-header">
@@ -39,17 +54,17 @@
           <div class="legend-item">
             <span class="dot lunas"></span>
             <span class="label">Lunas</span>
-            <span class="val">Rp {{ revenueWidget.current.paid.toLocaleString() }}</span>
+            <span class="val">Rp {{ revenueWidget.current.paid.toLocaleString('id-ID') }}</span>
           </div>
           <div class="legend-item">
             <span class="dot pending"></span>
             <span class="label">Pending</span>
-            <span class="val">Rp {{ revenueWidget.current.pending.toLocaleString() }}</span>
+            <span class="val">Rp {{ revenueWidget.current.pending.toLocaleString('id-ID') }}</span>
           </div>
           <div class="legend-item">
             <span class="dot void"></span>
             <span class="label">Void</span>
-            <span class="val">Rp {{ revenueWidget.current.void.toLocaleString() }}</span>
+            <span class="val">Rp {{ revenueWidget.current.void.toLocaleString('id-ID') }}</span>
           </div>
         </div>
       </div>
@@ -85,13 +100,13 @@
             <div class="sv-info">
               <span class="sv-name">{{ item.label }}</span>
               <span class="sv-pill" :class="getDashboardStatus(item.current_stock)">
-                {{ item.current_stock }} Butir
+                {{ (item.current_stock || 0).toLocaleString('id-ID') }} Butir
               </span>
             </div>
             <div class="sv-progress-bg">
               <div class="sv-progress-fill" 
                    :class="getDashboardStatus(item.current_stock)"
-                   :style="{ width: Math.min((item.current_stock / 100) * 100, 100) + '%' }">
+                   :style="{ width: Math.min(((item.current_stock || 0) / 100) * 100, 100) + '%' }">
               </div>
             </div>
           </div>
@@ -99,7 +114,7 @@
         <div class="supply-summary">
           <div v-for="s in packagingInventory" :key="s.id" class="supply-badge">
             <span class="sb-label">{{ s.label.split(' ')[0] }}</span>
-            <span class="sb-val">{{ s.current_stock }}</span>
+            <span class="sb-val">{{ (s.current_stock || 0).toLocaleString('id-ID') }}</span>
           </div>
         </div>
       </div>
@@ -112,7 +127,7 @@
             <span class="text-xs opacity-60">30 Hari Terakhir</span>
           </div>
           <div class="net-summary" :class="cashFlowWidget.net >= 0 ? 'plus' : 'minus'">
-            Net: Rp {{ cashFlowWidget.net.toLocaleString() }}
+            Net: Rp {{ cashFlowWidget.net.toLocaleString('id-ID') }}
           </div>
         </div>
         <div class="chart-container line">
@@ -122,7 +137,7 @@
             plugins: { legend: { display: false } }, 
             scales: { 
               x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } },
-              y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 }, callback: (v: any) => v >= 1000000 ? (v/1000000)+'Jt' : (v/1000)+'Rb' } }
+              y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 }, callback: (v: any) => v.toLocaleString('id-ID') } }
             }
           }" />
         </div>
@@ -139,13 +154,13 @@
         <div class="chart-container donut-mini">
           <Doughnut :data="salesProductWidget.chartData" :options="{ cutout: '70%', plugins: { legend: { display: false } } }" />
           <div class="chart-center">
-            <span class="cc-val-sm">{{ salesProductWidget.total }}</span>
+            <span class="cc-val-sm">{{ (salesProductWidget.total || 0).toLocaleString('id-ID') }}</span>
             <span class="cc-label-xs">Packs</span>
           </div>
         </div>
         <div class="legend-grid">
           <div v-for="(val, label) in { 'Hero': salesProductWidget.heroCount, 'Standard': salesProductWidget.standardCount, 'Salted': salesProductWidget.saltedCount }" :key="label" class="lg-item">
-            <span class="lg-val">{{ val }}</span>
+            <span class="lg-val">{{ (val || 0).toLocaleString('id-ID') }}</span>
             <span class="lg-label">{{ label }}</span>
           </div>
         </div>
@@ -164,22 +179,22 @@
           <div class="bucket-row green">
             <span class="b-label">Lunas</span>
             <div class="b-bar"><div class="b-fill" style="width: 100%"></div></div>
-            <span class="b-val">Rp {{ piutangWidget.paid.total.toLocaleString() }}</span>
+            <span class="b-val">Rp {{ (piutangWidget.paid.total || 0).toLocaleString('id-ID') }}</span>
           </div>
           <div class="bucket-row amber">
             <span class="b-label">0-7 h</span>
-            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min((piutangWidget.week1.total / 10000000) * 100, 100) + '%' }"></div></div>
-            <span class="b-val">Rp {{ piutangWidget.week1.total.toLocaleString() }}</span>
+            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min(((piutangWidget.week1.total || 0) / 10000000) * 100, 100) + '%' }"></div></div>
+            <span class="b-val">Rp {{ (piutangWidget.week1.total || 0).toLocaleString('id-ID') }}</span>
           </div>
           <div class="bucket-row orange">
             <span class="b-label">8-14 h</span>
-            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min((piutangWidget.week2.total / 10000000) * 100, 100) + '%' }"></div></div>
-            <span class="b-val">Rp {{ piutangWidget.week2.total.toLocaleString() }}</span>
+            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min(((piutangWidget.week2.total || 0) / 10000000) * 100, 100) + '%' }"></div></div>
+            <span class="b-val">Rp {{ (piutangWidget.week2.total || 0).toLocaleString('id-ID') }}</span>
           </div>
           <div class="bucket-row red" :class="{ 'pulse': piutangWidget.overdue.count > 0 }">
             <span class="b-label">15+ h</span>
-            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min((piutangWidget.overdue.total / 10000000) * 100, 100) + '%' }"></div></div>
-            <span class="b-val">Rp {{ piutangWidget.overdue.total.toLocaleString() }}</span>
+            <div class="b-bar"><div class="b-fill" :style="{ width: Math.min(((piutangWidget.overdue.total || 0) / 10000000) * 100, 100) + '%' }"></div></div>
+            <span class="b-val">Rp {{ (piutangWidget.overdue.total || 0).toLocaleString('id-ID') }}</span>
           </div>
         </div>
       </div>
@@ -300,6 +315,8 @@ import {
   CategoryScale, LinearScale, PointElement, 
   LineElement, BarElement, Filler 
 } from 'chart.js';
+import { useToast } from '../composables/useToast';
+import SkeletonLoader from '../components/ui/SkeletonLoader.vue';
 import { Doughnut, Line, Bar } from 'vue-chartjs';
 
 ChartJS.register(
@@ -308,7 +325,9 @@ ChartJS.register(
   LineElement, BarElement, Filler
 );
 
+const { showToast } = useToast();
 const authStore = useAuthStore();
+const loading = ref(true);
 const heroStock = ref(0);
 const standardStock = ref(0);
 const saltedStock = ref(0);
@@ -318,6 +337,24 @@ const customers = ref<any[]>([]);
 const financeEntries = ref<any[]>([]);
 const allSales = ref<any[]>([]);
 const inventory = ref<any[]>([]);
+const kpiData = ref<any>({
+  total_revenue: 0,
+  gross_profit: 0,
+  total_piutang: 0,
+  total_utang: 0,
+  stock_value: 0
+});
+
+// Net Position Calculation
+const netPosition = computed(() => {
+  const cash = financeEntries.value.reduce((acc, f) => {
+    if (f.entry_type === 'income') return acc + Number(f.amount);
+    if (f.entry_type === 'expense') return acc - Number(f.amount);
+    return acc;
+  }, 0);
+  // Actually Net Position = Cash + Piutang - Utang
+  return cash + kpiData.value.total_piutang - kpiData.value.total_utang;
+});
 
 // NEW: Impact counts for Reset
 const impactCounts = reactive({
@@ -503,6 +540,7 @@ const piutangWidget = computed(() => {
     const created = new Date(s.created_at);
     const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 3600 * 24));
     
+    // In V2, we use kpiData for totals but still need aging for buckets
     if (diffDays <= 7) { 
       buckets.week1.count++; 
       buckets.week1.total += (s.total_price || 0); 
@@ -514,6 +552,11 @@ const piutangWidget = computed(() => {
       buckets.overdue.total += (s.total_price || 0); 
     }
   });
+
+  // Override total from institutional KPI
+  buckets.week1.total = kpiData.value.total_piutang_7d || buckets.week1.total;
+  buckets.week2.total = kpiData.value.total_piutang_14d || buckets.week2.total;
+  buckets.overdue.total = kpiData.value.total_piutang_overdue || buckets.overdue.total;
 
   return buckets;
 });
@@ -535,48 +578,56 @@ let clockInterval: any;
 let refreshInterval: any;
 
 async function fetchData() {
-  // Fetch Stocks
-  const { data: stocks } = await supabase.from('inventory').select('*');
-  if (stocks) {
-    inventory.value = stocks;
-    heroStock.value = stocks.find(s => s.id === 'hero_size')?.current_stock ?? 0;
-    standardStock.value = stocks.find(s => s.id === 'standard_size')?.current_stock ?? 0;
-    saltedStock.value = stocks.find(s => s.id === 'salted_egg')?.current_stock ?? 0;
-  }
+  loading.value = true;
+  try {
+    // Fetch Stocks
+    const { data: stocks } = await supabase.from('inventory').select('*');
+    if (stocks) {
+      inventory.value = stocks;
+      heroStock.value = stocks.find(s => s.id === 'hero_size')?.current_stock ?? 0;
+      standardStock.value = stocks.find(s => s.id === 'standard_size')?.current_stock ?? 0;
+      saltedStock.value = stocks.find(s => s.id === 'salted_egg')?.current_stock ?? 0;
+    }
 
-  // Fetch ALL sales
-  const { data: sales } = await supabase
-    .from('sales')
-    .select('*, sale_items(*)')
-    .order('created_at', { ascending: false });
-  if (sales) allSales.value = sales;
+    // Fetch ALL sales
+    const { data: sales } = await supabase
+      .from('sales')
+      .select('*, sale_items(*)')
+      .order('created_at', { ascending: false });
+    if (sales) allSales.value = sales;
 
-  // Fetch customers
-  const { data: cust } = await supabase.from('customers').select('*').eq('is_deleted', false);
-  if (cust) customers.value = cust;
+    // Fetch customers
+    const { data: cust } = await supabase.from('customers').select('*').eq('is_deleted', false);
+    if (cust) customers.value = cust;
 
-  // Fetch Finance
-  const { data: fin } = await supabase.from('finance_entries').select('*').order('entry_date', { ascending: false });
-  if (fin) financeEntries.value = fin;
+    // Fetch Finance
+    const { data: fin } = await supabase.from('finance_entries').select('*').order('entry_date', { ascending: false });
+    if (fin) financeEntries.value = fin;
 
-  // Fetch Logs
-  const { data: latestLogs } = await supabase
-    .from('stock_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(8);
-  if (latestLogs) logs.value = latestLogs;
+    // Fetch Logs
+    const { data: latestLogs } = await supabase
+      .from('stock_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(8);
+    if (latestLogs) logs.value = latestLogs;
 
-  // Fetch Impact Counts (for Reset)
-  if (authStore.isAdmin) {
-    const { count: sCount } = await supabase.from('sales').select('*', { count: 'exact', head: true });
-    const { count: cCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
-    const { count: lCount } = await supabase.from('stock_logs').select('*', { count: 'exact', head: true });
-    const { count: fCount } = await supabase.from('finance_entries').select('*', { count: 'exact', head: true });
-    impactCounts.sales = sCount || 0;
-    impactCounts.customers = cCount || 0;
-    impactCounts.logs = lCount || 0;
-    impactCounts.finance = fCount || 0;
+    // Fetch Impact Counts (for Reset)
+    const { data: kpis } = await supabase.rpc('get_dashboard_kpis');
+    if (kpis) kpiData.value = kpis;
+
+    if (authStore.isAdmin) {
+      const { count: sCount } = await supabase.from('sales').select('*', { count: 'exact', head: true });
+      const { count: cCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
+      const { count: lCount } = await supabase.from('stock_logs').select('*', { count: 'exact', head: true });
+      const { count: fCount } = await supabase.from('finance_entries').select('*', { count: 'exact', head: true });
+      impactCounts.sales = sCount || 0;
+      impactCounts.customers = cCount || 0;
+      impactCounts.logs = lCount || 0;
+      impactCounts.finance = fCount || 0;
+    }
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -628,9 +679,10 @@ async function exportBackupData() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
+    showToast('Backup berhasil diunduh');
     backupStatus.value = 'downloaded';
   } catch (err: any) {
-    alert('Backup failed: ' + err.message);
+    showToast('Gagal backup data', 'error');
     backupStatus.value = 'idle';
   }
 }
@@ -665,15 +717,15 @@ async function handleSystemReset() {
     }).not('id', 'is', null);
 
     if (e4 || e5) {
-      alert(`Customer/Inventory Reset Issue: ${e4?.message || e5?.message}`);
+      showToast('Gagal reset sebagian data', 'error');
     } else {
-      alert('Sistem berhasil direset. Semua transaksi, logs, dan entri keuangan telah dihapus.');
+      showToast('Sistem berhasil direset');
     }
 
     closeResetModal();
     fetchData(); 
   } catch (err: any) {
-    alert('Critical Reset Failure: ' + err.message);
+    showToast('Gagal total reset sistem', 'error');
   } finally {
     reseting.value = false;
   }
@@ -715,6 +767,60 @@ onMounted(() => {
   gap: 20px;
   min-height: 380px;
   transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+/* NET POSITION BANNER */
+.net-position-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border-left: 4px solid #10b981;
+}
+
+.net-position-banner.warning {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.np-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.np-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  letter-spacing: 0.05em;
+}
+
+.np-val {
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.np-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.pulse {
+  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .widget:hover {

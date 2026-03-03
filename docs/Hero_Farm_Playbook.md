@@ -4,12 +4,22 @@
 ---
 
 ## 📑 Daftar Isi
-1. [Identitas Brand & Visual](#1-identitas-brand--visual)
-2. [Kontrak & Manajemen Freelancer](#2-kontrak--manajemen-freelancer)
-3. [Operasional: SOP & Quality Control](#3-operasional-sop--quality-control)
-4. [Keuangan: HPP & Laporan Penjualan](#4-keuangan-hpp--laporan-penjualan)
-5. [Instagram Launch & Content Strategy](#5-instagram-launch--content-strategy)
-6. [CRM: Database & Komunikasi Pelanggan](#6-crm-database--komunikasi-pelanggan)
+7. [Struktur Tim (Personnel Command)](#struktur-tim-personnel-command)
+8. [Identitas Brand & Visual](#1-identitas-brand--visual)
+9. [Kontrak & Manajemen Freelancer](#2-kontrak--manajemen-freelancer)
+10. [Operasional: SOP & Quality Control](#3-operasional-sop--quality-control)
+11. [Keuangan: HPP & Laporan Penjualan](#4-keuangan-hpp--laporan-penjualan)
+12. [Instagram Launch & Content Strategy](#5-instagram-launch--content-strategy)
+13. [CRM: Database & Komunikasi Pelanggan](#6-crm-database--komunikasi-pelanggan)
+
+---
+
+## Struktur Tim (Personnel Command)
+*Tim inti di balik operasional & pertumbuhan Hero Farm.*
+
+- **Fahru (Leader)**: Penanggung jawab utama proyek, pengambil keputusan strategis, dan pengawas seluruh lini bisnis.
+- **Rayhan (Marketing)**: Riset pasar, strategi promosi, dan manajemen database pelanggan (CRM).
+- **Akbar (Designer & Admin)**: Visual branding, desain konten feed/reels, admin Instagram, dan manajemen aset kreatif.
 
 ---
 

@@ -63,6 +63,17 @@
             <MapPinIcon class="icon-xs" />
             <span class="val truncate">{{ supplier.address || 'No Address' }}</span>
           </div>
+
+          <!-- NEW: OUTSTANDING DEBT -->
+          <div v-if="supplier.total_utang > 0" class="debt-warning-box animate-pulse">
+            <div class="dw-left">
+              <span class="dw-label">OUTSTANDING DEBT</span>
+              <span class="dw-val">Rp {{ supplier.total_utang.toLocaleString() }}</span>
+            </div>
+            <router-link :to="{ path: '/financial', query: { tab: 'utang' }}" class="btn-pay-link">
+              PAY <ChevronRightIcon class="icon-xs" />
+            </router-link>
+          </div>
         </div>
 
         <div class="card-actions-premium">
@@ -303,7 +314,18 @@ async function fetchData() {
       return;
     }
     
-    suppliers.value = vendorData || [];
+    const { data: utangData } = await supabase.from('utang_supplier').select('supplier_id, remaining').gt('remaining', 0);
+    const utangMap: Record<string, number> = {};
+    if (utangData) {
+      utangData.forEach(u => {
+        utangMap[u.supplier_id] = (utangMap[u.supplier_id] || 0) + Number(u.remaining);
+      });
+    }
+
+    suppliers.value = (vendorData || []).map(v => ({
+      ...v,
+      total_utang: utangMap[v.id] || 0
+    }));
 
     // Fetch deleted if admin
     if (authStore.isAdmin) {
@@ -646,6 +668,65 @@ watch(() => route.path, () => {
 
 .info-row svg { opacity: 0.4; }
 .info-row .val { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* DEBT WARNING */
+.debt-warning-box {
+  margin-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+
+.animate-pulse {
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0px rgba(239, 68, 68, 0); border-color: rgba(239, 68, 68, 0.2); }
+  50% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); }
+}
+
+.dw-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.dw-label {
+  font-size: 0.6rem;
+  font-weight: 900;
+  color: #ef4444;
+  letter-spacing: 0.05em;
+}
+
+.dw-val {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: white;
+}
+
+.btn-pay-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #ef4444;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.btn-pay-link:hover {
+  background: white;
+  color: #ef4444;
+  transform: translateX(4px);
+}
 
 .card-actions-premium {
   padding: 20px 32px;

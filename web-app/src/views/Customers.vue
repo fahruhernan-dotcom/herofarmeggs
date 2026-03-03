@@ -35,7 +35,14 @@
             {{ customer.name.charAt(0).toUpperCase() }}
           </div>
           <div class="info">
-            <h3 class="name">{{ customer.name }}</h3>
+            <div class="name-row">
+              <h3 class="name">{{ customer.name }}</h3>
+              <template v-if="getLTVBadge(customer.total_spent)">
+                <span class="ltv-badge" :class="getLTVBadge(customer.total_spent)!.toLowerCase()">
+                  {{ getLTVBadge(customer.total_spent) }}
+                </span>
+              </template>
+            </div>
             <p class="phone text-dim">{{ customer.whatsapp_number || 'No WA' }}</p>
           </div>
         </div>
@@ -48,6 +55,11 @@
           <div class="stat-item">
             <span class="label">Total Value</span>
             <span class="value">Rp {{ (customer.total_spent || 0).toLocaleString() }}</span>
+          </div>
+          <!-- NEW: PIUTANG BALANCE -->
+          <div v-if="customer.total_piutang > 0" class="stat-item piutang-stat animate-pulse">
+            <span class="label">Outstanding Piutang</span>
+            <span class="value text-red">Rp {{ customer.total_piutang.toLocaleString() }}</span>
           </div>
         </div>
 
@@ -248,7 +260,20 @@ async function fetchData() {
   
   if (error) console.error('CRM Error:', error);
   
-  if (data) customers.value = data;
+  if (data) {
+    const { data: piutangData } = await supabase.from('piutang_v2').select('customer_id, remaining').gt('remaining', 0);
+    const piutangMap: Record<string, number> = {};
+    if (piutangData) {
+      piutangData.forEach(p => {
+        if (p.customer_id) piutangMap[p.customer_id] = (piutangMap[p.customer_id] || 0) + Number(p.remaining);
+      });
+    }
+
+    customers.value = data.map(c => ({
+      ...c,
+      total_piutang: piutangMap[c.id] || 0
+    }));
+  }
 
   if (authStore.isAdmin) {
     const { data: delData } = await supabase
@@ -261,13 +286,24 @@ async function fetchData() {
 }
 
 const filteredCustomers = computed(() => {
-  if (!searchQuery.value) return customers.value;
-  const q = searchQuery.value.toLowerCase();
-  return customers.value.filter(c => 
-    c.name.toLowerCase().includes(q) || 
-    (c.whatsapp_number && c.whatsapp_number.includes(q))
-  );
+  let list = customers.value;
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase();
+    list = list.filter(c => 
+      c.name.toLowerCase().includes(q) || 
+      (c.whatsapp_number && c.whatsapp_number.includes(q))
+    );
+  }
+  // Sort by LTV then name
+  return [...list].sort((a, b) => (b.total_spent || 0) - (a.total_spent || 0));
 });
+
+function getLTVBadge(spent: number) {
+  if (spent >= 5000000) return 'PLATINUM';
+  if (spent >= 2000000) return 'GOLD';
+  if (spent >= 500000) return 'SILVER';
+  return null;
+}
 
 function closeModal() {
   showAddModal.value = false;
@@ -543,6 +579,43 @@ onUnmounted(() => {
 
 .stat-item .label { font-size: 0.65rem; text-transform: uppercase; color: var(--color-text-dim); }
 .stat-item .value { font-weight: 700; font-size: 0.95rem; color: var(--color-primary); }
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ltv-badge {
+  font-size: 0.6rem;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.platinum { background: linear-gradient(135deg, #e5e7eb, #9ca3af); color: #111827; box-shadow: 0 0 10px rgba(156, 163, 175, 0.4); }
+.gold { background: linear-gradient(135deg, #fbbf24, #d97706); color: #000; box-shadow: 0 0 10px rgba(217, 119, 6, 0.4); }
+.silver { background: linear-gradient(135deg, #94a3b8, #475569); color: #fff; }
+
+.piutang-stat {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.text-red { color: #ef4444 !important; }
+
+.animate-pulse {
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
 
 .card-footer {
   display: flex;

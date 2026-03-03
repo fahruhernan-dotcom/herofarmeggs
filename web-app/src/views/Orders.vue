@@ -90,57 +90,61 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="order in filteredOrders" :key="order.id" class="order-row" :class="{ 'is-voided': order.payment_status === 'voided' }">
-              <td class="order-id">
-                <span v-if="order.payment_status === 'voided'" class="void-watermark">VOID</span>
-                #INV-{{ order.id.toString().slice(-6).toUpperCase() }}
-              </td>
-              <td class="customer-info">
-                <div class="cust-name">{{ order.customers?.name || 'Guest Customer' }}</div>
-                <div class="cust-phone text-dim">{{ order.customers?.whatsapp_number || '-' }}</div>
-              </td>
-              <td class="date">{{ formatDate(order.created_at) }}</td>
-              <td class="items-cell">
-                <span class="items-count">{{ order.sale_items?.length || 0 }} Type(s)</span>
-              </td>
-              <td class="amount">Rp {{ (order.total_price || 0).toLocaleString() }}</td>
-              <td>
-                <button
-                  class="status-badge-btn"
-                  :class="order.payment_status"
-                  @click="openStatusMenu(order, 'payment')"
-                >
-                  <span class="badge-dot"></span>
-                  {{ formatStatusLabel(order.payment_status) }}
-                  <ChevronDownIcon class="badge-chevron" />
-                </button>
-              </td>
-              <td>
-                <button
-                  class="status-badge-btn"
-                  :class="order.fulfillment_status || 'processing'"
-                  @click="openStatusMenu(order, 'fulfillment')"
-                >
-                  <span class="badge-dot"></span>
-                  {{ formatStatusLabel(order.fulfillment_status || 'processing') }}
-                  <ChevronDownIcon class="badge-chevron" />
-                </button>
-              </td>
-              <td class="actions">
-                <button class="btn-icon" title="View Details" @click="viewOrderDetails(order)">
-                  <EyeIcon class="icon-sm" />
-                </button>
-                <button class="btn-icon" title="Print Invoice" @click="printFromOrder(order)">
-                  <PrinterIcon class="icon-sm" />
-                </button>
-              </td>
-            </tr>
-            <tr v-if="filteredOrders.length === 0">
-              <td colspan="8" class="empty-state">
-                <div class="empty-inner">
-                  <PackageIcon class="empty-icon" />
-                  <p>No orders found matching your criteria.</p>
-                </div>
+            <template v-if="loading">
+              <tr v-for="i in 5" :key="i">
+                <td colspan="8"><SkeletonLoader type="table-row" height="60px" /></td>
+              </tr>
+            </template>
+            <template v-else-if="filteredOrders.length > 0">
+              <tr v-for="order in filteredOrders" :key="order.id" class="order-row" :class="{ 'is-voided': order.payment_status === 'voided' }">
+                <td class="order-id">
+                  <span v-if="order.payment_status === 'voided'" class="void-watermark">VOID</span>
+                  #INV-{{ order.id.toString().slice(-6).toUpperCase() }}
+                </td>
+                <td class="customer-info">
+                  <div class="cust-name">{{ order.customers?.name || 'Guest Customer' }}</div>
+                  <div class="cust-phone text-dim">{{ order.customers?.whatsapp_number || '-' }}</div>
+                </td>
+                <td class="date">{{ formatDate(order.created_at) }}</td>
+                <td class="items-cell">
+                  <span class="items-count">{{ order.sale_items?.length || 0 }} Type(s)</span>
+                </td>
+                <td class="amount">Rp {{ (order.total_price || 0).toLocaleString('id-ID') }}</td>
+                <td>
+                  <button
+                    class="status-badge-btn"
+                    :class="order.payment_status"
+                    @click="openStatusMenu(order, 'payment')"
+                  >
+                    <span class="badge-dot"></span>
+                    {{ formatStatusLabel(order.payment_status) }}
+                    <ChevronDownIcon class="badge-chevron" />
+                  </button>
+                </td>
+                <td>
+                  <button
+                    class="status-badge-btn"
+                    :class="order.fulfillment_status || 'processing'"
+                    @click="openStatusMenu(order, 'fulfillment')"
+                  >
+                    <span class="badge-dot"></span>
+                    {{ formatStatusLabel(order.fulfillment_status || 'processing') }}
+                    <ChevronDownIcon class="badge-chevron" />
+                  </button>
+                </td>
+                <td class="actions">
+                  <button class="btn-icon" title="View Details" @click="viewOrderDetails(order)">
+                    <EyeIcon class="icon-sm" />
+                  </button>
+                  <button class="btn-icon" title="Print Invoice" @click="printFromOrder(order)">
+                    <PrinterIcon class="icon-sm" />
+                  </button>
+                </td>
+              </tr>
+            </template>
+            <tr v-else>
+              <td colspan="8">
+                <EmptyState icon="PackageSearchIcon" title="Tidak ada order" message="Mungkin coba ganti filter tanggal?" />
               </td>
             </tr>
           </tbody>
@@ -222,6 +226,17 @@
                 </div>
               </div>
 
+              <!-- PRICE OVERRIDE ACCOUNTABILITY BANNER -->
+              <div v-if="selectedOrder.price_overrides?.length > 0" class="override-alert-banner glass-panel animate-pop">
+                <div class="o-icon">
+                  <AlertTriangleIcon class="icon-md" />
+                </div>
+                <div class="o-content">
+                  <h4 class="o-title">Price Modification Warning</h4>
+                  <p class="o-desc">This order contains {{ selectedOrder.price_overrides.length }} items with manually adjusted prices.</p>
+                </div>
+              </div>
+
               <div class="customer-details-box glass-panel">
                 <label>BILLING TO</label>
                 <h3>{{ selectedOrder.customers?.name || 'Guest Customer' }}</h3>
@@ -253,7 +268,12 @@
                         </span>
                       </div>
                     </td>
-                    <td class="item-subtotal">Rp {{ (item.subtotal || 0).toLocaleString() }}</td>
+                    <td class="item-subtotal">
+                      Rp {{ (item.subtotal || 0).toLocaleString() }}
+                      <div v-if="hasPriceOverride(selectedOrder, item.egg_type)" class="override-reason-text">
+                        Reason: {{ getOverrideReason(selectedOrder, item.egg_type) }}
+                      </div>
+                    </td>
                   </tr>
                 </tbody>
                 <tfoot>
@@ -322,27 +342,25 @@
       </Transition>
     </Teleport>
 
-    <!-- TOAST NOTIFICATION -->
-    <Teleport to="body">
-      <Transition name="toast-slide">
-        <div v-if="toast.show" class="toast-notification" :class="toast.type">
-          <CheckCircle2Icon v-if="toast.type === 'success'" class="toast-icon" />
-          <AlertCircleIcon v-if="toast.type === 'error'" class="toast-icon" />
-          <div class="toast-content">
-            <span class="toast-title">{{ toast.title }}</span>
-            <span class="toast-msg">{{ toast.message }}</span>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- CUSTOM CONFIRM MODAL -->
+    <CustomConfirmModal 
+      v-model="showConfirmModal"
+      :title="confirmData.title"
+      :message="confirmData.message"
+      @confirm="confirmData.onConfirm()"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, markRaw } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, markRaw } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
+import { useToast } from '../composables/useToast';
+import SkeletonLoader from '../components/ui/SkeletonLoader.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
+import CustomConfirmModal from '../components/ui/CustomConfirmModal.vue';
 import {
   PlusIcon,
   SearchIcon,
@@ -350,20 +368,21 @@ import {
   PrinterIcon,
   ChevronDownIcon,
   CheckIcon,
-  PackageIcon,
   ListIcon,
   ClockIcon,
   CheckCircle2Icon,
   TruckIcon,
-  AlertCircleIcon,
   BanIcon,
   CircleCheckBigIcon,
   WalletIcon,
   TimerIcon,
   LockIcon,
-  Loader2Icon
+  Loader2Icon,
+  PackageSearchIcon,
+  AlertTriangleIcon
 } from 'lucide-vue-next';
 
+const { showToast } = useToast();
 const authStore = useAuthStore();
 
 // ─── STATE ─────────────────────────
@@ -371,8 +390,15 @@ const orders = ref<any[]>([]);
 const searchQuery = ref('');
 const selectedOrder = ref<any>(null);
 const activeFilter = ref('all');
-const dateFilter = ref('month'); // Default to this month for performance/relevance
+const dateFilter = ref('month');
 const updatingStatus = ref(false);
+const loading = ref(true);
+const showConfirmModal = ref(false);
+const confirmData = reactive({
+  title: '',
+  message: '',
+  onConfirm: () => {}
+});
 
 // Status menu state
 const statusMenu = ref({
@@ -383,13 +409,7 @@ const statusMenu = ref({
   y: 0
 });
 
-// Toast notification
-const toast = ref({
-  show: false,
-  title: '',
-  message: '',
-  type: 'success' as 'success' | 'error'
-});
+// Toast notification removed in favor of useToast
 
 // ─── STATUS OPTIONS ─────────────────
 const paymentOptions = [
@@ -398,6 +418,12 @@ const paymentOptions = [
     label: 'Pending',
     description: 'Payment not yet received',
     icon: markRaw(ClockIcon)
+  },
+  {
+    value: 'piutang',
+    label: 'Piutang',
+    description: 'Payment via credit/tempo',
+    icon: markRaw(TimerIcon)
   },
   {
     value: 'paid',
@@ -518,30 +544,35 @@ const filteredOrders = computed(() => {
 
 // ─── FETCH ──────────────────────────
 async function fetchOrders() {
-  const { data, error } = await supabase
-    .from('sales')
-    .select(`
-      id,
-      total_price,
-      payment_status,
-      fulfillment_status,
-      stock_reserved,
-      created_at,
-      customers!sales_customer_id_fkey (
-        name,
-        whatsapp_number,
-        address
-      ),
-      sale_items (*),
-      price_overrides (*)
-    `)
-    .order('created_at', { ascending: false });
+  loading.value = true;
+  try {
+    const { data, error } = await supabase
+      .from('sales')
+      .select(`
+        id,
+        total_price,
+        payment_status,
+        fulfillment_status,
+        stock_reserved,
+        created_at,
+        customers!sales_customer_id_fkey (
+          name,
+          whatsapp_number,
+          address
+        ),
+        sale_items (*),
+        price_overrides (*)
+      `)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Fetch Orders Error:', error);
-    showToast('Error', 'Failed to load orders: ' + error.message, 'error');
+    if (error) {
+      console.error('Fetch Orders Error:', error);
+      showToast('Gagal memuat data order', 'error');
+    }
+    if (data) orders.value = data || [];
+  } finally {
+    loading.value = false;
   }
-  if (data) orders.value = data || [];
 }
 
 const totalRevenue = computed(() => {
@@ -589,11 +620,12 @@ function formatDate(dateStr: string) {
 function formatStatusLabel(status: string) {
   const map: Record<string, string> = {
     pending: 'Pending',
-    paid: 'Paid',
-    cancelled: 'Cancelled',
-    processing: 'Processing',
-    on_delivery: 'On Delivery',
-    delivered: 'Delivered',
+    piutang: 'Piutang (Tempo)',
+    paid: 'Terbayar',
+    cancelled: 'Dibatalkan',
+    processing: 'Diproses',
+    on_delivery: 'Dikirim',
+    delivered: 'Terkirim',
     voided: 'Voided'
   };
   return map[status] || status;
@@ -606,8 +638,14 @@ function hasPriceOverride(order: any, eggType: string) {
 
 function getOriginalPrice(order: any, eggType: string) {
   if (!order || !order.price_overrides) return 0;
-  const override = order.price_overrides.find((o: any) => o.product_id === eggType);
+  const override = order.price_overrides.find((o: any) => o.product_id === eggType || o.inventory_id === eggType);
   return override ? Number(override.original_price) : 0;
+}
+
+function getOverrideReason(order: any, eggType: string) {
+  if (!order || !order.price_overrides) return '';
+  const override = order.price_overrides.find((o: any) => o.product_id === eggType || o.inventory_id === eggType);
+  return override ? override.reason : '';
 }
 
 async function handleCancelOrderStock(order: any) {
@@ -651,39 +689,33 @@ async function handleCancelOrderStock(order: any) {
 }
 
 async function handleVoid(order: any) {
-  if (!confirm('CRITICAL ACTION: This will void the invoice, RESTORE ALL STOCK, and subtract from customer spent. Proceed?')) return;
-  
-  updatingStatus.value = true;
-  try {
-    // 1. Mark as Voided
-    const { error: voidError } = await supabase
-      .from('sales')
-      .update({ payment_status: 'voided', stock_reserved: false, cancelled_at: new Date().toISOString() })
-      .eq('id', order.id);
+  confirmData.title = 'Konfirmasi Void';
+  confirmData.message = `CRITICAL ACTION: Ini akan membatalkan invoice secara PERMANEN (V2), mengembalikan stok, dan membatalkan piutang jika ada. Lanjutkan?`;
+  confirmData.onConfirm = async () => {
+    updatingStatus.value = true;
+    try {
+      const { data: result, error: voidError } = await supabase.rpc('void_sale_v2', {
+        p_sale_id: order.id,
+        p_voided_by: authStore.profile?.full_name || 'Admin',
+        p_reason: 'Voided via Order Management UI'
+      });
 
-    if (voidError) throw voidError;
+      if (voidError) throw voidError;
+      if (result?.error) {
+        showToast(result.error, 'error');
+        return;
+      }
 
-    // 2. Restore Stock (Eggs & Supplies)
-    if (order.stock_reserved) {
-      await handleCancelOrderStock(order);
-      order.stock_reserved = false;
+      // Refresh data
+      await fetchOrders();
+      showToast('Transaksi Berhasil di-Void (V2)');
+    } catch (err: any) {
+      showToast('Gagal Void Transaksi: ' + (err.message || err), 'error');
+    } finally {
+      updatingStatus.value = false;
     }
-
-    // 3. Sync Customer Totals (RPC)
-    if (order.customer_id) {
-      await supabase.rpc('sync_customer_totals', { target_customer_id: order.customer_id });
-    }
-
-    // Refresh data
-    await fetchOrders();
-    selectedOrder.value = orders.value.find(o => o.id === order.id);
-
-    showToast('Transaction Voided', 'Stock restored and LTV updated.', 'success');
-  } catch (err: any) {
-    showToast('Void Failed', err.message, 'error');
-  } finally {
-    updatingStatus.value = false;
-  }
+  };
+  showConfirmModal.value = true;
 }
 
 function viewOrderDetails(order: any) {
@@ -750,13 +782,9 @@ async function updateStatus(newValue: string) {
       selectedOrder.value[field] = newValue;
     }
 
-    showToast(
-      'Status Updated',
-      `${statusMenu.value.type === 'payment' ? 'Payment' : 'Fulfillment'} → ${formatStatusLabel(newValue)}`,
-      'success'
-    );
+    showToast(`Status Berhasil di-Update: ${formatStatusLabel(newValue)}`);
   } catch (e: any) {
-    showToast('Update Failed', e.message, 'error');
+    showToast('Gagal update status', 'error');
   } finally {
     updatingStatus.value = false;
     closeStatusMenu();
@@ -805,10 +833,9 @@ async function quickUpdateStatus(order: any, field: string, newValue: string) {
       selectedOrder.value[field] = newValue;
     }
 
-    const typeLabel = field === 'payment_status' ? 'Payment' : 'Fulfillment';
-    showToast('Status Updated', `${typeLabel} → ${formatStatusLabel(newValue)}`, 'success');
+    showToast(`Status Berhasil di-Update: ${formatStatusLabel(newValue)}`);
   } catch (e: any) {
-    showToast('Update Failed', e.message, 'error');
+    showToast('Update Failed', 'error');
   } finally {
     updatingStatus.value = false;
   }
@@ -841,12 +868,7 @@ function printFromOrder(order: any) {
   }
 }
 
-function showToast(title: string, message: string, type: 'success' | 'error') {
-  toast.value = { show: true, title, message, type };
-  setTimeout(() => {
-    toast.value.show = false;
-  }, 3000);
-}
+// internal showToast removed
 
 let refreshInterval: any;
 
@@ -1094,6 +1116,15 @@ onUnmounted(() => {
 }
 .status-badge-btn.pending .badge-dot { background: #FFAA00; box-shadow: 0 0 6px #FFAA00; }
 .status-badge-btn.pending:hover { background: rgba(255, 170, 0, 0.15); border-color: rgba(255, 170, 0, 0.4); }
+
+/* Payment: Piutang */
+.status-badge-btn.piutang {
+  background: rgba(255, 140, 0, 0.08);
+  color: #FF8C00;
+  border-color: rgba(255, 140, 0, 0.2);
+}
+.status-badge-btn.piutang .badge-dot { background: #FF8C00; box-shadow: 0 0 6px #FF8C00; }
+.status-badge-btn.piutang:hover { background: rgba(255, 140, 0, 0.12); border-color: rgba(255, 140, 0, 0.35); }
 
 /* Payment: Paid */
 .status-badge-btn.paid {
@@ -1382,6 +1413,7 @@ onUnmounted(() => {
 
 .modal-status-card.paid { background: rgba(0, 255, 157, 0.04); border-color: rgba(0, 255, 157, 0.15); }
 .modal-status-card.pending { background: rgba(255, 170, 0, 0.04); border-color: rgba(255, 170, 0, 0.15); }
+.modal-status-card.piutang { background: rgba(255, 140, 0, 0.04); border-color: rgba(255, 140, 0, 0.15); }
 .modal-status-card.cancelled { background: rgba(255, 62, 62, 0.04); border-color: rgba(255, 62, 62, 0.15); }
 .modal-status-card.processing { background: rgba(100, 149, 237, 0.04); border-color: rgba(100, 149, 237, 0.15); }
 .modal-status-card.on_delivery { background: rgba(255, 140, 0, 0.04); border-color: rgba(255, 140, 0, 0.15); }
@@ -1407,6 +1439,8 @@ onUnmounted(() => {
 .modal-status-card.paid .msc-badge .badge-dot { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
 .modal-status-card.pending .msc-badge { color: #FFAA00; }
 .modal-status-card.pending .msc-badge .badge-dot { background: #FFAA00; box-shadow: 0 0 6px #FFAA00; }
+.modal-status-card.piutang .msc-badge { color: #FF8C00; }
+.modal-status-card.piutang .msc-badge .badge-dot { background: #FF8C00; box-shadow: 0 0 6px #FF8C00; }
 .modal-status-card.cancelled .msc-badge { color: var(--color-error); }
 .modal-status-card.cancelled .msc-badge .badge-dot { background: var(--color-error); box-shadow: 0 0 6px var(--color-error); }
 .modal-status-card.processing .msc-badge { color: #6495ED; }
@@ -1667,10 +1701,11 @@ onUnmounted(() => {
   transition: all 0.3s ease;
 }
 
-.btn-void:hover:not(:disabled) {
+.btn-void:hover {
   background: var(--color-error);
   color: white;
-  box-shadow: 0 0 20px rgba(255, 66, 66, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(255, 62, 62, 0.3);
 }
 
 .btn-void:disabled {

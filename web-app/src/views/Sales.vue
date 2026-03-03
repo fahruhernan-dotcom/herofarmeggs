@@ -78,7 +78,10 @@
 
           <div class="items-selection">
             <label class="section-label">Package Selection</label>
-            <div class="pkg-grid">
+            <div class="pkg-grid" v-if="loading">
+              <SkeletonLoader v-for="i in 3" :key="i" type="card" height="120px" />
+            </div>
+            <div class="pkg-grid" v-else-if="sellableProducts.length > 0">
               <div 
                 v-for="item in sellableProducts" 
                 :key="item.id" 
@@ -95,7 +98,7 @@
                 </div>
                 <div class="p-price-tag">
                   <span class="currency">Rp</span>
-                  <span class="amount">{{ item.base_price_per_pack.toLocaleString('id-ID') }}</span>
+                  <span class="amount">{{ (item.base_price_per_pack || 0).toLocaleString('id-ID') }}</span>
                 </div>
                 <div class="pkg-icon-wrapper">
                   <PackageIcon v-if="item.id === 'standard_size'" />
@@ -104,6 +107,7 @@
                 </div>
               </div>
             </div>
+            <EmptyState v-else icon="PackageSearchIcon" title="Produk tidak ditemukan" message="Stok telur belum terdaftar." />
           </div>
 
           <div class="order-config-box animate-slide-up" v-if="selectedEggType">
@@ -138,28 +142,35 @@
 
             <!-- Payment Status Toggle -->
             <div class="payment-toggle-group">
-              <label class="section-label">Payment Status</label>
+              <label class="section-label">Tipe Pembayaran</label>
               <div class="toggle-options">
                 <button
                   type="button"
                   class="toggle-btn"
-                  :class="{ active: form.paymentStatus === 'pending', pending: true }"
-                  @click="form.paymentStatus = 'pending'"
+                  :class="{ active: form.paymentStatus === 'tunai', paid: true }"
+                  @click="form.paymentStatus = 'tunai'"
                 >
-                  <span class="toggle-dot pending"></span>
-                  Pending
+                  <span class="toggle-dot paid"></span>
+                  Tunai / Transfer
                 </button>
                 <button
                   type="button"
                   class="toggle-btn"
-                  :class="{ active: form.paymentStatus === 'paid', paid: true }"
-                  @click="form.paymentStatus = 'paid'"
+                  :class="{ active: form.paymentStatus === 'piutang', pending: true }"
+                  @click="form.paymentStatus = 'piutang'"
                 >
-                  <span class="toggle-dot paid"></span>
-                  Paid
+                  <span class="toggle-dot pending"></span>
+                  Piutang (Tempo)
                 </button>
               </div>
             </div>
+
+            <Transition name="fade">
+              <div v-if="form.paymentStatus === 'piutang'" class="form-group animate-slide mt-2">
+                <label>Tanggal Jatuh Tempo</label>
+                <input type="date" v-model="form.dueDate" class="premium-input" required />
+              </div>
+            </Transition>
 
             <Transition name="fade">
               <div v-if="maxStock <= 0 || form.quantity > maxPacks" class="premium-warning glass-panel">
@@ -204,22 +215,29 @@
               <div class="item-price-actions">
                 <div v-if="editingIndex === index" class="price-editor">
                   <span class="prefix">Rp</span>
-                  <input 
-                    type="number" 
-                    v-model.number="editingPriceValue" 
-                    class="price-edit-input"
-                    @keyup.enter="savePriceEdit(index)"
-                  />
-                  <button class="btn-save-price" @click="savePriceEdit(index)">
-                    <CheckIcon class="icon-xs" />
-                  </button>
+                    <input 
+                      type="number" 
+                      v-model.number="editingPriceValue" 
+                      class="price-edit-input"
+                      @keyup.enter="savePriceEdit(index)"
+                    />
+                    <input 
+                      type="text" 
+                      v-model="editingReason" 
+                      placeholder="Reason for override..." 
+                      class="reason-edit-input"
+                      @keyup.enter="savePriceEdit(index)"
+                    />
+                    <button class="btn-save-price" @click="savePriceEdit(index)">
+                      <CheckIcon class="icon-xs" />
+                    </button>
                   <button class="btn-cancel-price" @click="editingIndex = null">
                     <XIcon class="icon-xs" />
                   </button>
                 </div>
                 <div v-else class="price-display">
-                  <span class="item-subtotal">Rp {{ item.subtotal.toLocaleString() }}</span>
-                  <span class="unit-price-hint">(@ Rp {{ item.price.toLocaleString() }})</span>
+                  <span class="item-subtotal">Rp {{ item.subtotal.toLocaleString('id-ID') }}</span>
+                  <span class="unit-price-hint">(@ Rp {{ item.price.toLocaleString('id-ID') }})</span>
                   <button class="btn-edit-price" @click="startEditPrice(index, item.price)" title="Override Price">
                     <Edit3Icon class="icon-xs" />
                   </button>
@@ -232,9 +250,29 @@
           </div>
 
           <div class="cart-footer">
+            <!-- Premium Margin Analysis for Admin -->
+            <div v-if="authStore.profile?.role === 'admin' && cart.length > 0" class="margin-analysis-box glass-panel mb-4 animate-slide">
+              <div class="ma-header">
+                <span class="ma-title">Analytics (Admin)</span>
+                <span class="margin-badge" :class="cartMarginAnalysis.marginPct > 15 ? 'healthy' : 'warning'">
+                  {{ Math.round(cartMarginAnalysis.marginPct) }}% Margin
+                </span>
+              </div>
+              <div class="ma-grid">
+                <div class="ma-item">
+                  <span class="ma-label">Total HPP</span>
+                  <span class="ma-val">Rp {{ cartMarginAnalysis.totalHpp.toLocaleString('id-ID') }}</span>
+                </div>
+                <div class="ma-item highlight">
+                  <span class="ma-label">Est. Profit</span>
+                  <span class="ma-val">Rp {{ cartMarginAnalysis.profit.toLocaleString('id-ID') }}</span>
+                </div>
+              </div>
+            </div>
+
             <div class="cart-total-row">
               <span class="label">Total Order</span>
-              <span class="value">Rp {{ cartTotal.toLocaleString() }}</span>
+              <span class="value">Rp {{ cartTotal.toLocaleString('id-ID') }}</span>
             </div>
           </div>
         </div>
@@ -301,12 +339,21 @@
         </div>
       </section>
     </div>
+
+    <!-- CUSTOM CONFIRM MODAL -->
+    <CustomConfirmModal 
+      v-model="showConfirmModal"
+      :title="confirmData.title"
+      :message="confirmData.message"
+      @confirm="confirmData.onConfirm()"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/auth';
 import { 
   PackageIcon, 
   ZapIcon, 
@@ -322,7 +369,14 @@ import {
   CheckIcon,
   XIcon
 } from 'lucide-vue-next';
+import { useToast } from '../composables/useToast';
+import SkeletonLoader from '../components/ui/SkeletonLoader.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
+import CustomConfirmModal from '../components/ui/CustomConfirmModal.vue';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
+
+const { showToast } = useToast();
+const authStore = useAuthStore();
 
 // 1. STATE
 const inventory = ref<any[]>([]);
@@ -332,6 +386,13 @@ const showPreview = ref(false);
 const loading = ref(false);
 const editingIndex = ref<number | null>(null);
 const editingPriceValue = ref(0);
+const editingReason = ref('');
+const showConfirmModal = ref(false);
+const confirmData = reactive({
+  title: '',
+  message: '',
+  onConfirm: () => {}
+});
 
 
 const customerSearch = ref('');
@@ -341,7 +402,8 @@ const selectedCustomerId = ref<string | null>(null);
 
 const form = reactive({
   quantity: 1,
-  paymentStatus: 'paid' as 'paid' | 'pending',
+  paymentStatus: 'tunai' as 'tunai' | 'piutang',
+  dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // default 7 days
 });
 
 const cart = ref<Array<{
@@ -349,16 +411,22 @@ const cart = ref<Array<{
   label: string,
   quantity: number,
   price: number,
-  subtotal: number
+  subtotal: number,
+  overrideReason?: string
 }>>([]);
 
 // 2. FETCHING
 async function fetchData() {
-  const { data: inv } = await supabase.from('inventory').select('*');
-  if (inv) inventory.value = inv;
+  loading.value = true;
+  try {
+    const { data: inv } = await supabase.from('inventory').select('*');
+    if (inv) inventory.value = inv;
 
-  const { data: cust } = await supabase.from('customers').select('*').eq('is_deleted', false).order('name');
-  if (cust) customers.value = cust;
+    const { data: cust } = await supabase.from('customers').select('*').eq('is_deleted', false).order('name');
+    if (cust) customers.value = cust;
+  } finally {
+    loading.value = false;
+  }
 }
 
 // 3. COMPUTED
@@ -389,9 +457,20 @@ const sellableProducts = computed(() => inventory.value.filter(i => i.item_type 
 
 const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.subtotal, 0));
 
+const cartMarginAnalysis = computed(() => {
+  const totalHpp = cart.value.reduce((sum, item) => {
+    const inv = inventory.value.find(i => i.id === item.id);
+    return sum + (item.quantity * (inv?.hpp_per_pack || 0));
+  }, 0);
+  const profit = cartTotal.value - totalHpp;
+  const marginPct = cartTotal.value > 0 ? (profit / cartTotal.value) * 100 : 0;
+  return { totalHpp, profit, marginPct };
+});
 
 const isFormValid = computed(() => {
-  return cart.value.length > 0 && customerSearch.value.trim().length > 0;
+  const basic = cart.value.length > 0 && customerSearch.value.trim().length > 0;
+  if (form.paymentStatus === 'piutang') return basic && !!form.dueDate;
+  return basic;
 });
 
 // 4. METHODS
@@ -432,16 +511,24 @@ function removeFromCart(index: number) {
 function startEditPrice(index: number, currentPrice: number) {
   editingIndex.value = index;
   editingPriceValue.value = currentPrice;
+  editingReason.value = cart.value[index]?.overrideReason || '';
 }
 
 function savePriceEdit(index: number) {
   if (editingPriceValue.value <= 0) return;
   const item = cart.value[index];
   if (item) {
+    const originalPrice = inventory.value.find(inv => inv.id === item.id)?.base_price_per_pack || item.price;
+    if (editingPriceValue.value !== originalPrice && !editingReason.value.trim()) {
+      showToast('Berikan alasan perubahan harga', 'error');
+      return;
+    }
     item.price = editingPriceValue.value;
     item.subtotal = item.quantity * item.price;
+    item.overrideReason = editingReason.value;
   }
   editingIndex.value = null;
+  editingReason.value = '';
 }
 
 
@@ -450,9 +537,9 @@ function handlePreview() {
   showPreview.value = true;
 }
 
-function printInvoice(saleId: string, customItems?: any[], customTotal?: number) {
+function printInvoice(saleId: string, customItems?: any[], customTotal?: number, invoiceNumber?: string) {
   const invoiceData = {
-    invoiceNo: `EP-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${String(saleId).slice(-3).toUpperCase()}`,
+    invoiceNo: invoiceNumber || `EP-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${String(saleId).slice(-3).toUpperCase()}`,
     date: new Date().toLocaleDateString('id-ID'),
     customerName: selectedCustomerName.value,
     customerPhone: customerPhone.value,
@@ -482,104 +569,87 @@ function printInvoice(saleId: string, customItems?: any[], customTotal?: number)
 async function confirmSale() {
   if (cart.value.length === 0) return;
   
-  loading.value = true;
-  
-  // Capture snapshot for printing since cart will be cleared
-  const cartSnapshot = cart.value.map(item => ({
-    description: item.label,
-    quantity: item.quantity,
-    unit: 'Pack',
-    price: item.price,
-    total: item.subtotal
-  }));
-  const totalSnapshot = cartTotal.value;
+  confirmData.title = 'Konfirmasi Penjualan';
+  confirmData.message = `Simpan transaksi sebesar Rp ${cartTotal.value.toLocaleString('id-ID')}?`;
+  confirmData.onConfirm = async () => {
+    loading.value = true;
+    
+    // Capture snapshot for printing since cart will be cleared
+    const cartSnapshot = cart.value.map(item => ({
+      description: item.label,
+      quantity: item.quantity,
+      unit: 'Pack',
+      price: item.price,
+      total: item.subtotal
+    }));
+    const totalSnapshot = cartTotal.value;
 
-  try {
-    let finalCustomerId = selectedCustomerId.value;
+    try {
+      let finalCustomerId = selectedCustomerId.value;
 
-    // A. Auto-Register if it's a new name
-    if (!finalCustomerId && customerSearch.value) {
-      const existing = customers.value.find(c => c.name.toLowerCase() === customerSearch.value.toLowerCase());
-      if (existing) {
-        finalCustomerId = existing.id;
-      } else {
-        const { data: newCust, error: custError } = await supabase
-          .from('customers')
-          .insert([{ name: customerSearch.value, whatsapp_number: customerPhone.value }])
-          .select()
-          .single();
-        
-        if (custError) throw custError;
-        finalCustomerId = newCust.id;
+      // A. Auto-Register if it's a new name
+      if (!finalCustomerId && customerSearch.value) {
+        const existing = customers.value.find(c => c.name.toLowerCase() === customerSearch.value.toLowerCase());
+        if (existing) {
+          finalCustomerId = existing.id;
+        } else {
+          const { data: newCust, error: custError } = await supabase
+            .from('customers')
+            .insert([{ name: customerSearch.value, whatsapp_number: customerPhone.value }])
+            .select()
+            .single();
+          
+          if (custError) throw custError;
+          finalCustomerId = newCust.id;
+        }
       }
-    }
 
-    // B. Execute Atomic Transaction via RPC
-    const rpcPayload = {
-      p_customer_id: finalCustomerId,
-      p_items: cart.value.map(item => ({
-        egg_type: item.id,
-        quantity: item.quantity,
-        price: item.price,
-        subtotal: item.subtotal,
-        label: item.label
-      })),
-      p_payment_status: form.paymentStatus
-    };
-
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('validate_and_create_sale', rpcPayload);
-
-    if (rpcError) throw rpcError;
-    if (rpcResult?.error) {
-      alert(rpcResult.error);
-      return;
-    }
-
-    const saleId = rpcResult.sale_id;
-    const invoiceNumber = `EP-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}${String(saleId).slice(-3).toUpperCase()}`;
-
-    // Create Notification
-    await supabase.from('notifications').insert({
-      type: 'sale_created',
-      title: 'Penjualan Baru',
-      message: `Invoice ${invoiceNumber} - ${selectedCustomerName.value}`,
-      link: '/sales'
-    });
-
-    // C. Handle Price Overrides Audit (Client-side for now to keep RPC clean of Auth complexity)
-    for (const item of cart.value) {
-      const eggInInv = inventory.value.find(i => i.id === item.id);
-      if (eggInInv && item.price !== eggInInv.base_price_per_pack) {
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from('price_overrides').insert({
-          sale_id: saleId,
-          product_id: item.id,
-          original_price: eggInInv.base_price_per_pack,
+      // B. Execute Atomic Transaction via RPC v2
+      const rpcPayload = {
+        p_customer_id: finalCustomerId,
+        p_customer_name: customerSearch.value,
+        p_items: cart.value.map(item => ({
+          inventory_id: item.id,
+          packs_sold: item.quantity,
           override_price: item.price,
-          override_by: user?.email || 'Unknown'
-        });
+          override_reason: item.overrideReason || null
+        })),
+        p_payment_type: form.paymentStatus,
+        p_due_date: form.paymentStatus === 'piutang' ? form.dueDate : null
+      };
+
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('create_sale_v2', rpcPayload);
+
+      if (rpcError) throw rpcError;
+      if (rpcResult?.error) {
+        showToast(rpcResult.error, 'error');
+        return;
       }
+
+      const saleId = rpcResult.sale_id;
+      const invoiceNumber = rpcResult.invoice_number;
+
+      // Auto-Trigger Print with snapshot
+      printInvoice(saleId, cartSnapshot, totalSnapshot, invoiceNumber);
+
+      // Reset state
+      showPreview.value = false;
+      form.quantity = 1;
+      form.paymentStatus = 'tunai';
+      cart.value = [];
+      customerSearch.value = '';
+      customerPhone.value = '';
+      selectedCustomerId.value = null;
+      fetchData();
+
+      showToast('Transaksi Berhasil!');
+    } catch (e: any) {
+      showToast('Gagal memproses transaksi', 'error');
+    } finally {
+      loading.value = false;
     }
-
-    // Auto-Trigger Print with snapshot
-    printInvoice(saleId, cartSnapshot, totalSnapshot);
-
-    // Reset state
-    showPreview.value = false;
-    form.quantity = 1;
-    form.paymentStatus = 'paid';
-    cart.value = [];
-    customerSearch.value = '';
-    customerPhone.value = '';
-    selectedCustomerId.value = null;
-    fetchData();
-
-    alert('Transaction Successful!');
-  } catch (e: any) {
-    alert('Error: ' + e.message);
-  } finally {
-    loading.value = false;
-  }
+  };
+  showConfirmModal.value = true;
 }
 
 // Custom directive for clicking outside
@@ -1165,20 +1235,23 @@ onMounted(fetchData);
 }
 
 .price-edit-input {
-  width: 80px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--color-primary);
+  width: 90px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
   color: white;
-  font-size: 0.85rem;
+  padding: 4px 8px;
   font-weight: 800;
-  text-align: right;
-  padding: 2px 4px;
 }
 
-.price-edit-input:focus {
-  outline: none;
-  border-bottom-width: 2px;
+.reason-edit-input {
+  width: 150px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: white;
+  padding: 4px 8px;
+  font-size: 0.75rem;
 }
 
 .btn-edit-price, .btn-save-price, .btn-cancel-price {
@@ -1336,5 +1409,86 @@ onMounted(fetchData);
   background: rgba(255, 255, 255, 0.05);
   color: var(--color-text-dim);
   border: 1px solid var(--glass-border);
+}
+
+/* ━━━ MARGIN ANALYSIS STYLES ━━━ */
+.margin-analysis-box {
+  background: rgba(255, 140, 0, 0.03);
+  border: 1px solid rgba(255, 140, 0, 0.1);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.ma-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ma-title {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  letter-spacing: 0.05em;
+}
+
+.margin-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.margin-badge.healthy {
+  background: rgba(0, 255, 157, 0.1);
+  color: var(--color-success);
+}
+
+.margin-badge.warning {
+  background: rgba(255, 170, 0, 0.1);
+  color: #FFAA00;
+}
+
+.ma-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ma-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ma-label {
+  font-size: 0.6rem;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.ma-val {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: white;
+}
+
+.ma-item.highlight .ma-val {
+  color: var(--color-primary);
+}
+
+.mb-4 { margin-bottom: 16px; }
+.mt-2 { margin-top: 8px; }
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide {
+  animation: slideDown 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 </style>
