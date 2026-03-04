@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  telur-web:
+    build:
+      context: ./web-app
+      dockerfile: Dockerfile
+    container_name: telur-web
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      - NODE_ENV=production
+
+networks:
+  default:
+    name: web_network
+    external: true
