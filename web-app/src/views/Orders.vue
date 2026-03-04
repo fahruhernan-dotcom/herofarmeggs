@@ -144,7 +144,7 @@
             </template>
             <tr v-else>
               <td colspan="8">
-                <EmptyState icon="PackageSearchIcon" title="Tidak ada order" message="Mungkin coba ganti filter tanggal?" />
+                <EmptyState :icon="PackageSearchIcon" title="Tidak ada order" message="Mungkin coba ganti filter tanggal?" />
               </td>
             </tr>
           </tbody>
