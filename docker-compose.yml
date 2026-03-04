@@ -8,7 +8,7 @@ services:
     container_name: telur-web
     restart: always
     ports:
-      - "8081:80"
+      - "8083:80"
     environment:
       - NODE_ENV=production
 
