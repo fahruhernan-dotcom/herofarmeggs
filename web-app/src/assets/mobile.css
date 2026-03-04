@@ -1,0 +1,153 @@
+/* HERO FARM MOBILE UTILITY SYSTEM */
+
+:root {
+    --mobile-header-height: 56px;
+    --mobile-nav-height: 64px;
+    --safe-area-bottom: env(safe-area-inset-bottom);
+}
+
+/* Base Mobile Overrides */
+@media (max-width: 768px) {
+    .hero-font {
+        font-size: 1.5rem !important;
+    }
+
+    .text-dim {
+        font-size: 0.8rem;
+    }
+
+    /* Typography Scale Down */
+    .text-hero {
+        font-size: 28px !important;
+    }
+
+    .text-metric {
+        font-size: 20px !important;
+    }
+
+    .text-label {
+        font-size: 10px !important;
+    }
+
+    /* Spacing & Containers */
+    .main-content {
+        padding: 16px !important;
+        padding-top: calc(var(--mobile-header-height) + 16px) !important;
+        padding-bottom: calc(var(--mobile-nav-height) + 24px + var(--safe-area-bottom)) !important;
+    }
+
+    .card,
+    .glass-panel {
+        padding: 16px !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px;
+    }
+
+    /* Grid System Overrides */
+    .grid-3,
+    .grid-4,
+    .grid-auto {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    .grid-2 {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 12px !important;
+    }
+
+    .mobile-only {
+        display: block !important;
+    }
+
+    .desktop-only,
+    .table-desktop {
+        display: none !important;
+    }
+
+    /* Buttons */
+    .btn-full-mobile {
+        width: 100% !important;
+        justify-content: center;
+    }
+
+    .btn-touch {
+        min-height: 48px !important;
+    }
+
+    /* Horizontal Scroll Helpers */
+    .scroll-x {
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: 12px;
+        padding-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    }
+
+    .scroll-x::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Form Elements */
+    input,
+    select,
+    textarea,
+    .fg-input {
+        font-size: 16px !important;
+        /* Prevent iOS Zoom */
+        min-height: 48px !important;
+    }
+
+    /* Tables to Cards Transition */
+    .table-desktop {
+        display: none !important;
+    }
+
+    .cards-mobile {
+        display: flex !important;
+        flex-direction: column;
+        gap: 12px;
+    }
+}
+
+@media (min-width: 769px) {
+
+    .mobile-only,
+    .cards-mobile {
+        display: none !important;
+    }
+}
+
+/* Animations */
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}

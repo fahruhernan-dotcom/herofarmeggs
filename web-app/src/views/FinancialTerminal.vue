@@ -1,7 +1,7 @@
 <template>
   <div class="financial-terminal animate-fade-in">
     <!-- HEADER SECTION -->
-    <header class="terminal-header">
+    <header v-if="!isMobile" class="terminal-header desktop-only">
       <div class="header-left">
         <h1 class="gradient-text hero-font">Financial Terminal</h1>
         <p class="text-dim">Pusat laporan keuangan Hero Farm</p>
@@ -27,8 +27,25 @@
       </div>
     </header>
 
+    <!-- MOBILE HEADER -->
+    <header v-if="isMobile" class="mobile-terminal-header mobile-only mb-6">
+      <div class="mth-top">
+        <h2 class="hero-font text-xl">Finance</h2>
+        <div class="period-pills scroll-x mt-2">
+          <button 
+            v-for="p in periods" 
+            :key="'m-'+p.id"
+            @click="activePeriod = p.id"
+            :class="['p-pill', { active: activePeriod === p.id }]"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+      </div>
+    </header>
+
     <!-- TAB NAVIGATION -->
-    <nav class="tab-nav glass-panel">
+    <nav class="tab-nav scroll-x glass-panel">
       <button 
         v-for="t in tabs" 
         :key="t.id"
@@ -81,6 +98,9 @@
                   <h3>Laporan Laba Rugi</h3>
                 </div>
                 <div class="pnl-table-formal">
+                  <div class="pnl-donut-wrapper">
+                    <DoughnutChart :data="pnlDoughnutData" :options="pnlDoughnutOptions" />
+                  </div>
                   <div class="pnl-sec">
                     <div class="sec-title">PENDAPATAN</div>
                     <div v-for="item in pnlRevenueBreakdown" :key="item.label" class="pnl-row">
@@ -126,12 +146,15 @@
               </div>
             </div>
 
-            <!-- ━━━ FEATURE 3: DISCOUNT RECAP SECTION ━━━ -->
+            <!-- ━━━ FEATURE 3: DISCOUNT RECAP SECTION (Collapsible) ━━━ -->
             <div class="glass-panel discount-recap-box animate-fade-up mt-8" style="--delay: 7">
-              <div class="box-header">
+              <div class="box-header cursor-pointer" @click="showDiscountRecap = !showDiscountRecap">
                 <div class="bh-left">
-                  <h3>Rekap Diskon & Override Harga</h3>
-                  <p class="text-dim">Akuntabilitas pemotongan harga manual oleh kasir.</p>
+                  <div class="flex items-center gap-2">
+                    <h3>Rekap Diskon & Override Harga</h3>
+                    <component :is="showDiscountRecap ? ChevronUpIcon : ChevronDownIcon" class="icon-sm text-dim" />
+                  </div>
+                  <p class="text-dim text-sm">Akuntabilitas pemotongan harga manual oleh kasir.</p>
                 </div>
                 <div class="bh-stats">
                   <div class="mini-stat">
@@ -145,7 +168,7 @@
                 </div>
               </div>
 
-              <div class="table-container mt-4">
+              <div v-show="showDiscountRecap" class="table-container p-4 border-t border-white/5">
                 <table class="financial-table">
                   <thead>
                     <tr>
@@ -247,7 +270,8 @@
                 <h3>MUTASI BANK TERAKHIR</h3>
               </div>
               <div class="table-container">
-                <table class="financial-table" v-if="bankTransactions.length > 0">
+                <!-- 🖥️ DESKTOP TABLE -->
+                <table class="financial-table table-desktop" v-if="bankTransactions.length > 0">
                   <thead>
                     <tr>
                       <th>Tanggal</th>
@@ -275,6 +299,20 @@
                     </tr>
                   </tbody>
                 </table>
+
+                <!-- 📱 MOBILE TRANSACTIONS -->
+                <div v-if="bankTransactions.length > 0" class="cards-mobile px-4 pb-4">
+                  <div v-for="tx in bankTransactions" :key="'mtx-'+tx.id" class="tx-mobile-card glass-panel mb-3 p-4">
+                    <div class="tmc-header flex justify-between">
+                      <span class="text-xs text-dim">{{ formatDate(tx.transaction_date) }}</span>
+                      <span :class="['tx-pill-mini', tx.transaction_type]">{{ tx.transaction_type }}</span>
+                    </div>
+                    <div class="tmc-desc font-bold text-sm mt-2">{{ tx.description }}</div>
+                    <div class="tmc-amount text-right font-black mt-1" :class="tx.transaction_type === 'masuk' ? 'text-green' : 'text-red'">
+                       {{ tx.transaction_type === 'masuk' ? '+' : '-' }}{{ formatIDR(tx.amount) }}
+                    </div>
+                  </div>
+                </div>
                 <EmptyState v-else icon="WalletIcon" title="Belum ada transaksi" message="Transaksi bank akan muncul di sini otomatis setalah ada pergerakan kas." />
               </div>
             </div>
@@ -351,7 +389,8 @@
                 <h3>Daftar Piutang Aktif</h3>
               </div>
               <div class="table-container">
-                <table class="financial-table">
+                <!-- 🖥️ DESKTOP TABLE -->
+                <table class="financial-table table-desktop">
                   <thead>
                     <tr>
                       <th>Invoice ID</th>
@@ -385,6 +424,19 @@
                     </tr>
                   </tbody>
                 </table>
+
+                <!-- 📱 MOBILE PIUTANG -->
+                <div v-if="piutangList.length > 0" class="cards-mobile px-4 pb-4">
+                  <div v-for="p in piutangList" :key="'mpt-'+p.id" class="p-mobile-card glass-panel mb-3 p-4" :class="getPiutangRowClass(p)">
+                    <div class="pmc-header flex justify-between">
+                      <span class="text-xs text-dim">{{ p.invoice_no }}</span>
+                      <span class="days-pill" :class="getPiutangDaysClass(p)">{{ getDaysBetween(p.created_at, new Date()) }} Hari</span>
+                    </div>
+                    <div class="pmc-cust font-bold text-sm mt-2">{{ p.customers?.name || 'Umum' }}</div>
+                    <div class="pmc-amount text-right font-black mt-2 red">{{ formatIDR(p.remaining) }}</div>
+                    <button class="btn-primary w-full mt-3 text-xs" @click="handleMarkPaid(p)">TERIMA BAYAR</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -414,7 +466,8 @@
                 <h3>Daftar Kewajiban Supplier</h3>
               </div>
               <div class="table-container">
-                <table class="financial-table">
+                <!-- 🖥️ DESKTOP TABLE -->
+                <table class="financial-table table-desktop">
                   <thead>
                     <tr>
                       <th>Ref Nota</th>
@@ -436,7 +489,7 @@
                         <div class="action-btns">
                           <button class="btn-action danger" @click="handlePayUtang(u)" :disabled="loading">
                             <ZapIcon class="icon-xs" />
-                            <span>Bayar Sekarang</span>
+                            Bayar Sekarang
                           </button>
                         </div>
                       </td>
@@ -446,6 +499,19 @@
                     </tr>
                   </tbody>
                 </table>
+
+                <!-- 📱 MOBILE UTANG -->
+                <div v-if="utangList.length > 0" class="cards-mobile px-4 pb-4">
+                  <div v-for="u in utangList" :key="'mut-'+u.id" class="u-mobile-card glass-panel mb-3 p-4">
+                    <div class="umc-header flex justify-between">
+                      <span class="text-xs text-dim">PO-{{ u.purchase_id }}</span>
+                      <span class="text-xs text-red font-bold">DUE: {{ formatDate(new Date(new Date(u.created_at).getTime() + 7 * 24 * 60 * 60 * 1000)) }}</span>
+                    </div>
+                    <div class="umc-supp font-bold text-sm mt-2">{{ u.suppliers?.name || 'Unknown' }}</div>
+                    <div class="umc-amount text-right font-black mt-2 red">{{ formatIDR(u.remaining) }}</div>
+                    <button class="btn-primary w-full mt-3 text-xs" @click="handlePayUtang(u)">BAYAR SEKARANG</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -719,7 +785,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
@@ -743,6 +809,8 @@ import {
   EyeIcon,
   ToggleLeftIcon,
   ToggleRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
 } from 'lucide-vue-next';
 import { useToast } from '../composables/useToast';
 import CustomConfirmModal from '../components/ui/CustomConfirmModal.vue';
@@ -753,7 +821,7 @@ import {
   LineElement, CategoryScale, LinearScale, PointElement,
   BarElement, ArcElement, RadialLinearScale, Filler
 } from 'chart.js';
-import { Line as LineChart, Radar as RadarChart } from 'vue-chartjs';
+import { Line as LineChart, Radar as RadarChart, Doughnut as DoughnutChart } from 'vue-chartjs';
 
 ChartJS.register(
   Title, Tooltip, Legend, 
@@ -763,6 +831,11 @@ ChartJS.register(
 
 const authStore = useAuthStore();
 const router = useRouter();
+const isMobile = ref(window.innerWidth <= 768);
+
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 768;
+}
 
 // Admin Only Guard
 if (!authStore.isAdmin) {
@@ -820,6 +893,7 @@ const { showToast } = useToast();
 const showBankModal = ref(false);
 const showReportModal = ref(false);
 const showConfirmModal = ref(false);
+const showDiscountRecap = ref(false);
 const confirmData = ref({ title: '', message: '', onConfirm: () => {} });
 
 const bankForm = ref({
@@ -914,8 +988,8 @@ const fetchData = async () => {
       kpiData.value = {
         ...kpis,
         total_piutang: kpis.total_piutang_aktif || 0,
-        total_utang: kpis.total_utang_aktif || 0,
-        stock_value: (inv || []).reduce((acc: number, i: any) => acc + (Number(i.current_stock || 0) * (Number(i.hpp_per_egg || i.unit_cost || 0))), 0)
+        total_utang: (uData || []).reduce((acc: number, u: any) => acc + Number(u.remaining || 0), 0),
+        stock_value: (inv || []).reduce((acc: number, i: any) => acc + (Number(i.current_stock || 0) * (Number(i.hpp_per_egg || i.cost_per_egg || 0))), 0)
       };
     }
   } catch (err) {
@@ -925,7 +999,15 @@ const fetchData = async () => {
   }
 };
 
-onMounted(fetchData);
+onMounted(() => {
+  fetchData();
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile);
+});
 
 // ─── DISCOUNT COMPUTATIONS ─────────────────────
 const discountSummary = computed(() => {
@@ -957,8 +1039,8 @@ const pnlSummary = computed<PnlSummary>(() => {
     .filter(s => s?.payment_status === 'paid')
     .reduce((acc, s) => {
       const items = Array.isArray(s?.sale_items) ? s.sale_items : [];
-      // Use hpp_total from new schema or fallback to cost_price * quantity
-      const itemsHpp = items.reduce((iAcc: number, i: any) => iAcc + (Number(i?.hpp_total) || (Number(i?.cost_price || i?.unit_cost || 0) * (Number(i?.quantity) || 0))), 0);
+      // Use hpp_total from new schema or fallback to unit_cost * quantity
+      const itemsHpp = items.reduce((iAcc: number, i: any) => iAcc + (Number(i?.hpp_total) || (Number(i?.unit_cost || i?.cost_price || 0) * (Number(i?.quantity || i?.packs_sold) || 0))), 0);
       return acc + itemsHpp;
     }, 0);
 
@@ -995,7 +1077,7 @@ const pnlChartData = computed(() => {
     let hppVal = 0;
     const items: any[] = Array.isArray(s.sale_items) ? s.sale_items : [];
     for (const item of items) {
-      if (item) hppVal += (Number(item.cost_price) || 0) * (Number(item.quantity) || 0);
+      if (item) hppVal += Number(item.hpp_total) || (Number(item.unit_cost || item.cost_price || 0) * Number(item.quantity || item.packs_sold || 0));
     }
     entry.hpp += hppVal;
     entry.gp += (Number(s.total_price) || 0) - hppVal;
@@ -1040,6 +1122,36 @@ const pnlChartOptions = {
   }
 };
 
+const pnlDoughnutData = computed(() => {
+  return {
+    labels: ['Hero', 'Medium', 'Small'],
+    datasets: [{
+      data: [
+        pnlRevenueBreakdown.value.find(x => x.label === 'Hero')?.value || 0,
+        pnlRevenueBreakdown.value.find(x => x.label === 'Medium')?.value || 0,
+        pnlRevenueBreakdown.value.find(x => x.label === 'Small')?.value || 0,
+      ],
+      backgroundColor: ['#f59e0b', '#8b5cf6', '#38bdf8'],
+      borderWidth: 0,
+      hoverOffset: 4
+    }]
+  };
+});
+
+const pnlDoughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'right' as const, labels: { color: 'rgba(255,255,255,0.7)', font: { size: 10, family: 'sans-serif' } } },
+    tooltip: {
+      callbacks: {
+        label: (ctx: any) => `${ctx.label}: ${formatIDR(ctx.raw)}`
+      }
+    }
+  },
+  cutout: '70%'
+};
+
 interface PnlKpi {
   label: string;
   displayValue: string;
@@ -1053,24 +1165,24 @@ interface PnlKpi {
 const pnlKpis = computed<PnlKpi[]>(() => [
   { label: 'Total Pendapatan', displayValue: formatIDR(kpiData.value.total_revenue), prefix: '', suffix: '', color: 'green', delay: '1', trend: 0 },
   { label: 'Laba Kotor', displayValue: formatIDR(kpiData.value.gross_profit), prefix: '', suffix: '', color: 'amber', delay: '2', trend: 0 },
-  { label: 'Piutang Aktif', displayValue: formatIDR(kpiData.value.total_piutang), prefix: '', suffix: '', color: 'yellow', delay: '3', trend: 0 },
+  { label: 'Net Position', displayValue: formatIDR(kpiData.value.net_position), prefix: '', suffix: '', color: 'violet', delay: '3', trend: 0 },
   { label: 'Utang Supplier', displayValue: formatIDR(kpiData.value.total_utang), prefix: '', suffix: '', color: 'red', delay: '4', trend: 0 },
-  { label: 'Nilai Stok', displayValue: formatIDR(kpiData.value.stock_value), prefix: '', suffix: '', color: 'teal', delay: '5', trend: 0 },
-  { label: 'Margin (%)', displayValue: (Number(pnlSummary.value.margin || 0)).toFixed(1), prefix: '', suffix: '%', color: 'amber', delay: '6', trend: 0 },
+  { label: 'Piutang Aktif', displayValue: formatIDR(kpiData.value.total_piutang), prefix: '', suffix: '', color: 'yellow', delay: '5', trend: 0 },
+  { label: 'Nilai Stok', displayValue: formatIDR(kpiData.value.stock_value), prefix: '', suffix: '', color: 'teal', delay: '6', trend: 0 },
 ]);
 
 const pnlRevenueBreakdown = computed(() => {
-  const map: Record<string, number> = { 'Telur Hero': 0, 'Telur Standar': 0, 'Telur Asin': 0 };
+  const map: Record<string, number> = { 'Hero': 0, 'Medium': 0, 'Small': 0 };
   const paidSales: any[] = (allSales.value || []).filter((s: any) => s.payment_status === 'paid');
   for (const s of paidSales) {
     const saleItems: any[] = Array.isArray(s.sale_items) ? s.sale_items : [];
     for (const i of saleItems) {
       if (!i) continue;
-      const lbl: string = String(i.item_label || i.grade || '');
+      const lbl: string = String(i.item_label || i.grade || i.egg_type || '');
       const amt: number = Number(i.revenue) || (Number(i.unit_price || i.price_per_pack || 0) * (Number(i.quantity || i.packs_sold || 0)));
-      if (lbl.includes('Hero')) map['Telur Hero']! += amt;
-      else if (lbl.includes('Asin')) map['Telur Asin']! += amt;
-      else map['Telur Standar']! += amt;
+      if (lbl.toLowerCase().includes('hero')) map['Hero']! += amt;
+      else if (lbl.toLowerCase().includes('small') || lbl.toLowerCase().includes('asin')) map['Small']! += amt;
+      else map['Medium']! += amt;
     }
   }
   const rev = Object.values(map).reduce((a, b) => a + b, 0);
@@ -1082,17 +1194,17 @@ const pnlRevenueBreakdown = computed(() => {
 });
 
 const pnlHppBreakdown = computed(() => {
-  const map: Record<string, number> = { 'Telur Hero': 0, 'Telur Standar': 0, 'Telur Asin': 0 };
+  const map: Record<string, number> = { 'Hero': 0, 'Medium': 0, 'Small': 0 };
   const paidSales: any[] = (allSales.value || []).filter((s: any) => s.payment_status === 'paid');
   for (const s of paidSales) {
     const saleItems: any[] = Array.isArray(s.sale_items) ? s.sale_items : [];
     for (const i of saleItems) {
       if (!i) continue;
-      const lbl: string = String(i.item_label || i.grade || '');
+      const lbl: string = String(i.item_label || i.grade || i.egg_type || '');
       const amt: number = Number(i.hpp_total) || (Number(i.unit_cost || i.hpp_per_pack || 0) * (Number(i.quantity || i.packs_sold || 0)));
-      if (lbl.includes('Hero')) map['Telur Hero']! += amt;
-      else if (lbl.includes('Asin')) map['Telur Asin']! += amt;
-      else map['Telur Standar']! += amt;
+      if (lbl.toLowerCase().includes('hero')) map['Hero']! += amt;
+      else if (lbl.toLowerCase().includes('small') || lbl.toLowerCase().includes('asin')) map['Small']! += amt;
+      else map['Medium']! += amt;
     }
   }
   const hpp = Object.values(map).reduce((a, b) => a + b, 0);
@@ -1799,21 +1911,29 @@ const formatDate = (date: any) => {
   margin-bottom: 8px;
 }
 
+.pnl-donut-wrapper {
+  height: 200px;
+  margin-bottom: 24px;
+}
+
 .pnl-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 0.95rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.85);
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   transition: all 0.2s ease;
 }
 
 .pnl-row:hover {
     color: white;
+    background: rgba(255, 255, 255, 0.02);
     padding-left: 8px;
+    padding-right: 8px;
+    border-radius: 4px;
 }
 
 .pnl-vals {
@@ -2690,5 +2810,70 @@ const formatDate = (date: any) => {
   background: rgba(255, 255, 255, 0.02);
   border-radius: 16px;
   cursor: pointer;
+}
+@media (max-width: 1024px) {
+  .terminal-content { padding: 12px; }
+  .kpi-grid { grid-template-columns: 1fr; gap: 16px; margin-bottom: 32px; }
+  .pnl-main-grid { grid-template-columns: 1fr; }
+  
+  .chart-wrapper { height: 280px; }
+  .formal-pnl-box { margin-top: 16px; }
+  .pnl-row { font-size: 0.85rem; }
+  .pnl-perc { display: none; }
+  
+  .piutang-header-stats { flex-direction: column; padding: 16px; gap: 16px; }
+  .stat-divider { width: 100%; height: 1px; }
+  .stat-item { padding: 0; }
+  .stat-item .val { font-size: 1.2rem; }
+  
+  .bucket-grid { grid-template-columns: 1fr; }
+  
+  .product-profit-grid { grid-template-columns: 1fr; }
+  .radar-container { grid-template-columns: 1fr; padding: 16px; }
+  .radar-box { height: 280px; }
+  
+  .export-grid { grid-template-columns: 1fr; }
+  .export-card { flex-direction: column; text-align: center; }
+  .btn-export { width: 100%; }
+  
+  .schedule-grid { grid-template-columns: 1fr; }
+  
+  .slide-over-form { width: 90%; max-width: none; border-radius: 20px 20px 0 0; position: fixed; bottom: 0; right: 0; height: 80%; transform: translateY(0); }
+  
+  /* 📱 MOBILE HEADER */
+  .mobile-terminal-header { padding: 16px; }
+  .period-pills { display: flex; gap: 10px; margin-top: 12px; }
+  .p-pill {
+    padding: 6px 14px;
+    font-size: 11px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .p-pill.active { background: #f59e0b; color: black; border-color: #f59e0b; }
+  
+  /* 📱 TRANSACTION CARDS */
+  .tx-mobile-card, .p-mobile-card, .u-mobile-card {
+    border-left: 4px solid #f59e0b;
+  }
+  .tx-pill-mini {
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: 900;
+  }
+  .tx-pill-mini.masuk { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+  .tx-pill-mini.keluar { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+  
+  .days-pill {
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 900;
+  }
+  .days-pill.danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 }
 </style>

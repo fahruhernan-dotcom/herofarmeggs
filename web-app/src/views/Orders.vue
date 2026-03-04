@@ -1,13 +1,12 @@
 <template>
   <div class="orders-page">
-    <header class="header">
+    <header v-if="!isMobile" class="header desktop-only">
       <div class="header-left">
-        <h4 class="brand-tag">LOGISTICS & REVENUE</h4>
-        <h1 class="hero-font">Order Management</h1>
+        <h1 class="hero-font">Order History</h1>
         <p class="text-dim">Track every sale and manage order fulfilling statuses.</p>
       </div>
       <div class="header-actions">
-        <div class="date-filters glass-panel">
+        <div class="date-filters glass-panel desktop-only">
           <button 
             v-for="d in ['today', 'week', 'month', 'all']" 
             :key="d"
@@ -25,41 +24,60 @@
       </div>
     </header>
 
-    <!-- STATS SUMMARY -->
-    <div class="stats-summary">
-      <div class="summary-card glass-panel">
+    <!-- MOBILE HEADER -->
+    <header class="mobile-header mobile-only mb-6">
+      <div class="mh-top">
+        <h2 class="hero-font text-xl">Order History</h2>
+        <div class="date-pills scroll-x">
+          <button 
+            v-for="d in ['today', 'week', 'month', 'all']" 
+            :key="'m-'+d"
+            class="dp-btn"
+            :class="{ active: dateFilter === d }"
+            @click="dateFilter = d"
+          >
+            {{ d.charAt(0).toUpperCase() + d.slice(1) }}
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- STATS SUMMARY V2 (Asymmetric Grid) -->
+    <div class="stats-summary-v2 mt-24">
+      <div class="main-stat glass-panel">
         <span class="s-label">Total Revenue</span>
-        <span class="s-value">Rp {{ totalRevenue.toLocaleString() }}</span>
+        <span class="s-value">{{ formatCurrency(totalRevenue) }}</span>
         <div class="s-trend pos" v-if="paidOrders.length > 0">{{ paidOrders.length }} paid order(s)</div>
       </div>
-      <div class="summary-card glass-panel">
-        <span class="s-label">Shown Orders</span>
-        <span class="s-value">{{ baseDateFilteredOrders.length }}</span>
-        <p class="s-subtext">Within selected filter</p>
-      </div>
-      <div class="summary-card glass-panel">
-        <span class="s-label">Avg. Order Value</span>
-        <span class="s-value">Rp {{ avgOrderValue.toLocaleString() }}</span>
-      </div>
-      <div class="summary-card glass-panel highlight-pending" v-if="pendingCount > 0">
-        <span class="s-label">Needs Attention</span>
-        <span class="s-value warn-value">{{ pendingCount }}</span>
-        <p class="s-subtext warn-sub">Pending / On Delivery</p>
+      <div class="secondary-stats">
+        <div class="summary-card glass-panel">
+          <span class="s-label">Shown Orders</span>
+          <span class="s-value">{{ baseDateFilteredOrders.length }}</span>
+          <p class="s-subtext">Within selected filter</p>
+        </div>
+        <div class="summary-card glass-panel">
+          <span class="s-label">Avg. Order Value</span>
+          <span class="s-value">{{ formatCurrency(avgOrderValue) }}</span>
+        </div>
+        <div class="summary-card glass-panel highlight-pending" v-if="pendingCount > 0">
+          <span class="s-label">Needs Attention</span>
+          <span class="s-value warn-value">{{ pendingCount }}</span>
+          <p class="s-subtext warn-sub">Pending / On Delivery</p>
+        </div>
       </div>
     </div>
 
-    <!-- STATUS FILTER TABS -->
-    <div class="status-filter-bar">
+    <!-- STATUS FILTER TABS V2 (Pills) -->
+    <div class="status-filter-pills scroll-x mt-32">
       <button
         v-for="tab in statusTabs"
         :key="tab.value"
-        class="filter-tab"
+        class="filter-pill"
         :class="{ active: activeFilter === tab.value, [tab.value]: true }"
         @click="activeFilter = tab.value"
       >
-        <component :is="tab.icon" class="tab-icon" />
-        <span class="tab-label">{{ tab.label }}</span>
-        <span class="tab-count" v-if="tab.count > 0">{{ tab.count }}</span>
+        <span class="pill-label">{{ tab.label }}</span>
+        <span class="pill-count" v-if="tab.count > 0">{{ tab.count }}</span>
       </button>
     </div>
 
@@ -76,7 +94,8 @@
       </div>
 
       <div class="table-container">
-        <table class="premium-table">
+        <!-- 🖥️ DESKTOP TABLE -->
+        <table class="premium-table table-desktop">
           <thead>
             <tr>
               <th>Order ID</th>
@@ -99,17 +118,30 @@
               <tr v-for="order in filteredOrders" :key="order.id" class="order-row" :class="{ 'is-voided': order.payment_status === 'voided' }">
                 <td class="order-id">
                   <span v-if="order.payment_status === 'voided'" class="void-watermark">VOID</span>
-                  #INV-{{ order.id.toString().slice(-6).toUpperCase() }}
+                  <button class="id-link" @click="viewOrderDetails(order)">
+                    #INV-{{ order.id.toString().slice(-6).toUpperCase() }}
+                  </button>
                 </td>
                 <td class="customer-info">
                   <div class="cust-name">{{ order.customers?.name || 'Guest Customer' }}</div>
-                  <div class="cust-phone text-dim">{{ order.customers?.whatsapp_number || '-' }}</div>
                 </td>
-                <td class="date">{{ formatDate(order.created_at) }}</td>
+                <td class="date">
+                  <div class="rel-date">{{ formatRelativeDate(order.created_at) }}</div>
+                  <div class="exact-date text-dim">{{ formatDate(order.created_at) }}</div>
+                </td>
                 <td class="items-cell">
-                  <span class="items-count">{{ order.sale_items?.length || 0 }} Type(s)</span>
+                  <div class="items-chips">
+                    <span 
+                      v-for="item in order.sale_items" 
+                      :key="item.id" 
+                      class="i-chip"
+                      :class="item.egg_type"
+                    >
+                      {{ getGradeLabel(item.egg_type) }}
+                    </span>
+                  </div>
                 </td>
-                <td class="amount">Rp {{ (order.total_price || 0).toLocaleString('id-ID') }}</td>
+                <td class="amount">{{ formatCurrency(order.total_price || 0) }}</td>
                 <td>
                   <button
                     class="status-badge-btn"
@@ -133,9 +165,6 @@
                   </button>
                 </td>
                 <td class="actions">
-                  <button class="btn-icon" title="View Details" @click="viewOrderDetails(order)">
-                    <EyeIcon class="icon-sm" />
-                  </button>
                   <button class="btn-icon" title="Print Invoice" @click="printFromOrder(order)">
                     <PrinterIcon class="icon-sm" />
                   </button>
@@ -149,6 +178,30 @@
             </tr>
           </tbody>
         </table>
+
+        <!-- 📱 MOBILE CARDS -->
+        <div v-if="!loading && filteredOrders.length > 0" class="cards-mobile">
+          <div v-for="order in filteredOrders" :key="'om-'+order.id" class="order-mobile-card glass-panel" @click="viewOrderDetails(order)">
+            <div class="omc-header">
+              <span class="omc-id">#{{ order.id.toString().slice(-6).toUpperCase() }}</span>
+              <div class="omc-badges">
+                <span class="status-badge-mini" :class="order.payment_status">{{ formatStatusLabel(order.payment_status) }}</span>
+                <span class="status-badge-mini" :class="order.fulfillment_status || 'processing'">{{ formatStatusLabel(order.fulfillment_status || 'processing') }}</span>
+              </div>
+            </div>
+            <div class="omc-body">
+              <div class="omc-cust">{{ order.customers?.name || 'Guest' }}</div>
+              <div class="omc-amount">{{ formatCurrency(order.total_price || 0) }}</div>
+            </div>
+            <div class="omc-footer">
+              <span class="omc-time font-mono">{{ formatRelativeDate(order.created_at) }}</span>
+              <div class="items-mini">
+                <span v-for="item in order.sale_items.slice(0, 3)" :key="item.id" class="i-dot" :class="item.egg_type"></span>
+                <span v-if="order.sale_items.length > 3" class="i-more">+{{ order.sale_items.length - 3 }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -204,7 +257,7 @@
                 </div>
                 <div class="meta text-right">
                   <p class="label">Placed On</p>
-                  <p class="value">{{ new Date(selectedOrder.created_at).toLocaleString('id-ID') }}</p>
+                  <p class="value">{{ formatExactTime(selectedOrder.created_at) }}</p>
                 </div>
               </div>
 
@@ -256,20 +309,20 @@
                 <tbody>
                   <tr v-for="item in selectedOrder.sale_items" :key="item.id">
                     <td class="item-label">
-                      {{ formatEggType(item.egg_type) }}
+                      {{ getGradeLabel(item.egg_type) }}
                       <span v-if="hasPriceOverride(selectedOrder, item.egg_type)" class="override-badge" title="Price manually overridden">★ EDITED</span>
                     </td>
                     <td>{{ item.quantity }} Pack</td>
                     <td>
                       <div class="price-stack">
-                        <span class="actual-price">Rp {{ (item.unit_price || 0).toLocaleString() }}</span>
+                        <span class="actual-price">{{ formatCurrency(item.unit_price || 0) }}</span>
                         <span v-if="hasPriceOverride(selectedOrder, item.egg_type)" class="original-price strike">
-                          Rp {{ getOriginalPrice(selectedOrder, item.egg_type).toLocaleString() }}
+                          {{ formatCurrency(getOriginalPrice(selectedOrder, item.egg_type)) }}
                         </span>
                       </div>
                     </td>
                     <td class="item-subtotal">
-                      Rp {{ (item.subtotal || 0).toLocaleString() }}
+                      {{ formatCurrency(item.subtotal || 0) }}
                       <div v-if="hasPriceOverride(selectedOrder, item.egg_type)" class="override-reason-text">
                         Reason: {{ getOverrideReason(selectedOrder, item.egg_type) }}
                       </div>
@@ -279,7 +332,7 @@
                 <tfoot>
                   <tr class="total-row">
                     <td colspan="3">Grand Total</td>
-                    <td class="grand-total">Rp {{ (selectedOrder.total_price || 0).toLocaleString() }}</td>
+                    <td class="grand-total">{{ formatCurrency(selectedOrder.total_price || 0) }}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -356,6 +409,10 @@
 import { ref, reactive, computed, onMounted, onUnmounted, markRaw } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
+// @ts-ignore
+import { GRADES } from '../constants/grades';
+// @ts-ignore
+import { formatCurrency, formatRelativeDate, formatExactTime } from '../utils/formatters';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
 import { useToast } from '../composables/useToast';
 import SkeletonLoader from '../components/ui/SkeletonLoader.vue';
@@ -364,7 +421,6 @@ import CustomConfirmModal from '../components/ui/CustomConfirmModal.vue';
 import {
   PlusIcon,
   SearchIcon,
-  EyeIcon,
   PrinterIcon,
   ChevronDownIcon,
   CheckIcon,
@@ -384,6 +440,21 @@ import {
 
 const { showToast } = useToast();
 const authStore = useAuthStore();
+
+const isMobile = ref(false)
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  fetchOrders();
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile);
+});
 
 // ─── STATE ─────────────────────────
 const orders = ref<any[]>([]);
@@ -460,17 +531,11 @@ const fulfillmentOptions = [
   }
 ];
 
-const eggTypeLabels: Record<string, string> = {
-  'hero_size': 'Hero Premium Size (Pack)',
-  'standard_size': 'Hero Standard Size (Pack)',
-  'salted_egg': 'Hero Salted Eggs (Pack)',
-  'packaging_standard': 'Packaging Box',
-  'sticker_label': 'Sticker Label',
-  'mini_card': 'Hero Mini Card'
-};
-
-function formatEggType(type: string) {
-  return eggTypeLabels[type] || type;
+function getGradeLabel(id: string) {
+  if (id === 'hero_size') return GRADES.hero.label;
+  if (id === 'standard_size' || id === 'medium_size') return GRADES.medium.label;
+  if (id === 'small_size' || id === 'salted_egg') return GRADES.small.label;
+  return id;
 }
 
 // ─── COMPUTED ───────────────────────
@@ -848,7 +913,7 @@ function printFromOrder(order: any) {
     customerName: order.customers?.name || 'Guest Customer',
     customerPhone: order.customers?.whatsapp_number || '',
     items: (order.sale_items || []).map((item: any) => ({
-      description: formatEggType(item.egg_type),
+      description: getGradeLabel(item.egg_type),
       quantity: item.quantity,
       unit: 'Pack',
       price: item.unit_price,
@@ -870,15 +935,12 @@ function printFromOrder(order: any) {
 
 // internal showToast removed
 
-let refreshInterval: any;
 
 onMounted(() => {
   fetchOrders();
-  refreshInterval = setInterval(fetchOrders, 10000);
 });
 
 onUnmounted(() => {
-  clearInterval(refreshInterval);
 });
 </script>
 
@@ -912,11 +974,32 @@ onUnmounted(() => {
 
 .text-dim { color: var(--color-text-dim); }
 
-/* ─── STATS ──────────────────── */
-.stats-summary {
+/* ─── STATS ────────────────────*/
+/* STATS SUMMARY V2 */
+.stats-summary-v2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr 2fr;
+  gap: 24px;
+}
+
+.main-stat {
+  padding: 32px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(0,0,0,0) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.main-stat .s-value {
+  font-size: 2.5rem;
+  color: #f59e0b;
+}
+
+.secondary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
 }
 
 .summary-card {
@@ -926,60 +1009,53 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.summary-card.highlight-pending {
-  border-color: rgba(255, 140, 0, 0.3);
-  background: rgba(255, 140, 0, 0.04);
-}
-
-.s-label { font-size: 0.75rem; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.s-label { font-size: 0.85rem; font-weight: 700; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .s-value { font-size: 1.8rem; font-weight: 800; color: white; }
-.s-trend { font-size: 0.75rem; font-weight: 700; }
-.s-trend.pos { color: var(--color-success); }
-.s-subtext { font-size: 0.75rem; color: var(--color-text-dim); }
-.warn-value { color: var(--color-primary); }
-.warn-sub { color: var(--color-primary); opacity: 0.8; }
+.s-trend.pos { color: #22c55e; font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
+.s-subtext { font-size: 0.8rem; color: #666; margin-top: 4px; }
+
+.highlight-pending {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+}
+.warn-value { color: #ef4444; }
+.warn-sub { color: #ef4444; opacity: 0.8; }
 
 /* ─── STATUS FILTER TABS ──────── */
-.status-filter-bar {
+/* STATUS FILTER PILLS */
+.status-filter-pills {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 4px;
+  padding-bottom: 8px;
 }
 
-.status-filter-bar::-webkit-scrollbar { display: none; }
-
-.filter-tab {
+.filter-pill {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  padding: 10px 20px;
+  border-radius: 40px;
+  color: var(--color-text-dim);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  color: var(--color-text-dim);
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: 0.8rem;
-  font-weight: 600;
+  gap: 10px;
+  transition: all 0.2s ease;
   white-space: nowrap;
-  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.filter-tab:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: white;
-}
+.filter-pill:hover { background: rgba(255,255,255,0.08); color: white; }
+.filter-pill.active { background: white; color: black; border-color: white; }
 
-.filter-tab.active {
-  background: rgba(255, 140, 0, 0.1);
-  border-color: rgba(255, 140, 0, 0.4);
-  color: var(--color-primary);
+.pill-count {
+  background: rgba(255,255,255,0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
 }
-
-.filter-tab.active .tab-icon { color: var(--color-primary); }
+.filter-pill.active .pill-count { background: rgba(0,0,0,0.1); }
 
 .tab-icon { width: 16px; height: 16px; }
 
@@ -1068,8 +1144,42 @@ onUnmounted(() => {
 .order-row:hover {
   background: rgba(255, 255, 255, 0.02);
 }
+/* TABLE REVISIONS */
+.id-link {
+  background: none;
+  border: none;
+  color: #f59e0b;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+}
+.id-link:hover { text-decoration: underline; }
 
-.order-id { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--color-primary); font-size: 0.8rem; }
+.rel-date { font-weight: 700; color: white; }
+.exact-date { font-size: 0.75rem; margin-top: 2px; }
+
+.items-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.i-chip {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.i-chip.hero_size { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
+.i-chip.standard_size { color: #8b5cf6; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); }
+.i-chip.small_size { color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.2); }
+
+.order-id { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: white; position: relative; font-size: 0.8rem; }
 .cust-name { font-weight: 700; font-size: 0.85rem; }
 .cust-phone { font-size: 0.75rem; }
 .amount { font-weight: 800; }
@@ -1110,33 +1220,42 @@ onUnmounted(() => {
 
 /* Payment: Pending */
 .status-badge-btn.pending {
-  background: rgba(255, 170, 0, 0.1);
-  color: #FFAA00;
-  border-color: rgba(255, 170, 0, 0.2);
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.2);
 }
-.status-badge-btn.pending .badge-dot { background: #FFAA00; box-shadow: 0 0 6px #FFAA00; }
-.status-badge-btn.pending:hover { background: rgba(255, 170, 0, 0.15); border-color: rgba(255, 170, 0, 0.4); }
+.status-badge-btn.pending .badge-dot { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
+.status-badge-btn.pending:hover { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); }
 
 /* Payment: Piutang */
 .status-badge-btn.piutang {
-  background: rgba(255, 140, 0, 0.08);
-  color: #FF8C00;
-  border-color: rgba(255, 140, 0, 0.2);
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  border-color: rgba(139, 92, 246, 0.2);
 }
-.status-badge-btn.piutang .badge-dot { background: #FF8C00; box-shadow: 0 0 6px #FF8C00; }
-.status-badge-btn.piutang:hover { background: rgba(255, 140, 0, 0.12); border-color: rgba(255, 140, 0, 0.35); }
+.status-badge-btn.piutang .badge-dot { background: #8b5cf6; box-shadow: 0 0 6px rgba(139, 92, 246, 0.6); }
+.status-badge-btn.piutang:hover { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); }
 
 /* Payment: Paid */
 .status-badge-btn.paid {
-  background: rgba(0, 255, 157, 0.08);
-  color: var(--color-success);
-  border-color: rgba(0, 255, 157, 0.2);
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.2);
 }
-.status-badge-btn.paid .badge-dot { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
-.status-badge-btn.paid:hover { background: rgba(0, 255, 157, 0.12); border-color: rgba(0, 255, 157, 0.35); }
+.status-badge-btn.paid .badge-dot { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
+.status-badge-btn.paid:hover { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); }
 
-/* Cancelled */
-.status-pill.cancelled { background: rgba(255, 66, 66, 0.1); color: var(--color-error); }
+/* Payment: Cancelled / Voided */
+.status-badge-btn.cancelled,
+.status-badge-btn.voided {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+.status-badge-btn.cancelled .badge-dot,
+.status-badge-btn.voided .badge-dot { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); }
+.status-badge-btn.cancelled:hover,
+.status-badge-btn.voided:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); }
 
 /* DATE FILTERS */
 .date-filters {
@@ -1175,41 +1294,32 @@ onUnmounted(() => {
   to { transform: rotate(360deg); }
 }
 
-/* Cancelled */
-.status-badge-btn.cancelled {
-  background: rgba(255, 62, 62, 0.08);
-  color: var(--color-error);
-  border-color: rgba(255, 62, 62, 0.2);
-}
-.status-badge-btn.cancelled .badge-dot { background: var(--color-error); box-shadow: 0 0 6px var(--color-error); }
-.status-badge-btn.cancelled:hover { background: rgba(255, 62, 62, 0.12); border-color: rgba(255, 62, 62, 0.35); }
-
 /* Fulfillment: Processing */
 .status-badge-btn.processing {
-  background: rgba(100, 149, 237, 0.1);
-  color: #6495ED;
-  border-color: rgba(100, 149, 237, 0.2);
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.2);
 }
-.status-badge-btn.processing .badge-dot { background: #6495ED; box-shadow: 0 0 6px #6495ED; }
-.status-badge-btn.processing:hover { background: rgba(100, 149, 237, 0.15); border-color: rgba(100, 149, 237, 0.4); }
+.status-badge-btn.processing .badge-dot { background: #38bdf8; box-shadow: 0 0 6px rgba(56, 189, 248, 0.6); }
+.status-badge-btn.processing:hover { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.4); }
 
 /* Fulfillment: On Delivery */
 .status-badge-btn.on_delivery {
-  background: rgba(255, 140, 0, 0.1);
-  color: var(--color-primary);
-  border-color: rgba(255, 140, 0, 0.2);
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.2);
 }
-.status-badge-btn.on_delivery .badge-dot { background: var(--color-primary); box-shadow: 0 0 6px var(--color-primary); animation: pulse-dot 2s infinite; }
-.status-badge-btn.on_delivery:hover { background: rgba(255, 140, 0, 0.15); border-color: rgba(255, 140, 0, 0.4); }
+.status-badge-btn.on_delivery .badge-dot { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); animation: pulse-dot 2s infinite; }
+.status-badge-btn.on_delivery:hover { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); }
 
 /* Fulfillment: Delivered */
 .status-badge-btn.delivered {
-  background: rgba(0, 255, 157, 0.08);
-  color: var(--color-success);
-  border-color: rgba(0, 255, 157, 0.2);
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.2);
 }
-.status-badge-btn.delivered .badge-dot { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
-.status-badge-btn.delivered:hover { background: rgba(0, 255, 157, 0.12); border-color: rgba(0, 255, 157, 0.35); }
+.status-badge-btn.delivered .badge-dot { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
+.status-badge-btn.delivered:hover { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
@@ -1336,12 +1446,13 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.option-dot.pending { background: #FFAA00; box-shadow: 0 0 8px rgba(255, 170, 0, 0.5); }
-.option-dot.paid { background: var(--color-success); box-shadow: 0 0 8px rgba(0, 255, 157, 0.5); }
-.option-dot.cancelled { background: var(--color-error); box-shadow: 0 0 8px rgba(255, 62, 62, 0.5); }
-.option-dot.processing { background: #6495ED; box-shadow: 0 0 8px rgba(100, 149, 237, 0.5); }
-.option-dot.on_delivery { background: var(--color-primary); box-shadow: 0 0 8px rgba(255, 140, 0, 0.5); }
-.option-dot.delivered { background: var(--color-success); box-shadow: 0 0 8px rgba(0, 255, 157, 0.5); }
+.option-dot.pending { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
+.option-dot.piutang { background: #8b5cf6; box-shadow: 0 0 8px rgba(139, 92, 246, 0.5); }
+.option-dot.paid { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+.option-dot.cancelled { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+.option-dot.processing { background: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.5); }
+.option-dot.on_delivery { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
+.option-dot.delivered { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
 
 .option-content {
   display: flex;
@@ -1356,6 +1467,16 @@ onUnmounted(() => {
   width: 16px;
   height: 16px;
   color: var(--color-primary);
+}
+
+@media (max-width: 1024px) {
+  .status-dropdown {
+    position: relative;
+    top: auto !important;
+    left: auto !important;
+    width: 90%;
+    max-width: 320px;
+  }
 }
 
 /* ─── MODAL ────────────────────── */
@@ -1718,5 +1839,86 @@ onUnmounted(() => {
   color: var(--color-text-dim);
   margin-top: 10px;
   font-style: italic;
+}
+@media (max-width: 1024px) {
+  .orders-list { padding: 16px; }
+  .list-header { flex-direction: column; gap: 16px; align-items: stretch; }
+  .stats-summary-v2 { grid-template-columns: 1fr; gap: 16px; }
+  .secondary-stats { grid-template-columns: 1fr; }
+  
+  .details-modal { padding: 16px; width: 95%; max-height: 95vh; }
+  .modal-status-row { grid-template-columns: 1fr; }
+  .items-table { font-size: 0.75rem; }
+  .items-table th:nth-child(2), .items-table td:nth-child(2) { display: none; } /* Hide Qty column on small mobile if tight */
+  
+  .grand-total { font-size: 1.2rem; }
+  
+  /* 📱 MOBILE HEADER */
+  .mobile-header { padding: 16px 0; }
+  .date-pills { display: flex; gap: 8px; margin-top: 12px; }
+  .dp-btn {
+    padding: 6px 14px;
+    font-size: 11px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .dp-btn.active { background: var(--gold); color: black; border-color: var(--gold); }
+  
+  /* 📱 ORDER CARDS */
+  .order-mobile-card {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .omc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .omc-id { font-family: var(--font-mono); font-weight: 800; color: var(--gold); }
+  .omc-badges { display: flex; gap: 4px; }
+  .status-badge-mini {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: 800;
+  }
+  .status-badge-mini.paid { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+  .status-badge-mini.pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+  .status-badge-mini.on_delivery { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px dashed #f59e0b; }
+  .status-badge-mini.processing { background: rgba(56, 189, 248, 0.1); color: #38bdf8; }
+  
+  .omc-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .omc-cust { font-weight: 700; color: white; }
+  .omc-amount { font-weight: 900; color: white; }
+  
+  .omc-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 10px;
+  }
+  
+  .omc-time { font-size: 10px; color: var(--muted); }
+  .items-mini { display: flex; gap: 4px; align-items: center; }
+  .i-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .i-dot.hero_size { background: var(--gold); }
+  .i-dot.standard_size { background: var(--violet); }
+  .i-dot.small_size { background: var(--sky); }
+  .i-more { font-size: 9px; color: var(--muted); font-weight: 800; }
 }
 </style>

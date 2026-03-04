@@ -1,0 +1,5 @@
+﻿
+> web-app@0.0.0 build
+> vue-tsc -b && vite build
+
+src/components/ui/CustomDropdown.vue(58,25): error TS6133: 'watch' is declared but its value is never read.

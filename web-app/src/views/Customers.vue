@@ -468,15 +468,11 @@ async function recalculateAllStats() {
   }
 }
 
-let refreshInterval: any;
-
 onMounted(() => {
   fetchData();
-  refreshInterval = setInterval(fetchData, 10000);
 });
 
 onUnmounted(() => {
-  clearInterval(refreshInterval);
 });
 </script>
 

@@ -357,15 +357,11 @@ async function executeDelete() {
 }
 
 const route = useRoute();
-let refreshInterval: any;
-
 onMounted(() => {
   fetchTeam();
-  refreshInterval = setInterval(fetchTeam, 10000);
 });
 
 onUnmounted(() => {
-  clearInterval(refreshInterval);
 });
 
 // Force refresh when route changes

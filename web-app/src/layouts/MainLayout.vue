@@ -4,7 +4,7 @@
     <div class="aurora-static"></div>
 
     <!-- Persistent Sidebar Navigation (CardNav Implementation) -->
-    <aside class="sidebar">
+    <aside v-if="!isMobile" class="sidebar">
       <CardNav 
         :items="navCards" 
         class="main-card-nav"
@@ -25,10 +25,15 @@
       </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="workspace">
-      <!-- Top Bar with Notifications -->
-      <header class="workspace-top-bar">
+      <!-- 📱 MOBILE TOP BAR -->
+      <MobileTopBar 
+        v-if="isMobile" 
+        @toggle-drawer="showDrawer = true" 
+      />
+
+      <!-- 🖥️ DESKTOP TOP BAR -->
+      <header v-if="!isMobile" class="workspace-top-bar">
         <div class="search-placeholder"></div>
         <div class="top-bar-actions">
           <NotificationBell />
@@ -42,18 +47,34 @@
       </router-view>
     </main>
 
+    <!-- 📱 MOBILE NAVIGATION -->
+    <BottomNav 
+      v-if="isMobile" 
+      @open-drawer="showDrawer = true" 
+    />
+    
+    <MobileDrawer 
+      :show="showDrawer" 
+      @close="showDrawer = false" 
+    />
+
     <CriticalStockToast />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 import { supabase } from '../lib/supabase';
 import CardNav from '../components/animations/CardNav.vue';
 import NotificationBell from '../components/NotificationBell.vue';
 import CriticalStockToast from '../components/CriticalStockToast.vue';
+
+// Mobile Components
+import MobileTopBar from '../components/mobile/MobileTopBar.vue';
+import MobileDrawer from '../components/mobile/MobileDrawer.vue';
+import BottomNav from '../components/mobile/BottomNav.vue';
 import { 
   LayoutDashboardIcon, 
   PackageIcon, 
@@ -69,6 +90,12 @@ import {
 
 const authStore = useAuthStore();
 const router = useRouter();
+const showDrawer = ref(false);
+const isMobile = ref(window.innerWidth <= 768);
+
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 768;
+}
 let inventorySubscription: any = null;
 
 interface NavLink {
@@ -109,7 +136,7 @@ const navCards = computed<NavSection[]>(() => {
     sections.push({
       label: 'Management',
       links: [
-        { label: 'Financial Terminal', path: '/financial', icon: TrendingUpIcon, premium: true, badge: 'NEW' },
+        { label: 'Financial Terminal', path: '/financial', icon: TrendingUpIcon, premium: true },
         { label: 'Team Members', path: '/employees', icon: UsersIcon }
       ]
     });
@@ -138,11 +165,14 @@ async function handleLogout() {
 }
 
 onMounted(() => {
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
   // Setup Realtime Subscription for Inventory Alerts
   // Legacy inventory subscription removed - now handled by notifications table + PG Triggers
 });
 
 onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile);
   if (inventorySubscription) {
     supabase.removeChannel(inventorySubscription);
   }
@@ -153,7 +183,7 @@ onUnmounted(() => {
 .dashboard-layout {
   display: flex;
   min-height: 100vh;
-  background-color: var(--color-bg);
+  background-color: var(--bg-base);
   color: var(--color-text);
   padding: 16px;
   gap: 16px;
@@ -227,11 +257,11 @@ onUnmounted(() => {
   gap: 12px;
   padding: 14px;
   background: rgba(255, 62, 62, 0.05);
-  border: 1px solid rgba(255, 62, 62, 0.15);
-  color: var(--color-error);
+  border: 1px solid rgba(239, 62, 62, 0.15);
+  color: var(--red);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-family: var(--font-headline);
+  font-family: var(--font-ui);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -255,6 +285,16 @@ onUnmounted(() => {
   overflow-y: auto;
   padding: 0 40px 40px; /* Reduced top padding for header */
   scroll-behavior: smooth;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .workspace {
+    padding: 16px !important;
+    padding-top: calc(56px + 16px) !important;
+    padding-bottom: calc(64px + 32px) !important;
+    height: 100vh;
+  }
 }
 
 .workspace-top-bar {

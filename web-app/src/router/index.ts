@@ -18,6 +18,7 @@ const router = createRouter({
                     path: '',
                     name: 'dashboard',
                     component: () => import('../views/Dashboard.vue'),
+                    alias: '/dashboard',
                     meta: { requiresAuth: true }
                 },
                 {
@@ -29,7 +30,8 @@ const router = createRouter({
                 {
                     path: 'sales',
                     name: 'sales',
-                    component: () => import('../views/Sales.vue'),
+                    component: () => import('../views/NewOrder.vue'),
+                    alias: '/sales/new',
                     meta: { requiresAuth: true }
                 },
                 {

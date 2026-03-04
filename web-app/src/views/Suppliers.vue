@@ -14,87 +14,99 @@
       </div>
     </header>
 
-    <div class="suppliers-grid">
-      <div v-for="supplier in suppliers" :key="supplier.id" class="supplier-card glass-panel" :class="getCategoryClass(supplier.category)">
-        <div class="card-accent"></div>
-        <div class="card-header-premium">
-          <div class="header-main">
-            <div class="vendor-avatar">
-              {{ supplier.name.charAt(0).toUpperCase() }}
-            </div>
-            <div class="header-info">
-              <h3 class="name" :title="supplier.name">{{ supplier.name }}</h3>
-              <div class="service-chip">{{ supplier.category || 'General' }}</div>
-            </div>
-          </div>
-          
-          <div class="header-actions">
-            <button class="btn-circular" @click="editSupplier(supplier)" title="Edit Vendor">
-              <Edit3Icon class="icon-sv" />
-            </button>
-            <button class="btn-circular del" @click="deleteSupplier(supplier)" title="Delete Vendor">
-              <Trash2Icon class="icon-sv" />
-            </button>
-          </div>
-        </div>
-        
-        <div class="card-body-elite">
-          <!-- MATERIALS PREVIEW -->
-          <div v-if="supplier.price_list?.length" class="materials-preview">
-            <div v-for="(item, idx) in supplier.price_list.slice(0, 2)" :key="idx" class="m-tag">
-              <span class="m-name">{{ item.item_name }}</span>
-              <span class="m-price">Rp {{ item.price.toLocaleString() }}</span>
-            </div>
-            <div v-if="supplier.price_list.length > 2" class="m-more">+{{ supplier.price_list.length - 2 }} more</div>
-          </div>
-          <div v-else class="materials-empty">No catalog defined</div>
-
-          <div class="info-divider"></div>
-
-          <div class="info-row">
-            <UserIcon class="icon-xs" />
-            <span class="val">{{ supplier.contact_person || 'No Contact' }}</span>
-          </div>
-          <div class="info-row">
-            <PhoneIcon class="icon-xs" />
-            <span class="val">{{ supplier.phone || '-' }}</span>
-          </div>
-          <div class="info-row">
-            <MapPinIcon class="icon-xs" />
-            <span class="val truncate">{{ supplier.address || 'No Address' }}</span>
-          </div>
-
-          <!-- NEW: OUTSTANDING DEBT -->
-          <div v-if="supplier.total_utang > 0" class="debt-warning-box animate-pulse">
-            <div class="dw-left">
-              <span class="dw-label">OUTSTANDING DEBT</span>
-              <span class="dw-val">Rp {{ supplier.total_utang.toLocaleString() }}</span>
-            </div>
-            <router-link :to="{ path: '/financial', query: { tab: 'utang' }}" class="btn-pay-link">
-              PAY <ChevronRightIcon class="icon-xs" />
-            </router-link>
-          </div>
+    <!-- GROUPED BY CATEGORY -->
+    <template v-for="group in groupedSuppliers" :key="group.key">
+      <div class="category-section">
+        <div class="category-header">
+          <span class="category-icon">{{ group.icon }}</span>
+          <span class="category-label" :class="group.key">{{ group.label }}</span>
+          <span class="category-count">{{ group.items.length }}</span>
         </div>
 
-        <div class="card-actions-premium">
-          <div class="action-btns-group">
-            <button class="btn-action-main secondary" @click="viewCatalog(supplier)">
-              <SparklesIcon class="icon-xs" />
-              <span>VIEW CATALOG</span>
-            </button>
-            <button class="btn-action-main" @click="viewDeliveries(supplier)">
-              <HistoryIcon class="icon-xs" />
-              <span>DELIVERIES</span>
-            </button>
+        <div class="suppliers-grid">
+          <div v-for="supplier in group.items" :key="supplier.id" class="supplier-card glass-panel" :class="getCategoryClass(supplier.category)">
+            <div class="card-accent"></div>
+            <div class="card-header-premium">
+              <div class="header-main">
+                <div class="vendor-avatar" :class="getCategoryClass(supplier.category)">
+                  {{ supplier.name.charAt(0).toUpperCase() }}
+                </div>
+                <div class="header-info">
+                  <h3 class="name-full" :title="supplier.name">{{ supplier.name }}</h3>
+                  <div class="service-chip" :class="getCategoryClass(supplier.category)">{{ getCategoryLabel(supplier.category) }}</div>
+                </div>
+              </div>
+              
+              <div class="header-actions">
+                <button class="btn-circular" @click="editSupplier(supplier)" title="Edit Vendor">
+                  <Edit3Icon class="icon-sv" />
+                </button>
+                <button class="btn-circular del" @click="deleteSupplier(supplier)" title="Hapus">
+                  <Trash2Icon class="icon-sv" />
+                </button>
+              </div>
+            </div>
+            
+            <div class="card-body-elite">
+              <!-- CATALOG PREVIEW -->
+              <div class="catalog-section-card">
+                <span class="catalog-label">KATALOG</span>
+                <div v-if="supplier.price_list?.length" class="materials-preview">
+                  <div v-for="(item, idx) in supplier.price_list.slice(0, 2)" :key="idx" class="m-tag">
+                    <span class="m-name">{{ item.item_name }}</span>
+                    <span class="m-price font-mono">Rp {{ item.price.toLocaleString() }}</span>
+                  </div>
+                  <div v-if="supplier.price_list.length > 2" class="m-more">+{{ supplier.price_list.length - 2 }} lainnya</div>
+                </div>
+                <div v-else class="materials-empty">Belum ada katalog</div>
+              </div>
+
+              <div class="info-divider"></div>
+
+              <div class="info-row">
+                <UserIcon class="icon-xs" />
+                <span class="val">{{ supplier.contact_person || 'Belum ada kontak' }}</span>
+              </div>
+              <div class="info-row">
+                <PhoneIcon class="icon-xs" />
+                <span class="val">{{ supplier.phone || '-' }}</span>
+              </div>
+              <div class="info-row">
+                <MapPinIcon class="icon-xs" />
+                <span class="val">{{ supplier.address || 'Belum ada alamat' }}</span>
+              </div>
+
+              <!-- OUTSTANDING DEBT -->
+              <div v-if="supplier.total_utang > 0" class="debt-warning-box">
+                <div class="dw-left">
+                  <span class="dw-label">💰 UTANG AKTIF</span>
+                  <span class="dw-val font-mono">Rp {{ supplier.total_utang.toLocaleString() }}</span>
+                </div>
+              </div>
+              <div v-else class="debt-clear">
+                <span>✓ Tidak ada utang</span>
+              </div>
+            </div>
+
+            <div class="card-actions-premium">
+              <div class="action-btns-group">
+                <button class="btn-action-ghost" @click="viewCatalog(supplier)">
+                  🗂️ Lihat Katalog
+                </button>
+                <button class="btn-action-ghost" @click="viewDeliveries(supplier)">
+                  📜 Riwayat
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+    </template>
 
-      <div v-if="suppliers.length === 0" class="empty-state glass-panel">
-        <PackageIcon class="empty-icon" />
-        <h3>No active suppliers</h3>
-        <p>Your supply chain is clean. Add your first vendor to track HPP and stock logs.</p>
-      </div>
+    <div v-if="suppliers.length === 0" class="empty-state glass-panel">
+      <PackageIcon class="empty-icon" />
+      <h3>Belum ada supplier</h3>
+      <p>Klik 'Add New Supplier' untuk menambahkan vendor pertama.</p>
     </div>
 
     <!-- DELETED ARCHIVE (ADMIN ONLY) -->
@@ -140,104 +152,121 @@
       </div>
     </section>
 
-    <!-- ADD/EDIT MODAL -->
+    <!-- ADD/EDIT SLIDE-OVER -->
     <Teleport to="body">
-      <div v-if="showAddModal" class="modal-overlay" @click.self="closeModal">
-        <div class="modal-card glass-panel animate-pop">
-          <h2 class="hero-font">{{ editingId ? 'Update Vendor' : 'New Vendor Registration' }}</h2>
-          <p class="text-dim">Ensure vendor data is accurate for inventory HPP calculation.</p>
-
-          <form @submit.prevent="submitSupplier" class="modal-form">
-            <div class="form-group">
-              <label>Vendor Name / Farm Name</label>
-              <input type="text" v-model="form.name" placeholder="e.g. Farm Berkah Telur" required />
-            </div>
-
-            <div class="form-group">
-              <label>Contact Person</label>
-              <input type="text" v-model="form.contact_person" placeholder="e.g. Pak Haji Somad" />
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Phone / WhatsApp</label>
-                <input type="text" v-model="form.phone" placeholder="08..." />
+      <div v-if="showAddModal" class="slide-over-overlay" @click.self="closeModal">
+        <div class="slide-over-panel glass-panel animate-slide-left">
+          <div class="so-header">
+            <div class="so-header-content">
+              <div class="so-icon-box">
+                <TruckIcon v-if="!editingId" class="so-icon" />
+                <Edit3Icon v-else class="so-icon" />
+              </div>
+              <div class="so-title-area">
+                <h2 class="hero-font so-title">{{ editingId ? 'Update Vendor' : 'New Vendor Registration' }}</h2>
+                <p class="text-dim so-subtitle">Pastikan data vendor akurat untuk perhitungan HPP stok.</p>
               </div>
             </div>
+            <button class="btn-close-so" @click="closeModal">
+              <PlusIcon class="icon-close-rotate" />
+            </button>
+          </div>
 
-            <div class="form-group">
-              <label>Full Address</label>
-              <textarea v-model="form.address" placeholder="Vendor location..."></textarea>
-            </div>
-
-            <div class="form-group">
-              <CustomDropdown 
-                v-model="form.category" 
-                :options="categoryOptions" 
-                label="Service / Category" 
-                placeholder="Select supply type..."
-              />
-            </div>
-
-            <div class="modal-divider"></div>
-
-            <!-- PRODUCT CATALOG SECTION -->
-            <div class="catalog-section">
-              <div class="section-header">
-                <div class="sh-left">
-                  <SparklesIcon class="icon-sh" />
-                  <h3 class="hero-font subtitle">Product Catalog</h3>
+          <div class="so-body">
+            <form @submit.prevent="submitSupplier" class="so-form">
+              <div class="so-section">
+                <h3 class="so-section-title">🏢 BASIC INFORMATION</h3>
+                <div class="form-group">
+                  <label>Vendor Name / Farm Name</label>
+                  <input type="text" v-model="form.name" placeholder="e.g. Farm Berkah Telur" required />
                 </div>
-                <button type="button" class="btn-add-item" @click="addPriceItem">
-                  <PlusIcon class="icon-xs" />
-                  <span>ADD ITEM</span>
-                </button>
-              </div>
-              <p class="section-desc">List raw materials and set current purchase prices.</p>
 
-              <div class="catalog-list">
-                <div v-for="(item, idx) in form.price_list" :key="idx" class="catalog-entry glass-panel">
-                  <div class="entry-main">
-                    <input 
-                      type="text" 
-                      v-model="item.item_name" 
-                      placeholder="Material Name (e.g. Standard Egg)" 
-                      class="input-clean"
-                    />
-                    <div class="entry-values">
-                      <div class="price-input-wrap">
-                        <span class="prefix">Rp</span>
-                        <input 
-                          type="number" 
-                          v-model.number="item.price" 
-                          placeholder="0" 
-                        />
-                      </div>
-                      <input 
-                        type="text" 
-                        v-model="item.unit" 
-                        placeholder="unit" 
-                        class="unit-input"
-                      />
-                    </div>
+                <div class="form-group">
+                  <label>Contact Person</label>
+                  <input type="text" v-model="form.contact_person" placeholder="e.g. Pak Haji Somad" />
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Phone / WhatsApp</label>
+                    <input type="text" v-model="form.phone" placeholder="08..." />
                   </div>
-                  <button type="button" class="btn-remove-entry" @click="removePriceItem(idx)">
-                    <Trash2Icon class="icon-xs" />
+                </div>
+
+                <div class="form-group">
+                  <label>Full Address</label>
+                  <textarea v-model="form.address" placeholder="Lokasi vendor..." rows="3"></textarea>
+                </div>
+
+                <div class="form-group">
+                  <CustomDropdown 
+                    v-model="form.category" 
+                    :options="categoryOptions" 
+                    label="Service / Category" 
+                    placeholder="Pilih tipe supply..."
+                  />
+                  <p class="field-hint">Kategori ini akan menentukan filter pada saat pencatatan pembelian.</p>
+                </div>
+              </div>
+
+              <div class="so-divider"></div>
+
+              <!-- PRODUCT CATALOG SECTION -->
+              <div class="so-section">
+                <div class="so-section-header">
+                  <h3 class="so-section-title">🗂️ PRODUCT CATALOG</h3>
+                  <button type="button" class="btn-add-item-so" @click="addPriceItem">
+                    <PlusIcon class="icon-xs" />
+                    <span>TAMBAH PRODUK</span>
                   </button>
                 </div>
-                <div v-if="form.price_list.length === 0" class="catalog-empty-hint">
-                  No materials added to this vendor's catalog yet.
+                <p class="section-desc">Daftar item yang disupply vendor ini beserta harga belinya.</p>
+
+                <div class="catalog-list-so">
+                  <div v-for="(item, idx) in form.price_list" :key="idx" class="catalog-entry-so glass-panel">
+                    <div class="entry-main-so">
+                      <input 
+                        type="text" 
+                        v-model="item.item_name" 
+                        placeholder="Nama Item (misal: Telur Standard)" 
+                        class="input-clean-so"
+                      />
+                      <div class="entry-values-so">
+                        <div class="price-input-wrap-so">
+                          <span class="prefix-so">Rp</span>
+                          <input 
+                            type="number" 
+                            v-model.number="item.price" 
+                            placeholder="0" 
+                          />
+                        </div>
+                        <input 
+                          type="text" 
+                          v-model="item.unit" 
+                          placeholder="unit" 
+                          class="unit-input-so"
+                        />
+                      </div>
+                    </div>
+                    <button type="button" class="btn-remove-entry-so" @click="removePriceItem(idx)">
+                      <Trash2Icon class="icon-xs" />
+                    </button>
+                  </div>
+                  <div v-if="form.price_list.length === 0" class="catalog-empty-hint-so">
+                    Belum ada item dalam katalog vendor ini.
+                  </div>
                 </div>
               </div>
-            </div>
+            </form>
+          </div>
 
-            <div class="modal-actions">
-              <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
-              <button type="submit" class="btn-primary" :disabled="submitting">
-                {{ submitting ? 'SAVING...' : (editingId ? 'UPDATE VENDOR' : 'SAVE VENDOR') }}
-              </button>
-            </div>
-          </form>
+          <div class="so-footer">
+            <button type="button" class="btn-secondary-so" @click="closeModal">Cancel</button>
+            <button type="button" class="btn-primary-so" :disabled="submitting" @click="submitSupplier">
+              <TruckIcon class="icon-sm" />
+              <span>{{ submitting ? 'SAVING...' : (editingId ? 'UPDATE VENDOR' : 'SIMPAN VENDOR') }}</span>
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -245,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useRoute } from 'vue-router';
 import { 
@@ -255,8 +284,6 @@ import {
   UserIcon,
   PhoneIcon,
   MapPinIcon,
-  HistoryIcon,
-  SparklesIcon,
   PlusIcon,
   Trash2Icon,
   ArchiveIcon,
@@ -299,6 +326,44 @@ function getCategoryClass(cat: string) {
   if (cat.includes('Kemasan') || cat.includes('Box')) return 'accent-pack';
   return 'accent-general';
 }
+
+function getCategoryLabel(cat: string) {
+  if (!cat) return 'Lainnya';
+  if (cat.includes('Telur')) return 'Supplier Telur';
+  if (cat.includes('Kemasan') || cat.includes('Box')) return 'Kemasan';
+  if (cat.includes('Stiker')) return 'Stiker';
+  if (cat.includes('Card')) return 'Kartu';
+  return cat;
+}
+
+const groupedSuppliers = computed(() => {
+  const groups: Record<string, { key: string; icon: string; label: string; items: any[] }> = {};
+  
+  const categoryConfig: Record<string, { icon: string; label: string; order: number }> = {
+    telur: { icon: '🥚', label: 'SUPPLIER TELUR', order: 1 },
+    kemasan: { icon: '📦', label: 'SUPPLIER KEMASAN', order: 2 },
+    lainnya: { icon: '🏷️', label: 'SUPPLIER LAINNYA', order: 3 }
+  };
+
+  suppliers.value.forEach(s => {
+    const cat = (s.category || '').toLowerCase();
+    let key = 'lainnya';
+    if (cat.includes('telur') || cat.includes('egg') || cat.includes('ayam')) key = 'telur';
+    else if (cat.includes('kemasan') || cat.includes('box') || cat.includes('stiker') || cat.includes('card') || cat.includes('packaging')) key = 'kemasan';
+
+    if (!groups[key]) {
+      const cfg = categoryConfig[key];
+      groups[key] = { key, icon: cfg?.icon || '📁', label: cfg?.label || key.toUpperCase(), items: [] };
+    }
+    groups[key]!.items.push(s);
+  });
+
+  return Object.values(groups).sort((a, b) => {
+    const aOrder = categoryConfig[a.key]?.order || 99;
+    const bOrder = categoryConfig[b.key]?.order || 99;
+    return aOrder - bOrder;
+  });
+});
 
 async function fetchData() {
   console.log('Fetching fresh data for Suppliers...');
@@ -471,15 +536,11 @@ function viewCatalog(vendor: any) {
 }
 
 const route = useRoute();
-let refreshInterval: any;
-
 onMounted(() => {
   fetchData();
-  refreshInterval = setInterval(fetchData, 10000);
 });
 
 onUnmounted(() => {
-  clearInterval(refreshInterval);
 });
 
 // Force refresh when route changes
@@ -506,6 +567,41 @@ watch(() => route.path, () => {
   letter-spacing: 0.2em;
   font-size: 0.75rem;
   margin-bottom: 8px;
+}
+
+.category-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 8px;
+}
+
+.category-icon { font-size: 1.25rem; }
+.category-label {
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  color: var(--color-text-dim);
+}
+
+.category-label.telur { color: var(--gold); }
+.category-label.kemasan { color: var(--sky); }
+
+.category-count {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--color-text-dim);
 }
 
 .suppliers-grid {
@@ -586,32 +682,35 @@ watch(() => route.path, () => {
 .header-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
 
-.name {
-  font-size: 1.15rem;
-  font-weight: 800;
+.name-full {
+  font-size: 1.2rem;
+  font-weight: 850;
   color: white;
   margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .service-chip {
   font-size: 0.6rem;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--color-primary);
-  background: rgba(255, 140, 0, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 3px 10px;
+  border-radius: 6px;
   width: fit-content;
   letter-spacing: 0.1em;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--color-text-dim);
 }
+
+.service-chip.accent-egg { color: var(--gold); background: rgba(255, 215, 0, 0.1); border-color: rgba(255, 215, 0, 0.2); }
+.service-chip.accent-pack { color: var(--sky); background: rgba(0, 209, 255, 0.1); border-color: rgba(0, 209, 255, 0.2); }
+
 
 .header-actions {
   display: flex;
@@ -669,63 +768,41 @@ watch(() => route.path, () => {
 .info-row svg { opacity: 0.4; }
 .info-row .val { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* DEBT WARNING */
-.debt-warning-box {
-  margin-top: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  padding: 12px 16px;
-  border-radius: 12px;
-}
-
-.animate-pulse {
-  animation: pulse-red 2s infinite;
-}
-
-@keyframes pulse-red {
-  0%, 100% { box-shadow: 0 0 0px rgba(239, 68, 68, 0); border-color: rgba(239, 68, 68, 0.2); }
-  50% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); }
-}
-
-.dw-left {
+/* CATALOG SECTION IN CARD */
+.catalog-section-card {
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
-.dw-label {
-  font-size: 0.6rem;
+.catalog-label {
+  font-size: 0.65rem;
   font-weight: 900;
-  color: #ef4444;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.1em;
+  color: var(--color-text-dim);
+  opacity: 0.6;
 }
 
-.dw-val {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: white;
+.debt-warning-box {
+  margin-top: auto;
+  padding: 14px 18px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.btn-pay-link {
+.debt-clear {
+  margin-top: auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-success);
+  opacity: 0.6;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: #ef4444;
-  color: white;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-.btn-pay-link:hover {
-  background: white;
-  color: #ef4444;
-  transform: translateX(4px);
+  gap: 6px;
 }
 
 .card-actions-premium {
@@ -737,42 +814,24 @@ watch(() => route.path, () => {
   align-items: center;
 }
 
-.btn-action-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.03);
+.btn-action-ghost {
+  flex: 1;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--glass-border);
-  color: white;
-  padding: 10px 16px;
   border-radius: 10px;
-  font-size: 0.7rem;
+  color: var(--color-text-dim);
+  font-size: 0.75rem;
   font-weight: 800;
   cursor: pointer;
   transition: all 0.3s ease;
+  text-align: center;
 }
 
-.btn-action-main:hover {
-  background: white;
-  color: black;
-}
-
-.btn-action-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: transparent;
-  border: 1px solid var(--glass-border);
-  color: var(--color-text-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.action-secondary-group {
-  display: none;
+.btn-action-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
 }
 
 .empty-state {
@@ -788,377 +847,266 @@ watch(() => route.path, () => {
 
 .empty-icon { width: 64px; height: 64px; opacity: 0.05; }
 
-/* MODAL */
-.modal-overlay {
+/* SLIDE OVER STYLES */
+.slide-over-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.8);
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
+  z-index: 2000;
   display: flex;
-  justify-content: center;
-  align-items: flex-start; /* Start from top to allow scrolling */
-  padding: 40px 20px;
-  overflow-y: auto;
-  z-index: 1000;
+  justify-content: flex-end;
 }
 
-.modal-card { 
-  width: 100%; 
-  max-width: 500px; 
-  padding: 40px;
-  margin: auto; /* Keeps it centered if less than screen height */
-}
-
-.modal-form { margin-top: 24px; display: flex; flex-direction: column; gap: 20px; }
-
-.form-group { display: flex; flex-direction: column; gap: 8px; }
-.form-group label { font-size: 0.8rem; font-weight: 700; color: var(--color-text-dim); text-transform: uppercase; }
-.form-group input, .form-group textarea {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border);
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  color: white;
-  font-family: var(--font-body);
-}
-
-.modal-actions { display: flex; justify-content: flex-end; gap: 16px; margin-top: 12px; }
-
-.btn-secondary { background: transparent; border: 1px solid var(--glass-border); color: white; padding: 12px 24px; border-radius: var(--radius-sm); cursor: pointer; }
-
-.animate-pop { animation: popIn 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
-@keyframes popIn {
-  from { opacity: 0; transform: scale(0.9) translateY(20px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-/* NEW: CATALOG STYLES */
-.header-badges {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.catalog-badge {
-  font-size: 0.55rem;
-  font-weight: 900;
-  background: rgba(123, 97, 255, 0.1);
-  color: #7B61FF;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid rgba(123, 97, 255, 0.2);
-}
-
-.icon-xs-inline { width: 10px; height: 10px; }
-
-.materials-preview {
+.slide-over-panel {
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  background: #09090b;
+  border-left: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.5);
 }
 
-.m-tag {
+.animate-slide-left {
+  animation: slideLeft 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.so-header {
+  padding: 32px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  align-items: flex-start;
+  border-bottom: 1px solid var(--glass-border);
 }
 
-.m-name { font-size: 0.75rem; font-weight: 700; color: var(--color-text-dim); }
-.m-price { font-size: 0.75rem; font-weight: 800; color: var(--color-primary); }
-
-.m-more {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--color-text-dim);
-  text-align: center;
-  opacity: 0.6;
-}
-
-.materials-empty {
-  font-size: 0.75rem;
-  color: var(--color-text-dim);
-  opacity: 0.3;
-  font-style: italic;
-  padding: 12px 0;
-  text-align: center;
-}
-
-.info-divider {
-  height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255,255,255,0.05), transparent);
-  margin: 8px 0;
-}
-
-.action-btns-group {
+.so-header-content {
   display: flex;
-  gap: 8px;
+  gap: 20px;
 }
 
-.btn-action-main.secondary {
-  border-color: rgba(123, 97, 255, 0.3);
-  color: #BBADFF;
-}
-
-.btn-action-main.secondary:hover {
-  background: #7B61FF;
-  color: white;
-}
-
-/* MODAL CATALOG */
-.modal-divider {
-  height: 1px;
-  background: var(--glass-border);
-  margin: 10px 0;
-}
-
-.catalog-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.sh-left { display: flex; align-items: center; gap: 10px; }
-.icon-sh { width: 18px; height: 18px; color: var(--color-primary); }
-.subtitle { font-size: 1rem; margin: 0; }
-
-.btn-add-item {
-  background: rgba(255, 140, 0, 0.1);
-  border: 1px solid rgba(255, 140, 0, 0.2);
-  color: var(--color-primary);
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 0.65rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-add-item:hover {
-  background: var(--color-primary);
-  color: black;
-}
-
-.section-desc { font-size: 0.75rem; color: var(--color-text-dim); }
-
-/* ARCHIVE STYLES */
-.mt-12 { margin-top: 48px; }
-
-.archive-section {
-  border-top: 1px solid var(--glass-border);
-  padding-top: 32px;
-}
-
-.archive-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--glass-border);
+.so-icon-box {
+  width: 48px;
+  height: 48px;
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.2);
   border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.so-icon { color: #2dd4bf; width: 24px; height: 24px; }
+
+.so-title-area { display: flex; flex-direction: column; gap: 4px; }
+.so-title { font-size: 1.25rem; margin: 0; }
+.so-subtitle { font-size: 0.8rem; margin: 0; opacity: 0.6; }
+
+.btn-close-so {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
-.archive-header:hover {
-  background: rgba(255, 255, 255, 0.04);
+.btn-close-so:hover {
+  background: white;
+  color: black;
+  transform: rotate(90deg);
 }
 
-.ah-left { display: flex; align-items: center; gap: 12px; }
-.ah-left .subtitle { margin: 0; font-size: 0.8rem; letter-spacing: 0.1em; color: var(--color-text-dim); }
+.icon-close-rotate { transform: rotate(45deg); width: 16px; height: 16px; }
 
-.archive-count {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 8px;
-  border-radius: 20px;
+.so-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+}
+
+.so-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.so-section-title {
   font-size: 0.7rem;
-  font-weight: 800;
+  font-weight: 900;
+  letter-spacing: 0.15em;
   color: var(--color-text-dim);
+  margin-bottom: 8px;
 }
 
-.archive-chevron {
-  width: 18px;
-  height: 18px;
+.field-hint {
+  font-size: 0.7rem;
   color: var(--color-text-dim);
-  transition: transform 0.3s ease;
+  opacity: 0.5;
+  margin-top: 4px;
 }
 
-.archive-chevron.open { transform: rotate(180deg); }
-
-.archive-content { margin-top: 16px; }
-
-.archive-empty {
-  text-align: center;
-  padding: 40px;
-  color: var(--color-text-dim);
-  font-style: italic;
-  font-size: 0.85rem;
+.so-divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 32px 0;
 }
 
-.archive-table-wrap { overflow: hidden; }
-
-.archive-table {
-  width: 100%;
-  border-collapse: collapse;
+.so-footer {
+  padding: 32px;
+  display: flex;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--glass-border);
 }
 
-.archive-table th {
-  text-align: left;
-  padding: 12px 16px;
+.btn-secondary-so {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-primary-so {
+  flex: 2;
+  padding: 14px;
+  border-radius: 12px;
+  background: white;
+  color: black;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary-so:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* CATALOG IN SO */
+.so-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-add-item-so {
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  color: #2dd4bf;
+  padding: 6px 14px;
+  border-radius: 8px;
   font-size: 0.65rem;
-  text-transform: uppercase;
-  color: var(--color-text-dim);
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.archive-table td {
-  padding: 12px 16px;
-  font-size: 0.8rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-}
-
-.btn-restore {
+  font-weight: 800;
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 255, 157, 0.1);
-  border: 1px solid rgba(0, 255, 157, 0.2);
-  color: var(--color-success);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.65rem;
-  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.btn-restore:hover {
-  background: var(--color-success);
-  color: black;
-}
-
-.animate-slide-down {
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.catalog-list {
+.catalog-list-so {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 250px;
-  overflow-y: auto;
-  padding-right: 4px;
+  gap: 12px;
 }
 
-.catalog-entry {
+.catalog-entry-so {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
-.entry-main {
+.entry-main-so {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.input-clean {
+.input-clean-so {
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
-  font-weight: 700 !important;
   font-size: 0.9rem !important;
+  font-weight: 800 !important;
+  color: white;
 }
 
-.entry-values {
+.entry-values-so {
   display: flex;
   gap: 12px;
-  align-items: center;
 }
 
-.price-input-wrap {
+.price-input-wrap-so {
+  flex: 1;
   display: flex;
   align-items: center;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--glass-border);
-  padding: 4px 8px;
-  border-radius: 6px;
-  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  gap: 8px;
 }
 
-.price-input-wrap .prefix { font-size: 0.7rem; font-weight: 800; opacity: 0.5; }
-.price-input-wrap input {
+.prefix-so { font-size: 0.75rem; font-weight: 900; color: var(--gold); }
+
+.price-input-wrap-so input {
   background: transparent !important;
   border: none !important;
-  padding: 0 !important;
-  width: 80px !important;
-  font-size: 0.8rem !important;
+  width: 100% !important;
+  color: white !important;
   font-weight: 700 !important;
 }
 
-.unit-input {
+.unit-input-so {
   width: 60px !important;
-  background: rgba(255, 255, 255, 0.03) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
   border: 1px dashed var(--glass-border) !important;
-  padding: 4px 8px !important;
-  border-radius: 6px !important;
-  font-size: 0.75rem !important;
-  text-align: center;
+  text-align: center !important;
 }
 
-.btn-remove-entry {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(255, 62, 62, 0.1);
-  border: 1px solid rgba(255, 62, 62, 0.2);
-  color: var(--color-error);
+.btn-remove-entry-so {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.btn-remove-entry:hover {
-  background: var(--color-error);
-  color: white;
-}
-
-.catalog-empty-hint {
+.catalog-empty-hint-so {
+  padding: 32px;
   text-align: center;
-  padding: 20px;
-  font-size: 0.8rem;
   color: var(--color-text-dim);
   opacity: 0.5;
-  border: 1px dashed var(--glass-border);
-  border-radius: 12px;
+  font-size: 0.8rem;
+  border: 2px dashed var(--glass-border);
+  border-radius: 16px;
 }
 </style>
+
