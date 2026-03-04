@@ -15,4 +15,3 @@ services:
 networks:
   default:
     name: web_network
-    external: true
