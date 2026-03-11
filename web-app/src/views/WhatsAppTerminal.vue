@@ -1,198 +1,178 @@
 <template>
-  <div class="whatsapp-terminal">
-    <header class="header animate-in">
-      <div class="header-left">
-        <div class="brand-badge">TACTICAL COMM</div>
-        <h1 class="hero-title">WhatsApp Terminal</h1>
-        <p class="subtitle">Secure communication portal powered by WAHA Engine</p>
-      </div>
-      <div class="header-status">
-        <div class="connectivity-chip" :class="{ active: waStatus === 'CONNECTED' || waStatus === 'WORKING', warning: waStatus === 'SCAN_QR_CODE' }">
-          <div class="indicator-dot"></div>
-          <ZapIcon v-if="waStatus === 'CONNECTED' || waStatus === 'WORKING'" class="icon-xs" />
-          <GhostIcon v-else-if="waStatus === 'SCAN_QR_CODE'" class="icon-xs" />
-          <ZapOffIcon v-else class="icon-xs" />
-          <span>{{ waStatus === 'DISCONNECTED' ? 'CHECKING...' : waStatus }}</span>
-        </div>
-      </div>
-    </header>
+  <div class="waha-terminal">
 
-    <div class="terminal-main-layout animate-in">
-      <!-- 📱 SIDEBAR: Conversations -->
-      <aside class="sidebar-pnl glass-panel">
-        <div class="search-container">
-          <div class="search-input-wrap">
-            <SearchIcon class="search-icon" />
-            <input type="text" v-model="searchQuery" placeholder="Search operatives..." />
-          </div>
+    <!-- HEADER -->
+    <div class="waha-header">
+      <div>
+        <p class="waha-eyebrow">TACTICAL COMM</p>
+        <h1 class="waha-title">WhatsApp Terminal</h1>
+        <p class="waha-sub">Secure communication powered by WAHA Engine</p>
+      </div>
+      <div class="status-badge" :class="'status-' + status">
+        <span class="status-dot"></span>
+        <span class="status-text">{{ statusLabel }}</span>
+      </div>
+    </div>
+
+    <!-- CORS ERROR STATE -->
+    <div v-if="status === 'CORS_ERROR'" class="error-card">
+      <p class="error-icon">🚫</p>
+      <h3 class="error-title">Koneksi Diblokir (CORS)</h3>
+      <p class="error-sub">
+        Browser memblokir koneksi ke WAHA server.<br>
+        Tambahkan <code>WHATSAPP_CORS_ORIGIN=*</code> di environment WAHA lalu restart.
+      </p>
+      <div class="error-code">
+        WAHA_BASE = {{ WAHA_BASE }}<br>
+        SESSION   = {{ SESSION }}
+      </div>
+      <button class="btn-retry" @click="checkStatus">🔄 Coba Lagi</button>
+    </div>
+
+    <!-- QR CODE STATE -->
+    <div v-else-if="status === 'SCAN_QR_CODE'" class="qr-card">
+      <p class="qr-title">Scan QR Code</p>
+      <img v-if="qrCode" :src="qrCode" class="qr-image" alt="QR Code" />
+      <div v-else class="qr-loading">Memuat QR Code...</div>
+      <p class="qr-sub">Buka WhatsApp → Perangkat Tertaut → Tautkan Perangkat</p>
+      <button class="btn-retry" @click="checkStatus">🔄 Refresh QR</button>
+    </div>
+
+    <!-- MAIN TERMINAL (when WORKING) -->
+    <div v-else-if="status === 'WORKING'" class="terminal-layout">
+
+      <!-- LEFT: Chat List -->
+      <div class="chat-sidebar">
+
+        <!-- Search -->
+        <div class="search-box">
+          <span class="search-icon-el">🔍</span>
+          <input
+            v-model="searchQuery"
+            class="search-input"
+            placeholder="Cari kontak..."
+          />
         </div>
-        
-        <div class="chats-directory scroll-v">
-          <div 
-            v-for="chat in filteredChats" 
+
+        <!-- Loading -->
+        <div v-if="isLoadingChats" class="chat-loading">
+          <div class="spinner"></div>
+          <span>Memuat chat...</span>
+        </div>
+
+        <!-- Empty -->
+        <div v-else-if="filteredChats.length === 0" class="chat-empty">
+          <p>👻</p>
+          <p>Tidak ada chat ditemukan</p>
+        </div>
+
+        <!-- Chat list -->
+        <div v-else class="chat-list">
+          <div
+            v-for="chat in filteredChats"
             :key="chat.id"
-            class="chat-tile"
+            class="chat-item"
             :class="{ active: selectedChat?.id === chat.id }"
             @click="selectChat(chat)"
           >
-            <div class="avatar-hexagon">
-              <span class="avatar-text">{{ chat.name?.charAt(0) || '?' }}</span>
+            <div class="chat-avatar">{{ getChatAvatar(chat) }}</div>
+            <div class="chat-info">
+              <div class="chat-name-row">
+                <span class="chat-name">{{ getChatName(chat) }}</span>
+                <span class="chat-time">{{ formatChatTime(chat.lastMessage?.timestamp) }}</span>
+              </div>
+              <p class="chat-preview">{{ chat.lastMessage?.body ?? '...' }}</p>
             </div>
-            <div class="tile-content">
-              <div class="tile-top">
-                <span class="oper-name">{{ chat.name || chat.id.split('@')[0] }}</span>
-                <span class="oper-time">{{ formatTime(chat.lastMessage?.timestamp) }}</span>
-              </div>
-              <div class="tile-bottom">
-                <p class="msg-preview">{{ chat.lastMessage?.body || 'No messages received' }}</p>
-                <div v-if="chat.unreadCount" class="unread-count">{{ chat.unreadCount }}</div>
-              </div>
+            <div v-if="chat.unreadCount && chat.unreadCount > 0" class="unread-badge">
+              {{ chat.unreadCount }}
             </div>
           </div>
-          
-        <div v-if="chats.length === 0 && !loading" class="empty-directory">
-          <div class="ghost-box">
-            <GhostIcon class="icon-md" />
-            <p>No active transmissions found.</p>
-          </div>
-          
-          <!-- DEBUG CONSOLE -->
-          <div class="debug-console">
-            <div class="debug-line">> Engine: {{ wahaConfig.base_url }}</div>
-            <div class="debug-line">> Status: {{ waStatus }}</div>
-            <div class="debug-line" v-if="debugError" style="color: #ff4d4d">> Error: {{ debugError }}</div>
-          </div>
-
-          <button class="btn-ghost-glow mt-12" @click="fetchChats">
-            <RefreshCcwIcon class="icon-xs" />
-            Retry Signal
-          </button>
         </div>
-        </div>
-      </aside>
 
-      <!-- 🖥️ CHAT OPERATOR: Messages -->
-      <main class="message-operator glass-panel">
-        <template v-if="selectedChat">
-          <div class="operator-header">
-            <div class="oper-profile">
-              <div class="avatar-hexagon small">
-                <span>{{ selectedChat.name?.charAt(0) || '?' }}</span>
-              </div>
-              <div class="oper-meta">
-                <h3>{{ selectedChat.name || selectedChat.id.split('@')[0] }}</h3>
-                <span class="phone-id">{{ selectedChat.id }}</span>
-              </div>
-            </div>
-            <div class="header-actions">
-               <button class="tool-btn" @click="fetchMessages(selectedChat.id)">
-                 <RefreshCwIcon class="icon-xs" />
-               </button>
+        <!-- Engine info -->
+        <div class="engine-info">
+          <p>&gt; Engine: {{ WAHA_BASE }}</p>
+          <p>&gt; Session: {{ SESSION }}</p>
+          <p>&gt; Status: {{ status }}</p>
+        </div>
+        <button class="btn-retry" @click="checkStatus">🔄 Retry Signal</button>
+      </div>
+
+      <!-- RIGHT: Message Panel -->
+      <div class="message-panel">
+
+        <!-- No chat selected -->
+        <div v-if="!selectedChat" class="standby-state">
+          <div class="standby-icon">((o))</div>
+          <h3 class="standby-title">Signal Hub Standby</h3>
+          <p class="standby-sub">Pilih kontak untuk memulai komunikasi.</p>
+        </div>
+
+        <!-- Chat open -->
+        <template v-else>
+
+          <!-- Chat header -->
+          <div class="msg-header">
+            <div class="msg-avatar">{{ getChatAvatar(selectedChat) }}</div>
+            <div>
+              <p class="msg-name">{{ getChatName(selectedChat) }}</p>
+              <p class="msg-phone">{{ selectedChat.id?.replace('@c.us','') }}</p>
             </div>
           </div>
 
-          <div class="comms-log scroll-v" ref="msgContainer">
-            <div 
-              v-for="msg in messages" 
+          <!-- Messages -->
+          <div class="messages-list" ref="msgListRef">
+            <div v-if="isLoadingMsgs" class="msg-loading">Memuat pesan...</div>
+            <div
+              v-else
+              v-for="msg in messages"
               :key="msg.id"
-              class="log-bubble"
-              :class="msg.fromMe ? 'outbound' : 'inbound'"
+              class="msg-bubble"
+              :class="msg.fromMe ? 'sent' : 'received'"
             >
-              <div class="bubble-body">
-                <p>{{ msg.body }}</p>
-                <div class="bubble-footer">
-                  <span class="ts">{{ formatTime(msg.timestamp) }}</span>
-                  <CheckCheckIcon v-if="msg.fromMe" class="icon-tiny" />
-                </div>
-              </div>
-            </div>
-            
-            <div v-if="messages.length === 0" class="log-empty">
-              <div class="terminal-prompt">Waiting for transmission...</div>
+              <p class="msg-body">{{ msg.body }}</p>
+              <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
             </div>
           </div>
 
-          <div class="input-operator">
-            <div class="operator-input-tray glass-panel">
-              <input 
-                type="text" 
-                v-model="newMessage" 
-                placeholder="Compose secure message..." 
-                @keyup.enter="sendMessage"
-                :disabled="sending"
-              />
-              <button class="btn-fire" @click="sendMessage" :disabled="!newMessage || sending">
-                <SendIcon v-if="!sending" class="icon-sm" />
-                <div v-else class="loader-xs"></div>
-              </button>
-            </div>
+          <!-- Input -->
+          <div class="msg-input-row">
+            <input
+              v-model="newMessage"
+              class="msg-input"
+              placeholder="Ketik pesan..."
+              @keydown.enter="sendMessage"
+            />
+            <button class="btn-send" @click="sendMessage" :disabled="!newMessage.trim()">
+              ➤
+            </button>
           </div>
+
         </template>
-        
-        <div v-else class="waiting-state">
-          <div v-if="waStatus === 'SCAN_QR_CODE'" class="auth-box animate-in">
-            <div class="qr-container">
-              <img v-if="qrCode" :src="qrCode" alt="Scan QR Code" class="qr-image" />
-              <div v-else class="qr-loader">
-                <RadioIcon class="pulse-icon" />
-              </div>
-            </div>
-            <h2 class="hero-font">Scan to Authenticate</h2>
-            <p class="text-dim">Open WhatsApp on your phone and link this device.</p>
-          </div>
-
-          <div v-else-if="waStatus === 'STOPPED' || waStatus === 'OFFLINE'" class="auth-box animate-in">
-             <div class="neon-icon">
-                <ZapOffIcon class="pulse-icon red" />
-             </div>
-             <h2 class="hero-font">Terminal Offline</h2>
-             <p class="text-dim">Engine is not running or session is stopped.</p>
-             <button class="btn-fire mt-24" @click="startSession">
-               <ZapIcon class="icon-sm mr-8" />
-               START TRANSMISSION
-             </button>
-          </div>
-
-          <div v-else class="neutral-state animate-in">
-            <div class="neon-icon">
-              <RadioIcon class="pulse-icon" />
-            </div>
-            <h2 class="hero-font">Signal Hub Standby</h2>
-            <p class="text-dim">Select an operative link to begin tactical communication.</p>
-          </div>
-          <div class="grid-deco"></div>
-        </div>
-      </main>
+      </div>
     </div>
+
+    <!-- LOADING / STOPPED STATE -->
+    <div v-else class="standby-full">
+      <div class="standby-icon">((o))</div>
+      <p class="standby-sub">{{ status === 'LOADING' ? 'Menghubungkan ke WAHA...' : 'WAHA Session: ' + status }}</p>
+      <button class="btn-retry" @click="checkStatus">🔄 Retry</button>
+    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { supabase } from '../lib/supabase';
-import { 
-  SearchIcon, 
-  SendIcon, 
-  ZapIcon, 
-  ZapOffIcon,
-  RadioIcon,
-  RefreshCcwIcon,
-  RefreshCwIcon,
-  GhostIcon,
-  CheckCheckIcon
-} from 'lucide-vue-next';
 
-// --- Types ---
+// ── TYPES ──
 interface Chat {
   id: string;
   name?: string;
   unreadCount?: number;
-  lastMessage?: {
-    body: string;
-    timestamp: number;
-  };
+  lastMessage?: { body: string; timestamp: number };
 }
-
 interface Message {
   id: string;
   body: string;
@@ -200,566 +180,486 @@ interface Message {
   fromMe: boolean;
 }
 
-// --- State ---
-const loading = ref(true);
-const sending = ref(false);
-const waStatus = ref('DISCONNECTED');
-const qrCode = ref(''); // New state for QR code
-const chats = ref<Chat[]>([]);
-const selectedChat = ref<Chat | null>(null);
-const messages = ref<Message[]>([]);
-const newMessage = ref('');
-const searchQuery = ref('');
-const debugError = ref(''); // Added for diagnostics
-const msgContainer = ref<HTMLElement | null>(null);
+// ── CONFIG (fetched from Supabase, with hardcoded fallback) ──
+const WAHA_BASE_DEFAULT = 'http://43.133.137.52:3000';
+const SESSION_DEFAULT   = 'default';
+const WAHA_KEY_DEFAULT  = 'f84052ca69ad4216a7c784274016b3f0';
 
-let wahaConfig = {
-  base_url: '',
-  api_key: '',
-  session_name: 'default'
-};
+const WAHA_BASE = ref(WAHA_BASE_DEFAULT);
+const SESSION   = ref(SESSION_DEFAULT);
+let   WAHA_KEY  = WAHA_KEY_DEFAULT;
 
-let pollInterval: any = null;
-let messageSubscription: any = null;
+function wahaHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    ...(WAHA_KEY ? { 'X-Api-Key': WAHA_KEY } : {})
+  };
+}
 
-// --- Computed ---
+// ── REACTIVE STATE ──
+const status         = ref('LOADING');
+const chats          = ref<Chat[]>([]);
+const selectedChat   = ref<Chat | null>(null);
+const messages       = ref<Message[]>([]);
+const newMessage     = ref('');
+const searchQuery    = ref('');
+const isLoadingChats = ref(false);
+const isLoadingMsgs  = ref(false);
+const qrCode         = ref<string | null>(null);
+const msgListRef     = ref<HTMLElement | null>(null);
+let   pollingTimer: ReturnType<typeof setInterval> | null = null;
+
+// ── COMPUTED ──
 const filteredChats = computed(() => {
   if (!searchQuery.value) return chats.value;
   const q = searchQuery.value.toLowerCase();
-  return chats.value.filter(c => 
-    (c.name?.toLowerCase().includes(q)) || 
-    (c.id.toLowerCase().includes(q))
+  return chats.value.filter(c =>
+    (c.name ?? c.id ?? '').toLowerCase().includes(q)
   );
 });
 
-// --- Methods ---
+const statusLabel = computed(() => {
+  const map: Record<string, string> = {
+    LOADING:       'Connecting...',
+    WORKING:       'WORKING',
+    STOPPED:       'STOPPED',
+    FAILED:        'FAILED',
+    CORS_ERROR:    'CORS BLOCKED',
+    SCAN_QR_CODE:  'SCAN QR',
+  };
+  return map[status.value] ?? status.value;
+});
+
+// ── FETCH CONFIG ──
 async function fetchConfig() {
   try {
-    const { data, error } = await supabase.from('waha_config').select('*').limit(1).single();
-    if (error) throw error;
+    const { data } = await supabase.from('waha_config').select('*').limit(1).single();
     if (data) {
-      wahaConfig = {
-        base_url: data.base_url || 'http://localhost:3000',
-        api_key: data.api_key || '',
-        session_name: data.session_name || 'default'
-      };
+      WAHA_BASE.value = data.base_url || WAHA_BASE_DEFAULT;
+      SESSION.value   = data.session_name || SESSION_DEFAULT;
+      WAHA_KEY        = data.api_key || WAHA_KEY_DEFAULT;
     }
-  } catch (err) {
-    console.warn('Using default WAHA config (DB record not found)');
-    // Keep defaults
-    wahaConfig = {
-      base_url: 'http://43.133.137.52:3000', // Hardcoded as safety net
-      api_key: 'f84052ca69ad4216a7c784274016b3f0',
-      session_name: 'default'
-    };
+  } catch {
+    // Use defaults
   }
 }
 
-// 🛰️ SUPABASE REALTIME BRIDGE
-function subscribeToRealtime() {
-  if (messageSubscription) return;
-
-  messageSubscription = supabase
-    .channel('public:wa_messages')
-    .on('postgres_changes', { 
-      event: 'INSERT', 
-      schema: 'public', 
-      table: 'wa_messages' 
-    }, (payload) => {
-      const msg = payload.new;
-      
-      const chatIndex = chats.value.findIndex(c => c.id === msg.chat_id);
-      if (chatIndex !== -1) {
-        const targetChat = chats.value[chatIndex];
-        if (targetChat) {
-          targetChat.lastMessage = {
-            body: msg.body,
-            timestamp: msg.timestamp
-          };
-          chats.value.splice(chatIndex, 1);
-          chats.value.unshift(targetChat);
-        }
-      } else {
-        fetchChats();
-      }
-
-      if (selectedChat.value && msg.chat_id === selectedChat.value.id) {
-        if (!messages.value.find(m => m.id === msg.id)) {
-          messages.value.push({
-            id: msg.id,
-            body: msg.body,
-            timestamp: msg.timestamp,
-            fromMe: msg.from_me // Fixed mapping from DB snake_case
-          });
-          scrollToBottom();
-        }
-      }
-    })
-    .subscribe();
-}
-
+// ── 1. CHECK SESSION STATUS ──
 async function checkStatus() {
   try {
-    const res = await fetch(`${wahaConfig.base_url}/api/sessions`, {
-      headers: wahaConfig.api_key ? { 'X-Api-Key': wahaConfig.api_key } : {}
+    const res = await fetch(`${WAHA_BASE.value}/api/sessions/${SESSION.value}`, {
+      headers: wahaHeaders()
     });
-    
-    if (res.ok) {
-      debugError.value = ''; // Clear errors
-      const data = await res.json();
-      // Find current or first session if default not found
-      let session = data.find((s: any) => s.name === wahaConfig.session_name);
-      if (!session && data.length > 0) session = data[0]; 
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    status.value = data.status; // 'WORKING' | 'STOPPED' | 'SCAN_QR_CODE' etc.
 
-      const newStatus = session?.status || 'OFFLINE';
-      
-      // AUTO-FETCH logic: Trigger if status is CONNECTED or WORKING
-      const isActive = newStatus === 'CONNECTED' || newStatus === 'WORKING';
-      if (isActive && (waStatus.value !== newStatus || chats.value.length === 0)) {
-        fetchChats();
-      }
-
-      waStatus.value = newStatus;
-      
-      if (waStatus.value === 'SCAN_QR_CODE') {
-        fetchQRCode();
-      } else {
-        qrCode.value = '';
-      }
-    } else {
-      waStatus.value = 'OFFLINE';
-      debugError.value = `HTTP Error ${res.status}: ${res.statusText}`;
+    if (data.status === 'WORKING') {
+      qrCode.value = null;
+      await fetchChats();
+    } else if (data.status === 'SCAN_QR_CODE') {
+      await fetchQR();
     }
   } catch (err: any) {
-    waStatus.value = 'OFFLINE';
-    debugError.value = `Network Error: ${err.message}`;
+    console.error('WAHA status error:', err);
+    // If it's a network error (CORS or unreachable), show CORS error
+    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+      status.value = 'CORS_ERROR';
+    } else {
+      status.value = 'FAILED';
+    }
   }
 }
 
-async function startSession() {
+// ── 2. FETCH QR CODE ──
+async function fetchQR() {
   try {
-    loading.value = true;
-    await fetch(`${wahaConfig.base_url}/api/sessions/start`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(wahaConfig.api_key ? { 'X-Api-Key': wahaConfig.api_key } : {})
-      },
-      body: JSON.stringify({ name: wahaConfig.session_name })
-    });
-    setTimeout(checkStatus, 2000);
-  } catch (err) {
-    console.error('Failed to start session', err);
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function fetchQRCode() {
-  try {
-    const res = await fetch(`${wahaConfig.base_url}/api/screenshot?session=${wahaConfig.session_name}`, {
-      headers: wahaConfig.api_key ? { 'X-Api-Key': wahaConfig.api_key } : {}
-    });
+    const res = await fetch(
+      `${WAHA_BASE.value}/api/screenshot?session=${SESSION.value}`,
+      { headers: wahaHeaders() }
+    );
     if (res.ok) {
-        const blob = await res.blob();
-        qrCode.value = URL.createObjectURL(blob);
+      const blob = await res.blob();
+      qrCode.value = URL.createObjectURL(blob);
     }
   } catch (err) {
-    console.error('Failed to fetch QR code', err);
+    console.error('QR fetch error:', err);
   }
 }
 
+// ── 3. FETCH CHATS ──
 async function fetchChats() {
+  isLoadingChats.value = true;
   try {
-    const res = await fetch(`${wahaConfig.base_url}/api/chats?session=${wahaConfig.session_name}`, {
-      headers: wahaConfig.api_key ? { 'X-Api-Key': wahaConfig.api_key } : {}
-    });
-    if (res.ok) {
-      chats.value = await res.json();
-    }
+    const res = await fetch(
+      `${WAHA_BASE.value}/api/${SESSION.value}/chats?limit=50&offset=0`,
+      { headers: wahaHeaders() }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    chats.value = data ?? [];
   } catch (err) {
-    console.error('Failed to fetch chats', err);
+    console.error('Chats fetch error:', err);
+    chats.value = [];
   } finally {
-    loading.value = false;
+    isLoadingChats.value = false;
   }
 }
 
+// ── 4. FETCH MESSAGES ──
 async function fetchMessages(chatId: string) {
+  isLoadingMsgs.value = true;
   try {
-    const res = await fetch(`${wahaConfig.base_url}/api/messages?session=${wahaConfig.session_name}&chatId=${chatId}&limit=50`, {
-      headers: wahaConfig.api_key ? { 'X-Api-Key': wahaConfig.api_key } : {}
-    });
-    if (res.ok) {
-      const data = await res.json();
-      messages.value = data.sort((a: any, b: any) => a.timestamp - b.timestamp);
-      scrollToBottom();
-    }
+    const res = await fetch(
+      `${WAHA_BASE.value}/api/${SESSION.value}/chats/${encodeURIComponent(chatId)}/messages?limit=30`,
+      { headers: wahaHeaders() }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const rawMessages = data?.messages ?? data ?? [];
+    messages.value = rawMessages.reverse().map((m: any) => ({
+      id: m.id ?? m._id ?? String(Math.random()),
+      body: m.body ?? '',
+      timestamp: m.timestamp ?? 0,
+      fromMe: m.fromMe ?? m.from_me ?? false
+    }));
   } catch (err) {
-    console.error('Failed to fetch messages', err);
+    console.error('Messages fetch error:', err);
+    messages.value = [];
+  } finally {
+    isLoadingMsgs.value = false;
   }
 }
 
+// ── 5. SELECT CHAT ──
 async function selectChat(chat: Chat) {
   selectedChat.value = chat;
-  messages.value = [];
   await fetchMessages(chat.id);
+  await nextTick();
+  scrollToBottom();
 }
 
+// ── 6. SEND MESSAGE ──
 async function sendMessage() {
-  if (!selectedChat.value || !newMessage.value || sending.value) return;
-  
-  sending.value = true;
-  const body = newMessage.value;
+  const text = newMessage.value.trim();
+  if (!text || !selectedChat.value) return;
+
+  const chatId = selectedChat.value.id;
   newMessage.value = '';
 
   try {
-    const res = await fetch(`${wahaConfig.base_url}/api/sendText`, {
+    const res = await fetch(`${WAHA_BASE.value}/api/sendText`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(wahaConfig.api_key ? { 'X-Api-Key': wahaConfig.api_key } : {})
-      },
+      headers: wahaHeaders(),
       body: JSON.stringify({
-        session: wahaConfig.session_name,
-        chatId: selectedChat.value.id,
-        text: body
+        session: SESSION.value,
+        chatId:  chatId,
+        text:    text
       })
     });
+    if (!res.ok) throw new Error(`Send failed: ${res.status}`);
 
-    if (res.ok) {
-      // Optimistic Update
-      messages.value.push({
-        id: 'out-' + Date.now(),
-        body: body,
-        timestamp: Math.floor(Date.now() / 1000),
-        fromMe: true
-      });
-      scrollToBottom();
-      setTimeout(fetchChats, 1000);
-    }
-  } catch (err) {
-    alert('Failed to transmit signal.');
-  } finally {
-    sending.value = false;
+    // Optimistic UI
+    messages.value.push({
+      id:        'out-' + Date.now(),
+      body:      text,
+      fromMe:    true,
+      timestamp: Math.floor(Date.now() / 1000)
+    });
+    await nextTick();
+    scrollToBottom();
+
+    // Refresh from server
+    setTimeout(() => fetchMessages(chatId), 1000);
+  } catch (err: any) {
+    console.error('Send error:', err);
+    alert('Gagal kirim pesan: ' + err.message);
+    newMessage.value = text;
   }
 }
 
+// ── 7. SCROLL ──
 function scrollToBottom() {
-  nextTick(() => {
-    if (msgContainer.value) {
-      msgContainer.value.scrollTop = msgContainer.value.scrollHeight;
+  if (msgListRef.value) {
+    msgListRef.value.scrollTop = msgListRef.value.scrollHeight;
+  }
+}
+
+// ── 8. POLLING ──
+function startPolling() {
+  pollingTimer = setInterval(async () => {
+    if (selectedChat.value) {
+      await fetchMessages(selectedChat.value.id);
     }
-  });
+    if (status.value === 'WORKING') {
+      await fetchChats();
+    }
+  }, 5000);
 }
 
-function formatTime(ts?: number) {
-  if (!ts) return '';
-  const date = new Date(ts * 1000);
-  return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+// ── 9. HELPERS ──
+function formatTime(timestamp?: number) {
+  if (!timestamp) return '';
+  const d = new Date(timestamp * 1000);
+  return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatChatTime(timestamp?: number) {
+  if (!timestamp) return '';
+  const d = new Date(timestamp * 1000);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+}
+
+function getChatName(chat: Chat) {
+  return chat.name ?? chat.id?.replace('@c.us', '') ?? 'Unknown';
+}
+
+function getChatAvatar(chat: Chat) {
+  return getChatName(chat).charAt(0).toUpperCase();
+}
+
+// ── 10. LIFECYCLE ──
 onMounted(async () => {
   await fetchConfig();
   await checkStatus();
-  
-  subscribeToRealtime();
-
-  // Smart polling for status and keeping chats fresh
-  pollInterval = setInterval(async () => {
-    await checkStatus();
-  }, 5000);
+  startPolling();
 });
 
 onUnmounted(() => {
-  if (pollInterval) clearInterval(pollInterval);
-  if (messageSubscription) supabase.removeChannel(messageSubscription);
+  if (pollingTimer) clearInterval(pollingTimer);
 });
 </script>
 
 <style scoped>
-.whatsapp-terminal {
+.waha-terminal {
+  width: 100%;
+  height: calc(100vh - 120px);
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  height: calc(100vh - 120px);
-  --p-sent: #00ff9d;
-  --p-incoming: rgba(255, 255, 255, 0.08);
+  gap: 0;
 }
 
-.header {
-  display: flex;
+/* HEADER */
+.waha-header {
+  display: flex; align-items: flex-start;
   justify-content: space-between;
-  align-items: flex-end;
+  margin-bottom: 24px;
 }
+.waha-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #f59e0b; text-transform: uppercase; margin: 0 0 6px; }
+.waha-title   { font-size: 32px; font-weight: 900; color: white; margin: 0 0 4px; }
+.waha-sub     { font-size: 13px; color: rgba(255,255,255,0.40); margin: 0; }
 
-.brand-badge {
-  color: var(--color-primary);
-  letter-spacing: 0.3em;
-  font-size: 0.7rem;
-  font-weight: 900;
-  margin-bottom: 8px;
-  text-shadow: 0 0 10px rgba(255, 140, 0, 0.3);
+/* STATUS BADGE */
+.status-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-radius: 20px;
+  font-size: 13px; font-weight: 700;
 }
+.status-badge.status-WORKING    { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.30); color: #10b981; }
+.status-badge.status-LOADING    { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.30); color: #f59e0b; }
+.status-badge.status-CORS_ERROR { background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.30);  color: #ef4444; }
+.status-badge.status-STOPPED    { background: rgba(255,255,255,0.06);border: 1px solid rgba(255,255,255,0.10);color: rgba(255,255,255,0.40); }
+.status-badge.status-SCAN_QR_CODE { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.30); color: #f59e0b; }
+.status-badge.status-FAILED     { background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.30);  color: #ef4444; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 
-.hero-title { font-size: 2.5rem; font-weight: 900; line-height: 1.1; margin-bottom: 4px; }
-.subtitle { color: var(--color-text-dim); font-size: 0.95rem; }
-
-.connectivity-chip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.indicator-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 10px #ff4d4d; }
-.connectivity-chip.active { background: rgba(0, 255, 157, 0.05); border-color: rgba(0, 255, 157, 0.2); color: #00ff9d; }
-.connectivity-chip.active .indicator-dot { background: #00ff9d; box-shadow: 0 0 15px #00ff9d; }
-.connectivity-chip.warning { background: rgba(255, 140, 0, 0.05); border-color: rgba(255, 140, 0, 0.2); color: #ff8c00; }
-.connectivity-chip.warning .indicator-dot { background: #ff8c00; box-shadow: 0 0 15px #ff8c00; }
-
-.terminal-main-layout {
+/* TERMINAL LAYOUT */
+.terminal-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 0;
   flex: 1;
-  display: flex;
-  gap: 20px;
+  background: #141418;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  overflow: hidden;
   min-height: 0;
 }
 
 /* SIDEBAR */
-.sidebar-pnl {
-  width: 380px;
-  display: flex;
-  flex-direction: column;
-  background: rgba(0, 0, 0, 0.3) !important;
-  backdrop-filter: blur(20px) !important;
+.chat-sidebar {
+  border-right: 1px solid rgba(255,255,255,0.08);
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden;
 }
 
-.search-container { padding: 24px; }
-.search-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+.search-box {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-.search-input-wrap input { background: transparent; border: none; color: white; width: 100%; font-size: 0.9rem; }
-.search-input-wrap input:focus { outline: none; }
-.search-icon { color: var(--color-text-dim); }
-
-.chats-directory { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 0 12px 24px; }
-
-.chat-tile {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 18px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
-  margin-bottom: 4px;
+.search-icon-el { font-size: 14px; opacity: 0.4; }
+.search-input {
+  background: none; border: none; outline: none;
+  font-size: 13px; color: white; width: 100%;
 }
+.search-input::placeholder { color: rgba(255,255,255,0.30); }
 
-.chat-tile:hover { background: rgba(255, 255, 255, 0.03); transform: translateX(4px); }
-.chat-tile.active { background: rgba(255, 140, 0, 0.08); border-right: 4px solid var(--color-primary); }
+.chat-list {
+  flex: 1; overflow-y: auto;
+}
+.chat-list::-webkit-scrollbar { width: 4px; }
+.chat-list::-webkit-scrollbar-track { background: transparent; }
+.chat-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 2px; }
 
-.avatar-hexagon {
-  width: 52px; height: 52px;
+.chat-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 150ms;
+  position: relative;
+}
+.chat-item:hover  { background: rgba(255,255,255,0.04); }
+.chat-item.active { background: rgba(245,158,11,0.08); border-left: 3px solid #f59e0b; }
+
+.chat-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(245,158,11,0.20);
+  color: #f59e0b; font-weight: 700; font-size: 16px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #222, #000);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
-  color: var(--color-primary); font-weight: 800; font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.chat-info { flex: 1; min-width: 0; }
+.chat-name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.chat-name    { font-size: 13px; font-weight: 600; color: white; }
+.chat-time    { font-size: 10px; color: rgba(255,255,255,0.30); flex-shrink: 0; }
+.chat-preview { font-size: 12px; color: rgba(255,255,255,0.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+.unread-badge { background: #10b981; color: white; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+
+.engine-info {
+  padding: 12px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  line-height: 1.8;
+}
+.engine-info p { margin: 0; }
+
+/* MESSAGE PANEL */
+.message-panel {
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden;
 }
 
-.avatar-hexagon.small { width: 44px; height: 44px; font-size: 1rem; }
-
-.tile-content { flex: 1; min-width: 0; }
-.tile-top { display: flex; justify-content: space-between; margin-bottom: 6px; }
-.oper-name { font-weight: 700; color: white; font-size: 1rem; }
-.oper-time { font-size: 0.7rem; color: var(--color-text-dim); font-family: var(--font-mono); }
-
-.tile-bottom { display: flex; justify-content: space-between; align-items: center; }
-.msg-preview { font-size: 0.85rem; color: var(--color-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.8; }
-
-/* CHAT OPERATOR */
-.message-operator {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: rgba(0, 0, 0, 0.2) !important;
+.standby-state, .standby-full {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px; text-align: center;
 }
+.standby-icon { font-size: 60px; color: #f59e0b; opacity: 0.4; font-family: monospace; }
+.standby-title { font-size: 18px; font-weight: 700; color: white; margin: 0; }
+.standby-sub   { font-size: 13px; color: rgba(255,255,255,0.35); margin: 0; }
 
-.operator-header {
-  padding: 24px 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  display: flex; justify-content: space-between; align-items: center;
-  background: rgba(0, 0, 0, 0.2);
+.msg-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
 }
+.msg-avatar { width: 38px; height: 38px; border-radius: 50%; background: rgba(56,189,248,0.20); color: #38bdf8; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.msg-name   { font-size: 14px; font-weight: 700; color: white; margin: 0 0 2px; }
+.msg-phone  { font-size: 11px; color: rgba(255,255,255,0.35); margin: 0; font-family: 'DM Mono', monospace; }
 
-.oper-profile { display: flex; align-items: center; gap: 20px; }
-.oper-meta h3 { font-size: 1.2rem; margin-bottom: 2px; }
-.phone-id { font-size: 0.7rem; color: var(--color-text-dim); font-family: var(--font-mono); letter-spacing: 0.05em; }
-
-.comms-log {
-  flex: 1;
-  overflow-y: auto;
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  background: radial-gradient(circle at center, rgba(255, 140, 0, 0.02), transparent);
+.messages-list {
+  flex: 1; overflow-y: auto;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 8px;
 }
+.messages-list::-webkit-scrollbar { width: 4px; }
+.messages-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 2px; }
 
-.log-bubble { max-width: 65%; display: flex; }
-.log-bubble.outbound { align-self: flex-end; }
-.log-bubble.inbound { align-self: flex-start; }
-
-.bubble-body {
-  padding: 14px 20px;
-  border-radius: 20px;
-  font-size: 1rem;
-  line-height: 1.5;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-.outbound .bubble-body { 
-  background: linear-gradient(135deg, var(--color-primary), #ff4d00); 
-  color: black; 
-  border-bottom-right-radius: 4px;
-  font-weight: 600;
-}
-.inbound .bubble-body { 
-  background: var(--p-incoming); 
-  color: white; 
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-bottom-left-radius: 4px;
-}
-
-.bubble-footer {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  font-size: 0.65rem;
-  opacity: 0.6;
-}
-
-.input-operator { padding: 32px; }
-.operator-input-tray {
-  display: flex;
-  padding: 8px 12px;
-  border-radius: 100px;
-  background: rgba(255, 255, 255, 0.04) !important;
-  align-items: center;
-  transition: all 0.3s;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-.operator-input-tray:focus-within { border-color: var(--color-primary) !important; background: rgba(255, 255, 255, 0.06) !important; }
-
-.operator-input-tray input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: white;
-  padding: 12px 24px;
-  font-size: 1rem;
-}
-.operator-input-tray input:focus { outline: none; }
-
-.btn-fire {
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  border: none;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.btn-fire:hover:not(:disabled) { transform: rotate(-10deg) scale(1.15); box-shadow: 0 0 20px rgba(255, 140, 0, 0.4); }
-.btn-fire:disabled { opacity: 0.3; cursor: not-allowed; }
-
-.waiting-sta.empty-directory { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; }
-.ghost-box { opacity: 0.3; margin-bottom: 24px; }
-
-.debug-console {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.4);
+.msg-bubble {
+  max-width: 70%;
+  padding: 10px 14px;
   border-radius: 12px;
-  padding: 12px;
-  margin: 16px 0;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex; flex-direction: column; gap: 4px;
 }
-.debug-line { color: #666; margin-bottom: 4px; overflow-wrap: break-word; }
+.msg-bubble.sent     { align-self: flex-end; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.20); }
+.msg-bubble.received { align-self: flex-start; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+.msg-body { font-size: 13px; color: white; margin: 0; line-height: 1.5; word-break: break-word; }
+.msg-time { font-size: 10px; color: rgba(255,255,255,0.30); align-self: flex-end; }
 
-.waiting-state {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; gap: 24px; position: relative;
+.msg-input-row {
+  display: flex; gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
 }
-
-.auth-box {
-  display: flex; flex-direction: column; align-items: center; gap: 20px;
-  z-index: 10;
+.msg-input {
+  flex: 1; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px; padding: 10px 16px;
+  font-size: 13px; color: white; outline: none;
+  transition: border-color 150ms;
 }
-
-.qr-container {
-  padding: 12px; background: white; border-radius: 20px;
-  box-shadow: 0 0 40px rgba(0, 255, 157, 0.2);
-}
-
-.qr-image { width: 260px; height: 260px; border-radius: 12px; }
-.qr-loader { width: 260px; height: 260px; display: flex; align-items: center; justify-content: center; }
-
-.neon-icon {
-  width: 140px; height: 140px;
-  border-radius: 50%;
-  background: rgba(255, 140, 0, 0.03);
+.msg-input:focus { border-color: rgba(245,158,11,0.40); }
+.msg-input::placeholder { color: rgba(255,255,255,0.25); }
+.btn-send {
+  background: #f59e0b; color: #000;
+  border: none; border-radius: 10px;
+  width: 44px; height: 44px;
+  font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(255, 140, 0, 0.1);
-  box-shadow: inset 0 0 30px rgba(255, 140, 0, 0.05);
+  transition: filter 150ms;
+  flex-shrink: 0;
 }
+.btn-send:hover    { filter: brightness(1.10); }
+.btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.pulse-icon { width: 56px; height: 56px; color: var(--color-primary); animation: glow-pulse 3s infinite; }
-
-.tool-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--color-text-dim);
-  padding: 10px; border-radius: 12px;
-  cursor: pointer; transition: all 0.3s;
+/* ERROR / QR CARDS */
+.error-card, .qr-card {
+  background: #141418; border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px; padding: 48px;
+  display: flex; flex-direction: column;
+  align-items: center; text-align: center; gap: 12px;
 }
-.tool-btn:hover { background: rgba(255, 255, 255, 0.1); color: white; }
-
-.animate-in { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
+.error-icon { font-size: 48px; margin: 0; }
+.error-title { font-size: 18px; font-weight: 700; color: white; margin: 0; }
+.error-sub   { font-size: 13px; color: rgba(255,255,255,0.45); margin: 0; line-height: 1.6; }
+.error-sub code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: #f59e0b; font-family: 'DM Mono', monospace; }
+.error-code {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: rgba(255,255,255,0.30); background: rgba(0,0,0,0.30);
+  padding: 12px 20px; border-radius: 8px; text-align: left; line-height: 2;
 }
+.qr-image { width: 220px; height: 220px; border-radius: 8px; border: 2px solid rgba(245,158,11,0.30); }
+.qr-title  { font-size: 18px; font-weight: 700; color: white; margin: 0; }
+.qr-sub    { font-size: 12px; color: rgba(255,255,255,0.40); margin: 0; }
+.qr-loading { color: rgba(255,255,255,0.35); font-size: 13px; }
 
-@keyframes glow-pulse {
-  0% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 10px var(--color-primary)); }
-  100% { transform: scale(1); opacity: 0.6; }
+/* BUTTONS */
+.btn-retry {
+  background: transparent;
+  border: 1px solid rgba(245,158,11,0.35);
+  color: #f59e0b; border-radius: 8px;
+  padding: 8px 20px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 150ms;
+  margin: 8px 16px;
 }
+.btn-retry:hover { background: rgba(245,158,11,0.08); }
 
-.scroll-v { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.1) transparent; }
-.scroll-v::-webkit-scrollbar { width: 6px; }
-.scroll-v::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+/* MISC */
+.chat-loading, .chat-empty, .msg-loading {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 40px 20px; gap: 10px;
+  font-size: 13px; color: rgba(255,255,255,0.30); text-align: center;
+}
+.spinner {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.10);
+  border-top-color: #f59e0b;
+  animation: spin 800ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 1200px) {
-  .sidebar-pnl { width: 300px; }
+@media (max-width: 768px) {
+  .terminal-layout { grid-template-columns: 1fr; }
+  .chat-sidebar { max-height: 300px; }
 }
 </style>
