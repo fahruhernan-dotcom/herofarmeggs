@@ -1,0 +1,33 @@
+# 1. Setup Folder & Pindahkan File
+# Jalankan ini di lokal kamu (PC Windows kamu) untuk mem-build app dan kumpulkan file:
+# Buka terminal dan masuk ke folder `D:\Dokumen\02_Kerja_Profesional\Telur\vps-deploy`
+
+# 2. Buat file `docker-compose.yml` di vps-deploy
+version: '3.8'
+
+services:
+  web-app:
+    build:
+      context: ../web-app
+      dockerfile: ../vps-deploy/Dockerfile
+    container_name: herofarm-web
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: waha
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - WAHA_WORKER_CONCURRENCY=2
+    volumes:
+      - waha-data:/app/.waha
+
+volumes:
+  waha-data:
