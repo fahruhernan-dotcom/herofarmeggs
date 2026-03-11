@@ -30,6 +30,7 @@ services:
     environment:
       - WAHA_WORKER_CONCURRENCY=2
       - WH_CORS_ALLOWED_ORIGINS=*
+      - WH_API_KEY=herofarm123
     volumes:
       - waha-data:/app/.waha
 
