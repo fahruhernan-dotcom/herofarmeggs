@@ -84,6 +84,12 @@ const router = createRouter({
                     meta: { requiresAuth: true, requiresAdmin: true }
                 },
                 {
+                    path: 'whatsapp',
+                    name: 'whatsapp',
+                    component: () => import('../views/WhatsAppTerminal.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
                     path: 'customer-service',
                     name: 'customer-service',
                     component: () => import('../views/CustomerService.vue'),

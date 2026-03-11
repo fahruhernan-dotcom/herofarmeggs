@@ -158,7 +158,8 @@ const navCards = computed<NavSection[]>(() => {
 
   if (authStore.isAdmin) {
     systemLinks.push(
-      { label: 'Customer Services', path: '/customer-service', icon: MessageSquareIcon },
+      { label: 'WhatsApp Terminal', path: '/whatsapp', icon: MessageSquareIcon },
+      { label: 'Automation HUB', path: '/customer-service', icon: TrendingUpIcon },
       { label: 'Company Settings', path: '/settings', icon: SettingsIcon }
     );
   }
