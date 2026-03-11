@@ -271,7 +271,7 @@ async function testWaha() {
     });
     waha.is_active = response.ok;
     if (response.ok) alert('✅ WAHA Terminal is reachable.');
-    else alert('❌ WAHA responded with error.');
+    else alert(`❌ WAHA responded with error: ${response.status} ${response.statusText}`);
   } catch (err) {
     waha.is_active = false;
     alert('❌ Could not reach WAHA. Is it running?');
