@@ -28,6 +28,9 @@ FROM nginx:alpine
 # Copy hasil build dari tahap 1 ke folder public Nginx
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# COPY custom nginx config untuk routing SPA (Vue Router)
+COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
+
 # Pamerkan port 80
 EXPOSE 80
 
