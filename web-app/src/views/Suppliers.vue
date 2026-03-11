@@ -152,6 +152,108 @@
       </div>
     </section>
 
+    <!-- CATALOG VIEWER MODAL -->
+    <Teleport to="body">
+      <div v-if="showCatalogModal" class="modal-overlay" @click.self="showCatalogModal = false">
+        <div class="modal-panel animate-pop">
+           <div class="modal-header">
+             <div class="mh-left">
+               <div class="mh-icon-box">
+                 <PackageIcon class="icon-md" />
+               </div>
+               <div class="mh-title-area">
+                 <h3 class="modal-title">Product Catalog</h3>
+                 <p class="modal-subtitle">{{ catalogVendorName }}</p>
+               </div>
+             </div>
+             <button class="btn-close-modal" @click="showCatalogModal = false">
+               <PlusIcon class="icon-close-rotate" />
+             </button>
+           </div>
+
+           <div class="modal-body-scroll">
+             <div class="catalog-list-premium">
+               <div v-for="(item, idx) in catalogData" :key="idx" class="catalog-row-premium">
+                 <div class="cr-info">
+                   <div class="cr-icon">🛒</div>
+                   <span class="cr-name">{{ item.item_name }}</span>
+                 </div>
+                 <div class="cr-price-area">
+                   <span class="cr-price font-mono">Rp {{ item.price.toLocaleString() }}</span>
+                   <span class="cr-unit">/ {{ item.unit }}</span>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           <div class="modal-footer">
+             <button class="btn-modal-primary" @click="showCatalogModal = false">CLOSE VIEW</button>
+           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- DELIVERY HISTORY MODAL -->
+    <Teleport to="body">
+      <div v-if="showHistoryModal" class="modal-overlay" @click.self="showHistoryModal = false">
+        <div class="modal-panel animate-pop history-modal">
+           <div class="modal-header">
+             <div class="mh-left">
+               <div class="mh-icon-box history">
+                 <TruckIcon class="icon-md" />
+               </div>
+               <div class="mh-title-area">
+                 <h3 class="modal-title">Supply History</h3>
+                 <p class="modal-subtitle">{{ historyVendorName }}</p>
+               </div>
+             </div>
+             <button class="btn-close-modal" @click="showHistoryModal = false">
+               <PlusIcon class="icon-close-rotate" />
+             </button>
+           </div>
+
+           <div class="modal-body-scroll">
+             <div v-if="loadingHistory" class="loading-state-so">
+               <Loader2Icon class="spin icon-lg" />
+               <p>Fetching supply logs...</p>
+             </div>
+             
+             <div v-else-if="deliveryHistory.length === 0" class="history-empty">
+               <ArchiveIcon class="icon-xl" />
+               <p>No delivery records found for this vendor.</p>
+             </div>
+
+             <div v-else class="history-list-premium">
+               <div v-for="log in deliveryHistory" :key="log.id" class="history-card-premium">
+                 <div class="hc-date">
+                   <span class="d-label">DELIVERY DATE</span>
+                   <span class="d-val">{{ new Date(log.purchase_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) }}</span>
+                 </div>
+                 <div class="hc-main">
+                    <div class="hc-product">
+                      <span class="p-badge-mini" :class="log.product_id">{{ (log.product_id || 'GENERAL').replace('_', ' ').toUpperCase() }}</span>
+                      <span class="p-qty font-mono">{{ (log.total_eggs_bought / 10).toFixed(1) }} <small>KG</small></span>
+                    </div>
+                    <div class="hc-price font-mono">
+                      Rp {{ (log.total_cost || 0).toLocaleString() }}
+                    </div>
+                 </div>
+                 <div class="hc-status" :class="{ paid: log.remaining_debt <= 0 }">
+                    {{ log.remaining_debt <= 0 ? '✓ LUNAS' : '⚠️ UTANG' }}
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           <div class="modal-footer">
+             <button class="btn-modal-primary" @click="showHistoryModal = false">CLOSE LOGS</button>
+           </div>
+        </div>
+      </div>
+    </Teleport>
+
+
+
     <!-- ADD/EDIT SLIDE-OVER -->
     <Teleport to="body">
       <div v-if="showAddModal" class="slide-over-overlay" @click.self="closeModal">
@@ -175,27 +277,25 @@
           <div class="so-body">
             <form @submit.prevent="submitSupplier" class="so-form">
               <div class="so-section">
-                <h3 class="so-section-title">🏢 BASIC INFORMATION</h3>
+                <h3 class="so-section-title">📘 BASIC INFORMATION</h3>
                 <div class="form-group">
                   <label>Vendor Name / Farm Name</label>
-                  <input type="text" v-model="form.name" placeholder="e.g. Farm Berkah Telur" required />
+                  <input type="text" v-model="form.name" v-titlecase placeholder="e.g. Farm Berkah Telur" class="premium-input-so" required />
                 </div>
 
                 <div class="form-group">
                   <label>Contact Person</label>
-                  <input type="text" v-model="form.contact_person" placeholder="e.g. Pak Haji Somad" />
+                  <input type="text" v-model="form.contact_person" v-titlecase placeholder="e.g. Pak Haji Somad" class="premium-input-so" />
                 </div>
 
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Phone / WhatsApp</label>
-                    <input type="text" v-model="form.phone" placeholder="08..." />
-                  </div>
+                <div class="form-group">
+                  <label>Phone / WhatsApp</label>
+                  <input type="text" v-model="form.phone" placeholder="08..." class="premium-input-so" />
                 </div>
 
                 <div class="form-group">
                   <label>Full Address</label>
-                  <textarea v-model="form.address" placeholder="Lokasi vendor..." rows="3"></textarea>
+                  <textarea v-model="form.address" v-titlecase placeholder="Lokasi vendor..." rows="3" class="premium-input-so"></textarea>
                 </div>
 
                 <div class="form-group">
@@ -204,6 +304,7 @@
                     :options="categoryOptions" 
                     label="Service / Category" 
                     placeholder="Pilih tipe supply..."
+                    class="premium-dropdown-so"
                   />
                   <p class="field-hint">Kategori ini akan menentukan filter pada saat pencatatan pembelian.</p>
                 </div>
@@ -214,7 +315,7 @@
               <!-- PRODUCT CATALOG SECTION -->
               <div class="so-section">
                 <div class="so-section-header">
-                  <h3 class="so-section-title">🗂️ PRODUCT CATALOG</h3>
+                  <h3 class="so-section-title">📂 PRODUCT CATALOG</h3>
                   <button type="button" class="btn-add-item-so" @click="addPriceItem">
                     <PlusIcon class="icon-xs" />
                     <span>TAMBAH PRODUK</span>
@@ -228,6 +329,7 @@
                       <input 
                         type="text" 
                         v-model="item.item_name" 
+                        v-titlecase
                         placeholder="Nama Item (misal: Telur Standard)" 
                         class="input-clean-so"
                       />
@@ -263,7 +365,7 @@
           <div class="so-footer">
             <button type="button" class="btn-secondary-so" @click="closeModal">Cancel</button>
             <button type="button" class="btn-primary-so" :disabled="submitting" @click="submitSupplier">
-              <TruckIcon class="icon-sm" />
+              <TruckIcon class="icon-md" v-if="!submitting" />
               <span>{{ submitting ? 'SAVING...' : (editingId ? 'UPDATE VENDOR' : 'SIMPAN VENDOR') }}</span>
             </button>
           </div>
@@ -292,7 +394,10 @@ import {
 } from 'lucide-vue-next';
 import CustomDropdown from '../components/ui/CustomDropdown.vue';
 import { useAuthStore } from '../stores/auth';
+import { useToast } from '../composables/useToast';
+import { sanitizePayload } from '../utils/sanitize';
 
+const { showToast } = useToast();
 const authStore = useAuthStore();
 const suppliers = ref<any[]>([]);
 const deletedSuppliers = ref<any[]>([]);
@@ -301,6 +406,17 @@ const showAddModal = ref(false);
 const submitting = ref(false);
 const inventory = ref<any[]>([]);
 const editingId = ref<string | null>(null);
+
+// Catalog Viewer State
+const showCatalogModal = ref(false);
+const catalogVendorName = ref('');
+const catalogData = ref<any[]>([]);
+// History Viewer State
+const showHistoryModal = ref(false);
+const historyVendorName = ref('');
+const deliveryHistory = ref<any[]>([]);
+const loadingHistory = ref(false);
+
 
 const categoryOptions = [
   { label: '🥚 Telur Hero', value: 'Telur Hero' },
@@ -437,7 +553,7 @@ async function submitSupplier() {
   submitting.value = true;
   
   // Clean payload from Reactive Proxy
-  const payload = JSON.parse(JSON.stringify(form));
+  const payload = sanitizePayload(JSON.parse(JSON.stringify(form)));
   console.log('Final Payload to Database:', payload);
   try {
     let result;
@@ -522,17 +638,38 @@ function removePriceItem(index: number) {
   form.price_list.splice(index, 1);
 }
 
-function viewDeliveries(vendor: any) {
-  alert('History deliveries from ' + vendor.name + ' feature is coming soon!');
+async function viewDeliveries(vendor: any) {
+  historyVendorName.value = vendor.name;
+  showHistoryModal.value = true;
+  loadingHistory.value = true;
+  deliveryHistory.value = [];
+
+  try {
+    const { data, error } = await supabase
+      .from('purchases')
+      .select('*')
+      .eq('supplier_id', vendor.id)
+      .order('purchase_date', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    deliveryHistory.value = data || [];
+  } catch (err: any) {
+    console.error('Failed to fetch history:', err);
+    showToast('Gagal mengambil riwayat pengiriman.', 'error');
+  } finally {
+    loadingHistory.value = false;
+  }
 }
 
 function viewCatalog(vendor: any) {
   if (!vendor.price_list || vendor.price_list.length === 0) {
-    alert('No items in catalog for ' + vendor.name);
+    showToast(`Vendor ${vendor.name} belum memiliki katalog produk.`, 'warning');
     return;
   }
-  const list = vendor.price_list.map((i: any) => `- ${i.item_name}: Rp ${i.price.toLocaleString()} / ${i.unit}`).join('\n');
-  alert(`Product Catalog - ${vendor.name}\n\n${list}`);
+  catalogVendorName.value = vendor.name;
+  catalogData.value = vendor.price_list;
+  showCatalogModal.value = true;
 }
 
 const route = useRoute();
@@ -783,6 +920,49 @@ watch(() => route.path, () => {
   opacity: 0.6;
 }
 
+.materials-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.m-tag {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.m-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.m-price {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.m-more {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-text-dim);
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
+.materials-empty {
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+  opacity: 0.4;
+  font-style: italic;
+}
+
 .debt-warning-box {
   margin-top: auto;
   padding: 14px 18px;
@@ -854,8 +1034,8 @@ watch(() => route.path, () => {
   left: 0;
   width: 100%;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
   z-index: 2000;
   display: flex;
   justify-content: flex-end;
@@ -863,17 +1043,17 @@ watch(() => route.path, () => {
 
 .slide-over-panel {
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   height: 100%;
   background: #09090b;
-  border-left: 1px solid var(--glass-border);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
-  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.5);
+  box-shadow: -40px 0 80px rgba(0, 0, 0, 0.8);
 }
 
 .animate-slide-left {
-  animation: slideLeft 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  animation: slideLeft 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slideLeft {
@@ -882,53 +1062,53 @@ watch(() => route.path, () => {
 }
 
 .so-header {
-  padding: 32px;
+  padding: 40px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .so-header-content {
   display: flex;
-  gap: 20px;
+  gap: 24px;
 }
 
 .so-icon-box {
-  width: 48px;
-  height: 48px;
-  background: rgba(45, 212, 191, 0.1);
-  border: 1px solid rgba(45, 212, 191, 0.2);
-  border-radius: 12px;
+  width: 52px;
+  height: 52px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.so-icon { color: #2dd4bf; width: 24px; height: 24px; }
+.so-icon { color: #10b981; width: 24px; height: 24px; }
 
-.so-title-area { display: flex; flex-direction: column; gap: 4px; }
-.so-title { font-size: 1.25rem; margin: 0; }
-.so-subtitle { font-size: 0.8rem; margin: 0; opacity: 0.6; }
+.so-title-area { display: flex; flex-direction: column; gap: 6px; }
+.so-title { font-size: 1.5rem; margin: 0; color: white; font-weight: 800; letter-spacing: -0.02em; }
+.so-subtitle { font-size: 0.85rem; margin: 0; color: rgba(255,255,255,0.4); }
 
 .btn-close-so {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  border: 1px solid var(--glass-border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-close-so:hover {
   background: white;
   color: black;
-  transform: rotate(90deg);
+  transform: rotate(90deg) scale(1.1);
 }
 
 .icon-close-rotate { transform: rotate(45deg); width: 16px; height: 16px; }
@@ -936,71 +1116,128 @@ watch(() => route.path, () => {
 .so-body {
   flex: 1;
   overflow-y: auto;
-  padding: 32px;
+  padding: 40px;
 }
 
 .so-section {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
 }
 
 .so-section-title {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 900;
-  letter-spacing: 0.15em;
-  color: var(--color-text-dim);
+  letter-spacing: 0.2em;
+  color: #38bdf8;
   margin-bottom: 8px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+}
+
+.premium-input-so {
+  width: 100%;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 14px 18px;
+  border-radius: 12px;
+  color: white;
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.premium-input-so:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1);
+}
+
+textarea.premium-input-so {
+  resize: vertical;
+  min-height: 100px;
 }
 
 .field-hint {
-  font-size: 0.7rem;
-  color: var(--color-text-dim);
-  opacity: 0.5;
-  margin-top: 4px;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.3);
+  margin-top: 6px;
+  line-height: 1.5;
 }
 
 .so-divider {
   height: 1px;
-  background: var(--glass-border);
-  margin: 32px 0;
+  background: rgba(255,255,255,0.04);
+  margin: 40px 0;
 }
 
 .so-footer {
-  padding: 32px;
+  padding: 32px 40px;
   display: flex;
   gap: 16px;
-  background: rgba(255, 255, 255, 0.02);
-  border-top: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.015);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .btn-secondary-so {
   flex: 1;
-  padding: 14px;
+  padding: 16px;
   border-radius: 12px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   background: transparent;
   color: white;
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 0.9rem;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary-so:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: white;
 }
 
 .btn-primary-so {
   flex: 2;
-  padding: 14px;
+  padding: 16px;
   border-radius: 12px;
   background: white;
   color: black;
   font-weight: 900;
+  font-size: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   border: none;
   cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-.btn-primary-so:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary-so:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.btn-primary-so:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-primary-so:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* CATALOG IN SO */
 .so-section-header {
@@ -1010,48 +1247,72 @@ watch(() => route.path, () => {
 }
 
 .btn-add-item-so {
-  background: rgba(45, 212, 191, 0.1);
-  border: 1px solid rgba(45, 212, 191, 0.2);
-  color: #2dd4bf;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 0.65rem;
-  font-weight: 800;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 850;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.05em;
+}
+
+.btn-add-item-so:hover {
+  background: #10b981;
+  color: white;
+  transform: scale(1.05);
 }
 
 .catalog-list-so {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  margin-top: -12px;
 }
 
 .catalog-entry-so {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 24px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  transition: border-color 0.2s;
+}
+
+.catalog-entry-so:focus-within {
+  border-color: #10b981;
 }
 
 .entry-main-so {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .input-clean-so {
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
-  font-size: 0.9rem !important;
+  font-size: 1rem !important;
   font-weight: 800 !important;
-  color: white;
+  color: white !important;
+  outline: none;
 }
+
+.input-clean-so::placeholder { color: rgba(255,255,255,0.25); }
 
 .entry-values-so {
   display: flex;
@@ -1062,14 +1323,14 @@ watch(() => route.path, () => {
   flex: 1;
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border);
-  padding: 8px 12px;
-  border-radius: 8px;
-  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 16px;
+  border-radius: 10px;
+  gap: 10px;
 }
 
-.prefix-so { font-size: 0.75rem; font-weight: 900; color: var(--gold); }
+.prefix-so { font-size: 12px; font-weight: 800; color: #10b981; }
 
 .price-input-wrap-so input {
   background: transparent !important;
@@ -1077,36 +1338,263 @@ watch(() => route.path, () => {
   width: 100% !important;
   color: white !important;
   font-weight: 700 !important;
+  outline: none;
+  font-family: 'DM Mono', monospace;
 }
 
 .unit-input-so {
-  width: 60px !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px dashed var(--glass-border) !important;
+  width: 70px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.15) !important;
+  padding: 10px !important;
+  border-radius: 10px !important;
   text-align: center !important;
+  font-size: 13px !important;
+  color: rgba(255,255,255,0.6) !important;
+  outline: none;
 }
 
 .btn-remove-entry-so {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.1);
   color: #ef4444;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-remove-entry-so:hover {
+  background: #ef4444;
+  color: white;
+  transform: scale(1.1);
 }
 
 .catalog-empty-hint-so {
-  padding: 32px;
+  padding: 40px;
   text-align: center;
-  color: var(--color-text-dim);
-  opacity: 0.5;
-  font-size: 0.8rem;
-  border: 2px dashed var(--glass-border);
-  border-radius: 16px;
+  color: rgba(255,255,255,0.2);
+  font-size: 0.9rem;
+  border: 2px dashed rgba(255,255,255,0.05);
+  border-radius: 20px;
 }
+
+/* MODAL SYSTEM */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  z-index: 2100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.modal-panel {
+  width: 100%;
+  max-width: 500px;
+  background: #0d0d0f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.mh-left { display: flex; gap: 20px; align-items: center; }
+
+.mh-icon-box {
+  width: 48px;
+  height: 48px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+}
+
+.mh-title-area { display: flex; flex-direction: column; gap: 4px; }
+.modal-title { font-size: 1.25rem; margin: 0; color: white; font-weight: 800; }
+.modal-subtitle { font-size: 0.85rem; margin: 0; color: rgba(255,255,255,0.4); }
+
+.btn-close-modal {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-close-modal:hover { background: white; color: black; transform: rotate(90deg); }
+
+.modal-body-scroll {
+  padding: 32px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.catalog-list-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.catalog-row-premium {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  transition: all 0.2s ease;
+}
+
+.catalog-row-premium:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(56, 189, 248, 0.3);
+  transform: scale(1.02);
+}
+
+.cr-info { display: flex; align-items: center; gap: 14px; }
+.cr-icon { font-size: 1.1rem; }
+.cr-name { font-size: 0.95rem; font-weight: 700; color: white; }
+
+.cr-price-area { text-align: right; display: flex; flex-direction: column; }
+.cr-price { font-size: 1rem; font-weight: 800; color: #38bdf8; }
+.cr-unit { font-size: 0.7rem; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.05em; }
+
+.modal-footer {
+  padding: 24px 32px;
+  background: rgba(255, 255, 255, 0.01);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.btn-modal-primary {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  background: white;
+  color: black;
+  font-weight: 950;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-modal-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+
+.animate-pop { animation: popModal 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes popModal { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+/* HISTORY SPECIFIC */
+.mh-icon-box.history {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.history-card-premium {
+  padding: 20px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.hc-date { display: flex; flex-direction: column; gap: 4px; }
+.hc-date .d-label { font-size: 8px; font-weight: 800; color: rgba(255,255,255,0.3); letter-spacing: 0.1em; }
+.hc-date .d-val { font-size: 0.9rem; font-weight: 800; color: white; }
+
+.hc-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #000;
+  border-radius: 12px;
+}
+
+.hc-product { display: flex; align-items: center; gap: 12px; }
+.p-badge-mini {
+  font-size: 9px;
+  font-weight: 850;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.6);
+}
+.p-badge-mini.hero { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.p-badge-mini.standard_size { background: rgba(139, 92, 246, 0.1); color: #a78bfa; }
+.p-badge-mini.salted_egg { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+
+.p-qty { font-size: 1.1rem; color: white; font-weight: 800; }
+.p-qty small { font-size: 0.6rem; opacity: 0.4; margin-left: 2px; }
+
+.hc-price { font-size: 1rem; font-weight: 800; color: #f59e0b; }
+
+.hc-status {
+  font-size: 10px;
+  font-weight: 900;
+  color: #ef4444;
+  text-align: right;
+  opacity: 0.8;
+}
+
+.hc-status.paid { color: #10b981; }
+
+.loading-state-so {
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: rgba(255,255,255,0.4);
+}
+
+.history-empty {
+  padding: 60px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: rgba(255,255,255,0.2);
+}
+
+.icon-xl { width: 48px; height: 48px; opacity: 0.1; }
+
 </style>
+
+
 

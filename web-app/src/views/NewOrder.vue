@@ -13,7 +13,7 @@
           v-for="item in sellableProducts" 
           :key="item.id" 
           class="stock-chip"
-          :class="[item.id, { 'out-of-stock-pulse': item.current_stock <= 0 }]"
+          :class="[item.id, getStockStatusClass(item)]"
         >
           <span class="chip-icon">🥚</span>
           <span class="chip-label">{{ item.label }}</span>
@@ -47,6 +47,7 @@
               <input 
                 type="text" 
                 v-model="customerSearch" 
+                v-titlecase
                 placeholder="Type name..." 
                 class="premium-input"
                 @focus="showCustResults = true"
@@ -82,7 +83,10 @@
         <div class="items-selection mt-32">
           <div class="step-indicator">STEP 2: PACKAGE SELECTION</div>
           <div class="pkg-grid-3" v-if="loading">
-            <SkeletonLoader v-for="i in 3" :key="i" type="card" height="120px" />
+            <div class="skeleton-wrap p-20 text-center">
+              <SkeletonLoader v-for="i in 3" :key="i" type="card" height="120px" />
+              <p class="loading-hint mt-12">{{ loadingMsg }}</p>
+            </div>
           </div>
           <div class="pkg-grid-3" v-else-if="sellableProducts.length > 0">
             <div 
@@ -102,6 +106,10 @@
               <div class="pkg-price">{{ formatCurrency(item.base_price_per_pack || 0) }}</div>
               <div class="pkg-glow" v-if="selectedEggType === item.id"></div>
             </div>
+          </div>
+          <div v-else class="empty-inventory-alert glass-panel p-20 text-center">
+            <p class="text-dim mb-12">Tidak ada produk tersedia atau gagal memuat data.</p>
+            <button @click="fetchData" class="btn-secondary btn-sm">RETRY DATA FETCH</button>
           </div>
         </div>
 
@@ -339,18 +347,25 @@ const authStore = useAuthStore();
 
 // GLOBAL UTILS
 // @ts-ignore
-import { GRADES } from '../constants/grades';
+import { GRADES, normalizeGrade, getGradeLabel } from '../constants/grades';
 // @ts-ignore
-import { formatCurrency, formatStock, formatPct } from '../utils/formatters';
+import { formatCurrency, formatStock, formatPct, toTitleCase } from '../utils/formatters';
 // @ts-ignore
 import { calcHppPerPack, calcMargin, calcMaxPacks } from '../utils/calculations';
 
-function getGradeLabel(id: string) {
-  if (id === 'hero_size') return GRADES.hero.label;
-  if (id === 'standard_size') return GRADES.medium.label;
-  if (id === 'small_size' || id === 'salted_egg') return GRADES.small.label;
-  return id;
-}
+// Custom directive for title case
+const vTitlecase = {
+  mounted(el: HTMLInputElement) {
+    el.addEventListener('input', (event: Event) => {
+      const target = event.target as HTMLInputElement;
+      target.value = toTitleCase(target.value);
+    });
+  },
+  updated(el: HTMLInputElement) {
+    // Ensure initial value is title cased if it changes programmatically
+    el.value = toTitleCase(el.value);
+  }
+};
 
 // 1. STATE
 const inventory = ref<any[]>([]);
@@ -386,16 +401,33 @@ const cart = ref<Array<{
 }>>([]);
 
 // 2. FETCHING
+const loadingMsg = ref('Initializing terminal...');
+
 async function fetchData() {
+  if (loading.value) return;
   loading.value = true;
+  loadingMsg.value = 'Connecting to inventory...';
+  
   try {
-    const { data: inv } = await supabase.from('inventory').select('*');
+    // 1. Fetch Inventory
+    const { data: inv, error: invErr } = await supabase.from('inventory').select('*');
+    if (invErr) throw invErr;
     if (inv) inventory.value = inv;
 
-    const { data: cust } = await supabase.from('customers').select('*').eq('is_deleted', false).order('name');
+    loadingMsg.value = 'Fetching CRM database...';
+    // 2. Fetch Customers (simplified to avoid missing columns errors)
+    const { data: cust, error: custErr } = await supabase.from('customers').select('*').limit(100);
+    if (custErr) {
+        console.warn('Customer fetch failed, proceeding anyway:', custErr);
+    }
     if (cust) customers.value = cust;
+    
+  } catch (err: any) {
+    console.error('Terminal Data Sync Error:', err);
+    showToast('Koneksi bermasalah: ' + (err.message || ''), 'error');
   } finally {
     loading.value = false;
+    loadingMsg.value = '';
   }
 }
 
@@ -403,15 +435,22 @@ async function fetchData() {
 const filteredCustomers = computed(() => {
   if (!customerSearch.value) return [];
   const q = customerSearch.value.toLowerCase();
-  return customers.value.filter(c => c.name.toLowerCase().includes(q));
+  return customers.value.filter(c => c.name?.toLowerCase().includes(q));
 });
 
 const sellableProducts = computed(() => {
-  // Order specifically: Hero, Medium (Standard), Small (implied or other)
-  const orderedIds = ['hero_size', 'standard_size', 'small_size'];
+  const canonicalIds = ['hero', 'salted_egg'];
+  // Deduplicate by canonical ID
+  const seen = new Set();
   return inventory.value
-    .filter(i => i.item_type === 'egg')
-    .sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
+    .filter(i => canonicalIds.includes(normalizeGrade(i.id)))
+    .filter(i => {
+      const cid = normalizeGrade(i.id);
+      if (seen.has(cid)) return false;
+      seen.add(cid);
+      return true;
+    })
+    .sort((a, b) => canonicalIds.indexOf(normalizeGrade(a.id)) - canonicalIds.indexOf(normalizeGrade(b.id)));
 });
 
 const maxStock = computed(() => inventory.value.find(i => i.id === selectedEggType.value)?.current_stock ?? 0);
@@ -419,6 +458,16 @@ const maxPacks = computed(() => calcMaxPacks(maxStock.value));
 
 const currentPrice = computed(() => inventory.value.find(i => i.id === selectedEggType.value)?.base_price_per_pack ?? 0);
 const currentTotal = computed(() => form.quantity * currentPrice.value);
+
+function getStockStatusClass(item: any) {
+  const current = item.current_stock || 0;
+  const safety = item.safety_stock || 20;
+  
+  if (current <= 0) return 'out-of-stock-pulse';
+  if (current <= safety) return 'status-critical';
+  if (current <= safety * 2) return 'status-low';
+  return 'status-safe';
+}
 
 const cartTotal = computed(() => cart.value.reduce((sum, item) => sum + item.subtotal, 0));
 
@@ -485,6 +534,9 @@ async function confirmSale() {
   confirmData.message = `Simpan transaksi sebesar ${formatCurrency(cartTotal.value)}?`;
   confirmData.onConfirm = async () => {
     loading.value = true;
+    loadingMsg.value = 'Mempersiapkan data...';
+    
+    // Snaphots for printing
     const cartSnapshot = cart.value.map(item => ({
       description: item.label,
       quantity: item.quantity,
@@ -496,30 +548,44 @@ async function confirmSale() {
 
     try {
       let finalCustomerId = selectedCustomerId.value;
+      loadingMsg.value = 'Verifikasi pelanggan...';
+
+      // 1. CRM Resolution
       if (!finalCustomerId && customerSearch.value) {
-        const { data: newCust, error: custError } = await supabase
-          .from('customers')
-          .insert([{ name: customerSearch.value, whatsapp_number: customerPhone.value }])
-          .select().single();
-        if (custError) throw custError;
-        finalCustomerId = newCust.id;
+        // Just use the name for the RPC, it handles creation
+        console.log('Using name-based resolution for:', customerSearch.value);
       }
 
-      const rpcPayload = {
-        p_customer_id: finalCustomerId,
-        p_customer_name: customerSearch.value,
-        p_items: cart.value.map(item => ({
-          inventory_id: item.id,
-          packs_sold: item.quantity,
-          override_price: item.price,
+      loadingMsg.value = 'Memproses transaksi (Siklus DB)...';
+      
+      const cleanItems = cart.value.map(item => {
+        // Map legacy/UI IDs to canonical DB IDs
+        const dbId = normalizeGrade(item.id);
+
+        return {
+          inventory_id: dbId,
+          packs_sold: Number(item.quantity) || 1,
+          override_price: Number(item.price) || 0,
           override_reason: item.overrideReason || null
-        })),
-        p_payment_type: form.paymentStatus,
-        p_due_date: form.paymentStatus === 'piutang' ? form.dueDate : null
+        };
+      });
+
+      const rpcPayload = {
+        p_customer_name: (customerSearch.value || 'Guest').trim(),
+        p_items: cleanItems,
+        p_payment_type: form.paymentStatus || 'tunai',
+        p_due_date: form.paymentStatus === 'piutang' ? (form.dueDate || new Date().toISOString().split('T')[0]) : null
       };
 
+      console.log('Sending RPC create_sale_v2 with:', rpcPayload);
       const { data: rpcResult, error: rpcError } = await supabase.rpc('create_sale_v2', rpcPayload);
-      if (rpcError) throw rpcError;
+      
+      if (rpcError) {
+          console.error('RPC Execution Error:', rpcError);
+          // provide cleaner error message to user
+          const msg = rpcError.message?.includes('unique') ? 'Nama pelanggan sudah ada di database.' : rpcError.message;
+          throw new Error(msg);
+      }
       if (rpcResult?.error) {
         showToast(rpcResult.error, 'error');
         return;
@@ -585,62 +651,148 @@ onMounted(fetchData);
   padding-bottom: 100px;
 }
 
-.white-title { color: white; font-weight: 700; font-size: 24px; }
-
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  margin-bottom: 32px;
 }
 
-/* STOCK BAR */
+.brand-tag {
+  color: #f59e0b;
+  letter-spacing: 0.25em;
+  font-size: 0.7rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.hero-font {
+  font-family: var(--font-headline);
+  font-size: 2.8rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.white-title { 
+  color: white; 
+}
+
+@media (max-width: 1024px) {
+  .hero-font {
+    font-size: 2.2rem;
+  }
+}
+
+/* ━━━ STOCK INDICATOR BAR (ELITE REDESIGN) ━━━ */
 .stock-bar {
   display: flex;
-  gap: 12px;
-  padding: 8px 20px;
-  border-radius: 40px;
-  background: rgba(255, 255, 255, 0.03);
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.02);
 }
 
 .stock-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
-  font-weight: 700;
+  gap: 10px;
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
   border: 1px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-.stock-chip.hero_size { 
-  background: rgba(245, 158, 11, 0.15); 
+.chip-icon {
+  font-size: 14px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.chip-label {
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.chip-val {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Product Themes */
+.stock-chip.hero { 
+  background: rgba(245, 158, 11, 0.03); 
   color: #f59e0b; 
-  border-color: rgba(245, 158, 11, 0.3);
+  border-color: rgba(245, 158, 11, 0.1);
 }
-.stock-chip.standard_size { 
-  background: rgba(139, 92, 246, 0.15); 
-  color: #8b5cf6; 
-  border-color: rgba(139, 92, 246, 0.3);
-}
-.stock-chip.small_size { 
-  background: rgba(56, 189, 248, 0.15); 
+
+.stock-chip.salted_egg { 
+  background: rgba(56, 189, 248, 0.03); 
   color: #38bdf8; 
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.1);
 }
 
+/* ━━━ STATUS THEMES ━━━ */
+.status-safe {
+  background: rgba(16, 185, 129, 0.05) !important;
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.status-low {
+  background: rgba(245, 158, 11, 0.05) !important;
+  color: #f59e0b !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+.status-critical {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* OUT OF STOCK BREATHING GLOW */
 .out-of-stock-pulse {
-  background: rgba(239, 68, 68, 0.15) !important;
-  color: #ef4444 !important;
-  border-color: #ef4444 !important;
-  animation: pulse-red 2s infinite;
+  background: rgba(239, 68, 68, 0.06) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  animation: breathing-glow 3s infinite ease-in-out;
 }
 
-@keyframes pulse-red {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+.out-of-stock-pulse .chip-val {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: white !important;
+}
+
+@keyframes breathing-glow {
+  0% { 
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 15px 0 rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.6);
+  }
+  100% { 
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
 }
 
 /* LAYOUT */
@@ -841,23 +993,58 @@ onMounted(fetchData);
 
 /* DUE DATE ALERT */
 .due-date-alert {
-  background: rgba(245, 158, 11, 0.05);
-  border: 1px dashed rgba(245, 158, 11, 0.3);
-  padding: 20px;
-  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.03);
+  border: 1px dashed rgba(245, 158, 11, 0.2);
+  padding: 24px;
+  border-radius: 20px;
 }
 
-.alert-title { font-size: 13px; font-weight: 800; color: #f59e0b; margin-bottom: 12px; }
-.alert-hint { font-size: 11px; color: var(--color-text-dim); margin-top: 8px; }
+.alert-title { 
+  font-size: 14px; 
+  font-weight: 800; 
+  color: #f59e0b; 
+  margin-bottom: 16px; 
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alert-hint { 
+  font-size: 11px; 
+  color: rgba(255,255,255,0.4); 
+  margin-top: 12px; 
+}
 
 .premium-input-date {
   width: 100%;
-  background: rgba(0,0,0,0.2);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  padding: 12px;
-  border-radius: 8px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 14px 18px;
+  border-radius: 12px;
   color: white;
-  font-family: inherit;
+  font-family: 'DM Mono', monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.premium-input-date:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
+}
+
+/* Customizing the native calendar icon */
+.premium-input-date::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.premium-input-date::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 /* CART SUMMARY V2 */
@@ -973,6 +1160,10 @@ onMounted(fetchData);
 
 .preview-actions { display: flex; gap: 16px; }
 
+.search-input-wrapper {
+  position: relative;
+}
+
 .search-results-menu {
   position: absolute;
   top: 100%;
@@ -1007,7 +1198,13 @@ onMounted(fetchData);
 .mt-40 { margin-top: 40px; }
 .flex-1 { flex: 1; }
 .text-right { text-align: right; }
+.text-center { text-align: center; }
 .spin { animation: spin 1s linear infinite; }
+
+.skeleton-wrap { width: 100%; border: 1px dashed var(--glass-border); border-radius: 20px; }
+.loading-hint { font-size: 0.8rem; font-weight: 700; color: #f59e0b; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
 @keyframes spin { from {transform: rotate(0deg);} to {transform: rotate(360deg);} }
 
 @media (max-width: 1024px) {

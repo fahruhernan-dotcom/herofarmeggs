@@ -135,9 +135,9 @@
                       v-for="item in order.sale_items" 
                       :key="item.id" 
                       class="i-chip"
-                      :class="item.egg_type"
+                      :class="normalizeGrade(item.inventory_id || item.egg_type)"
                     >
-                      {{ getGradeLabel(item.egg_type) }}
+                      {{ getGradeLabel(item.inventory_id || item.egg_type) }}
                     </span>
                   </div>
                 </td>
@@ -410,10 +410,10 @@ import { ref, reactive, computed, onMounted, onUnmounted, markRaw } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 // @ts-ignore
-import { GRADES } from '../constants/grades';
+import { GRADES, getGradeLabel as getGlobalLabel } from '../constants/grades';
 // @ts-ignore
 import { formatCurrency, formatRelativeDate, formatExactTime } from '../utils/formatters';
-import { generateInvoiceHTML } from '../utils/invoiceTemplate';
+import { generateInvoicePDF } from '../utils/generateInvoice';
 import { useToast } from '../composables/useToast';
 import SkeletonLoader from '../components/ui/SkeletonLoader.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
@@ -532,10 +532,7 @@ const fulfillmentOptions = [
 ];
 
 function getGradeLabel(id: string) {
-  if (id === 'hero_size') return GRADES.hero.label;
-  if (id === 'standard_size' || id === 'medium_size') return GRADES.medium.label;
-  if (id === 'small_size' || id === 'salted_egg') return GRADES.small.label;
-  return id;
+  return getGlobalLabel(id);
 }
 
 // ─── COMPUTED ───────────────────────
@@ -906,30 +903,29 @@ async function quickUpdateStatus(order: any, field: string, newValue: string) {
   }
 }
 
-function printFromOrder(order: any) {
-  const invoiceData = {
-    invoiceNo: `EP-${new Date(order.created_at).getFullYear()}${String(new Date(order.created_at).getMonth() + 1).padStart(2, '0')}${String(new Date(order.created_at).getDate()).padStart(2, '0')}${String(order.id).slice(-3).toUpperCase()}`,
-    date: new Date(order.created_at).toLocaleDateString('id-ID'),
-    customerName: order.customers?.name || 'Guest Customer',
-    customerPhone: order.customers?.whatsapp_number || '',
-    items: (order.sale_items || []).map((item: any) => ({
-      description: getGradeLabel(item.egg_type),
-      quantity: item.quantity,
-      unit: 'Pack',
-      price: item.unit_price,
-      total: item.subtotal
-    })),
-    grandTotal: order.total_price || 0
-  };
+async function printFromOrder(order: any) {
+  try {
+    const invoiceData = {
+      invoiceNumber: `EP-${new Date(order.created_at).getFullYear()}${String(new Date(order.created_at).getMonth() + 1).padStart(2, '0')}${String(new Date(order.created_at).getDate()).padStart(2, '0')}${String(order.id).slice(-3).toUpperCase()}`,
+      date: new Date(order.created_at).toLocaleDateString('id-ID'),
+      customerName: order.customers?.name || 'Guest Customer',
+      customerPhone: order.customers?.whatsapp_number || '',
+      customerAddress: order.customers?.address || '',
+      items: (order.sale_items || []).map((item: any) => ({
+        product_name: getGradeLabel(item.egg_type),
+        quantity: item.quantity,
+        unit: 'Pack',
+        unit_price: item.unit_price,
+        subtotal: item.subtotal
+      })),
+      total: order.total_price || 0,
+      notes: order.notes || ''
+    };
 
-  const html = generateInvoiceHTML(invoiceData);
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
+    await generateInvoicePDF(invoiceData);
+    showToast('Invoice PDF generated successfully.', 'success');
+  } catch (err: any) {
+    showToast('Failed to generate PDF: ' + err.message, 'error');
   }
 }
 
@@ -1175,9 +1171,8 @@ onUnmounted(() => {
   border: 1px solid rgba(255,255,255,0.1);
 }
 
-.i-chip.hero_size { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
-.i-chip.standard_size { color: #8b5cf6; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); }
-.i-chip.small_size { color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.2); }
+.i-chip.hero { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
+.i-chip.salted_egg { color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.2); }
 
 .order-id { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: white; position: relative; font-size: 0.8rem; }
 .cust-name { font-weight: 700; font-size: 0.85rem; }
@@ -1916,9 +1911,8 @@ onUnmounted(() => {
   .omc-time { font-size: 10px; color: var(--muted); }
   .items-mini { display: flex; gap: 4px; align-items: center; }
   .i-dot { width: 6px; height: 6px; border-radius: 50%; }
-  .i-dot.hero_size { background: var(--gold); }
-  .i-dot.standard_size { background: var(--violet); }
-  .i-dot.small_size { background: var(--sky); }
+  .i-dot.hero { background: var(--gold); }
+  .i-dot.salted_egg { background: var(--sky); }
   .i-more { font-size: 9px; color: var(--muted); font-weight: 800; }
 }
 </style>

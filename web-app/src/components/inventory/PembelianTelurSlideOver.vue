@@ -12,13 +12,32 @@
           </div>
 
           <div class="so-body">
+            <!-- PRODUCT SELECTOR -->
+            <div class="fg">
+              <label class="fg-label">PRODUK YANG DIBELI</label>
+              <div class="product-selector">
+                <div class="product-option" 
+                     :class="{ selected: form.product_id === 'hero' }" 
+                     @click="form.product_id = 'hero'">
+                  <div class="po-icon">🥚</div>
+                  <div class="po-text">Telur Hero</div>
+                </div>
+                <div class="product-option" 
+                     :class="{ selected: form.product_id === 'salted_egg' }" 
+                     @click="form.product_id = 'salted_egg'">
+                  <div class="po-icon">🧂</div>
+                  <div class="po-text">Salted Egg</div>
+                </div>
+              </div>
+            </div>
+
             <!-- SUPPLIER -->
             <div class="fg">
               <label class="fg-label">SUPPLIER</label>
               <CustomDropdown
                 v-model="form.supplier_id"
                 :options="supplierOptions"
-                placeholder="Pilih supplier telur..."
+                placeholder="Pilih supplier..."
                 search-placeholder="Cari nama supplier..."
               />
               <span v-if="autoFilledPrice" class="price-hint">💡 Harga dari katalog: {{ formatCurrency(autoFilledPrice) }}</span>
@@ -60,7 +79,7 @@
               </div>
               <div class="calc-row small">
                 <span>HPP per Pack (10B)</span>
-                <span class="calc-val dim">{{ formatCurrency(form.price_per_egg * 10 * 1.073) }}</span>
+                <span class="calc-val dim">{{ formatCurrency(previewHppPack) }}</span>
               </div>
             </div>
 
@@ -78,7 +97,7 @@
             <!-- NOTES -->
             <div class="fg">
               <label class="fg-label">CATATAN BATCH</label>
-              <textarea v-model="form.notes" rows="2" class="fg-input fg-textarea" placeholder="Contoh: Batch 02/Mar/2026 - Kualitas A"></textarea>
+              <textarea v-model="form.notes" v-titlecase rows="2" class="fg-input fg-textarea" placeholder="Contoh: Batch 02/Mar/2026 - Kualitas A"></textarea>
             </div>
           </div>
 
@@ -89,7 +108,7 @@
               :disabled="!canSubmit || submitting"
               @click="handleSubmit"
             >
-              {{ submitting ? 'MEMPROSES...' : 'SIMPAN & LANJUT KE GRADING →' }}
+              {{ submitting ? 'MEMPROSES...' : 'SIMPAN PEMBELIAN & MASUK STOK' }}
             </button>
           </div>
         </div>
@@ -101,10 +120,10 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
 import { supabase } from '../../lib/supabase';
-// @ts-ignore
 import { formatCurrency } from '../../utils/formatters';
 import { useToast } from '../../composables/useToast';
 import CustomDropdown from '../ui/CustomDropdown.vue';
+import { sanitizePayload } from '../../utils/sanitize';
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{
@@ -114,9 +133,10 @@ const emit = defineEmits<{
 
 const { showToast } = useToast();
 const submitting = ref(false);
-const filteredSuppliers = ref<any[]>([]);
+const allSuppliers = ref<any[]>([]);
 
 const form = reactive({
+  product_id: 'hero',
   supplier_id: '',
   total_eggs: 0,
   price_per_egg: 0,
@@ -124,12 +144,26 @@ const form = reactive({
   notes: ''
 });
 
+// Reset supplier if product changes
+watch(() => form.product_id, () => {
+  form.supplier_id = '';
+  autoFilledPrice.value = 0;
+});
+
 const supplierOptions = computed(() => {
-  return filteredSuppliers.value.map(s => ({
-    label: s.name,
-    value: s.id,
-    sublabel: s.category || 'Supplier Telur'
-  }));
+  return allSuppliers.value
+    .filter(s => {
+      const cat = (s.category || '').toLowerCase();
+      // Broaden matching logic to prevent empty list if categories are slightly different
+      if (form.product_id === 'hero') return cat.includes('hero') || cat.includes('bebek') || cat === 'telur';
+      if (form.product_id === 'salted_egg') return cat.includes('salted') || cat.includes('asin');
+      return true;
+    })
+    .map(s => ({
+      label: s.name,
+      value: s.id,
+      sublabel: s.category || 'Supplier Telur'
+    }));
 });
 
 const totalCost = computed(() => form.total_eggs * form.price_per_egg);
@@ -146,26 +180,21 @@ const dpStatus = computed(() => {
 });
 
 async function fetchSuppliers() {
-  // Fetch suppliers that are egg suppliers
   const { data } = await supabase
     .from('suppliers')
     .select('id, name, category, price_list')
     .eq('is_deleted', false)
     .order('name');
   
-  if (data) {
-    // Filter to egg-related categories
-    filteredSuppliers.value = data.filter(s => {
-      const cat = (s.category || '').toLowerCase();
-      return cat.includes('telur') || cat.includes('egg') || cat.includes('ayam');
-    });
-  }
+  if (data) Object.assign(allSuppliers.value, data);
 }
 
 watch(() => props.show, (val) => {
   if (val) {
     fetchSuppliers();
+    fetchSupplyCosts(); // Fetch latest supply costs when sliding over
     // Reset form
+    form.product_id = 'hero';
     form.supplier_id = '';
     form.total_eggs = 0;
     form.price_per_egg = 0;
@@ -177,7 +206,7 @@ watch(() => props.show, (val) => {
 
 watch(() => form.supplier_id, (id) => {
   if (!id) { autoFilledPrice.value = 0; return; }
-  const supplier = filteredSuppliers.value.find(s => s.id === id);
+  const supplier = allSuppliers.value.find(s => s.id === id);
   if (supplier?.price_list?.length) {
     const eggItem = supplier.price_list.find((p: any) => 
       p.item_name?.toLowerCase().includes('telur') || p.item_name?.toLowerCase().includes('egg')
@@ -189,37 +218,56 @@ watch(() => form.supplier_id, (id) => {
   }
 });
 
+const supplyCosts = reactive({
+  packaging: 0,
+  sticker: 0,
+  card: 0
+});
+
+async function fetchSupplyCosts() {
+  const { data } = await supabase
+    .from('inventory')
+    .select('id, cost_per_egg')
+    .in('id', ['packaging_standard', 'sticker_label', 'mini_card']);
+  
+  if (data) {
+    supplyCosts.packaging = data.find(i => i.id === 'packaging_standard')?.cost_per_egg || 0;
+    supplyCosts.sticker = data.find(i => i.id === 'sticker_label')?.cost_per_egg || 0;
+    supplyCosts.card = data.find(i => i.id === 'mini_card')?.cost_per_egg || 0;
+  }
+}
+
+const previewHppPack = computed(() => {
+  return (form.price_per_egg * 10) + supplyCosts.packaging + supplyCosts.sticker + supplyCosts.card;
+});
+
 async function handleSubmit() {
   if (!canSubmit.value || submitting.value) return;
   submitting.value = true;
   try {
+    const cleanPayload = sanitizePayload({ notes: form.notes });
     const { data, error } = await supabase.rpc('create_purchase_with_utang', {
       p_supplier_id: form.supplier_id,
       p_total_eggs: form.total_eggs,
       p_price_per_egg: form.price_per_egg,
       p_amount_paid: form.amount_paid || 0,
-      p_notes: form.notes || null
+      p_notes: cleanPayload.notes || null,
+      p_product_id: form.product_id
     });
     if (error) throw error;
     if (data?.error) { showToast(data.error, 'error'); return; }
 
-    const supplierName = filteredSuppliers.value.find(s => s.id === form.supplier_id)?.name || 'Supplier';
+    const supplierName = allSuppliers.value.find(s => s.id === form.supplier_id)?.name || 'Supplier';
     showToast(`✓ Pembelian dicatat — ${formatCurrency(totalCost.value)} | Utang: ${formatCurrency(sisaUtang.value)} ke ${supplierName}`, 'success');
 
-    // Fetch created purchase for grading
-    const { data: newPurchase } = await supabase
-      .from('purchases')
-      .select('*')
-      .eq('id', data.purchase_id)
-      .single();
-
-    emit('purchaseCreated', newPurchase || { id: data.purchase_id, total_eggs_bought: form.total_eggs, supplier_id: form.supplier_id });
+    emit('purchaseCreated', { id: data.purchase_id, total_eggs_bought: form.total_eggs, supplier_id: form.supplier_id });
   } catch (err: any) {
     showToast('Gagal: ' + (err.message || ''), 'error');
   } finally {
     submitting.value = false;
   }
 }
+
 </script>
 
 <style scoped>
@@ -458,4 +506,42 @@ async function handleSubmit() {
 
 .btn-gold:hover:not(:disabled) { filter: brightness(1.1); transform: scale(1.02); }
 .btn-gold:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.product-selector {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.product-option {
+  flex: 1;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.product-option:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.product-option.selected {
+  background: rgba(245,158,11,0.1);
+  border-color: #f59e0b;
+}
+
+.po-icon {
+  font-size: 24px;
+}
+
+.po-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+}
 </style>

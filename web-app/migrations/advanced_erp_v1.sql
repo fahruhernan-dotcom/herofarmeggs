@@ -6,27 +6,12 @@ ALTER TABLE sales
 ADD COLUMN IF NOT EXISTS stock_reserved BOOLEAN DEFAULT false,
 ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
 
--- 2. Price Overrides Audit Table
-CREATE TABLE IF NOT EXISTS price_overrides (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sale_id UUID REFERENCES sales(id) ON DELETE CASCADE,
-    product_id TEXT NOT NULL,
-    original_price NUMERIC NOT NULL,
-    override_price NUMERIC NOT NULL,
-    override_by TEXT NOT NULL,
-    override_at TIMESTAMPTZ DEFAULT now()
-);
+-- 2. Price Overrides Audit Table (Ensure references match inventory_id)
+-- Already defined in 20260303_operational_upgrades.sql, 
+-- but we make sure any logic here uses the correct naming.
 
--- 3. Price History Tracking Table
-CREATE TABLE IF NOT EXISTS price_history (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    product_id TEXT NOT NULL,
-    price_type TEXT NOT NULL, -- 'selling' or 'hpp'
-    old_price NUMERIC,
-    new_price NUMERIC,
-    changed_by TEXT,
-    changed_at TIMESTAMPTZ DEFAULT now()
-);
+-- 3. Price History Tracking Table 
+-- Already defined in 20260303_operational_upgrades.sql
 
 -- 4. Soft Delete for Core Entities
 ALTER TABLE suppliers 

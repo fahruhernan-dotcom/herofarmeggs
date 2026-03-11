@@ -53,80 +53,84 @@
 
     <div v-if="activeTab === 'inventory'" class="tab-content animate-fade">
       <!-- ━━━ SECTION: PRIMARY PRODUCTS ━━━ -->
-      <section class="inventory-section">
-        <div class="section-header-flex">
-          <div class="section-badge pulse-gold">PRIMARY PRODUCTS</div>
-          <button 
-            v-if="authStore.isAdmin"
-            class="btn-recalculate" 
-            @click="recalculateAllHPP"
-            :disabled="recalculating"
-          >
-            <RefreshCwIcon :class="{ 'animate-spin': recalculating }" class="icon-xs" />
-            <span>{{ recalculating ? 'RECALCULATING...' : '⟳ RECALCULATE ALL HPP' }}</span>
-          </button>
+      <section class="inventory-section section-primary-products">
+        <div class="section-header">
+          <div class="section-header-left">
+            <span class="section-badge">PRIMARY PRODUCTS</span>
+            <div class="section-divider-line"></div>
+          </div>
+          <div class="section-header-right" style="display:flex; gap:12px;">
+            <div class="search-box-mini glass-panel">
+              <SearchIcon class="icon-xs" />
+              <input v-model="searchInventoryQuery" placeholder="Cari produk..." />
+            </div>
+            <button 
+              v-if="authStore.isAdmin"
+              class="btn-recalculate" 
+              @click="recalculateAllHPP"
+              :disabled="recalculating"
+            >
+              <RefreshCwIcon :class="{ 'animate-spin': recalculating }" class="icon-xs" />
+              <span>{{ recalculating ? 'RECALCULATING...' : '⟳ RECALCULATE HPP' }}</span>
+            </button>
+          </div>
         </div>
 
-        <div class="inventory-grid" v-if="loading">
-          <div v-for="i in 3" :key="i" class="skeleton-card-inventory"></div>
+        <div class="primary-products-grid" v-if="loading">
+          <div v-for="i in 2" :key="i" class="skeleton-card-inventory"></div>
         </div>
 
-        <div class="inventory-grid" v-else-if="eggInventory.length > 0">
-          <div v-for="item in eggInventory" :key="item.id" class="grade-card glass-panel" :class="item.id">
+        <div class="primary-products-grid" v-else-if="eggInventory.length > 0">
+          <div v-for="item in eggInventory" :key="item.id" class="product-card">
             <!-- TOP ROW: GRADE & STATUS -->
-            <div class="gc-header">
-              <span class="grade-chip" :class="getChipClass(item.id)">{{ getGradeLabel(item.id) }}</span>
-              <div class="status-badge" :class="getStockStatus(item).class">
-                <span v-if="getStockStatus(item).class === 'kritis'" class="dot-pulse"></span>
+            <div class="card-header">
+              <span class="card-name" :class="getChipClass(item.id)">{{ getGradeLabel(item.id) }}</span>
+              <div class="status-badge" :class="`badge-${getStockStatus(item).class}`">
+                <span v-if="getStockStatus(item).class === 'kritis'" class="dot-pulse" style="margin-right:6px"></span>
                 {{ getStockStatus(item).label }}
               </div>
             </div>
 
-            <!-- MAIN STOCK INFO -->
-            <div class="gc-main">
-              <div class="stock-display">
-                <h2 class="stock-val-large font-mono">{{ formatStockCount(item.current_stock) }}</h2>
-                <span class="stock-unit">butir</span>
-              </div>
+            <!-- BIG NUMBER & PROGRESS -->
+            <div class="stock-display">
+              <h2 class="stock-number">{{ formatStockCount(item.current_stock) }}</h2>
+              <span class="stock-unit">butir</span>
+            </div>
 
-              <!-- PROGRESS BAR -->
-              <div class="progress-container">
-                <div class="progress-meta">
-                  <span class="pack-count font-mono">{{ calcMaxPacks(item.current_stock) }} PACK</span>
-                </div>
-                <div class="progress-track">
-                  <div class="progress-bar" 
-                    :class="getStockStatus(item).class"
-                    :style="{ width: getStockProgress(item) + '%' }">
-                  </div>
-                </div>
+            <div class="pack-count">{{ calcMaxPacks(item.current_stock) }} PACK</div>
+
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" 
+                :class="`bg-${getStockStatus(item).class}`"
+                :style="{ width: getStockProgress(item) + '%' }">
               </div>
             </div>
 
             <!-- MICRO STATS GRID -->
-            <div class="gc-stats-grid">
-              <div class="ms-item">
-                <span class="ms-label">RETAIL</span>
-                <span class="ms-val font-mono">{{ formatCurrency(item.retail_price_per_pack || item.base_price_per_pack) }}</span>
+            <div class="metrics-row">
+              <div class="metric-item">
+                <span class="metric-label">RETAIL</span>
+                <span class="metric-value">{{ formatCurrency(item.retail_price_per_pack || item.base_price_per_pack) }}</span>
               </div>
-              <div class="ms-item">
-                <span class="ms-label">HPP/BUTIR</span>
-                <span class="ms-val font-mono">{{ formatCurrency(item.hpp_per_egg || item.cost_per_egg) }}</span>
+              <div class="metric-item">
+                <span class="metric-label">HPP/BUTIR</span>
+                <span class="metric-value">{{ formatCurrency(item.hpp_per_egg || item.cost_per_egg) }}</span>
               </div>
-              <div class="ms-item">
-                <span class="ms-label">HPP/PACK</span>
-                <span class="ms-val font-mono">{{ formatCurrency((item.hpp_per_egg || item.cost_per_egg) * 10 * 1.073) }}</span>
+              <div class="metric-item">
+                <span class="metric-label">HPP/PACK</span>
+                <span class="metric-value">{{ formatCurrency((item.cost_per_egg * 10) + (item.cost_per_packaging || 0) + (item.cost_per_sticker || 0) + (item.cost_per_card || 0)) }}</span>
               </div>
             </div>
 
             <!-- BOTTOM ROW: SAFETY & ACTION -->
-            <div class="gc-footer">
+            <div class="card-footer">
               <div class="safety-info">
-                <span class="info-label">Safety:</span>
-                <span class="info-val font-mono">{{ item.safety_stock || 20 }} butir</span>
+                <span class="safety-label">Safety:</span>
+                <span class="safety-value">{{ item.safety_stock || 20 }} butir</span>
               </div>
-              <button class="btn-adjust" @click="quickAdjust(item.id)">
-                <span>ADJUST STOCK</span>
+              <button class="manage-btn" @click="quickAdjust(item.id)">
+                <SettingsIcon class="icon-xs" />
+                <span>MANAGE</span>
               </button>
             </div>
           </div>
@@ -135,40 +139,52 @@
       </section>
 
       <!-- ━━━ SECTION: SUPPLIES & PACKAGING ━━━ -->
-      <section class="inventory-section">
-        <div class="section-badge">SUPPLIES & PACKAGING</div>
-        <div class="inventory-grid mt-6" v-if="loading">
+      <section class="inventory-section section-supplies">
+        <div class="section-header">
+          <div class="section-header-left">
+            <span class="section-badge">SUPPLIES & PACKAGING</span>
+            <div class="section-divider-line"></div>
+          </div>
+          <div class="section-header-right"></div>
+        </div>
+        
+        <div class="supplies-grid" v-if="loading">
           <div v-for="i in 3" :key="i" class="skeleton-card-inventory mini"></div>
         </div>
-        <div class="inventory-grid mt-6" v-else-if="supplyInventory.length > 0">
-          <div v-for="item in supplyInventory" :key="item.id" class="grade-card glass-panel supply-card">
-            <div class="gc-header">
-              <span class="supply-label">{{ item.label }}</span>
-              <div class="status-badge" :class="item.current_stock <= (item.safety_stock || 20) ? 'low' : 'optimal'">
+        
+        <div class="supplies-grid" v-else-if="supplyInventory.length > 0">
+          <div v-for="item in supplyInventory" :key="item.id" class="supply-card">
+            <div class="card-header">
+              <span class="card-name">{{ item.label }}</span>
+              <div class="status-badge" :class="item.current_stock <= (item.safety_stock || 20) ? 'badge-low' : 'badge-optimal'">
                 {{ item.current_stock <= (item.safety_stock || 20) ? 'LOW' : 'OPTIMAL' }}
               </div>
             </div>
 
-            <div class="gc-main mini">
-              <h2 class="stock-val-medium font-mono text-green">{{ item.current_stock }}</h2>
-              <span class="stock-unit-mini">units</span>
-              <div class="progress-track mini">
-                <div class="progress-bar optimal" :style="{ width: Math.min((item.current_stock/60)*100, 100) + '%' }"></div>
+            <div class="stock-display" style="gap: 6px;">
+              <h2 class="stock-number" style="color: #10b981;">{{ item.current_stock }}</h2>
+              <span class="stock-unit">units</span>
+            </div>
+
+            <div class="progress-bar-track" style="margin-top: 12px; margin-bottom: 24px;">
+              <div class="progress-bar-fill bg-optimal" :style="{ width: Math.min((item.current_stock / (item.safety_stock * 3 || 60)) * 100, 100) + '%' }"></div>
+            </div>
+
+            <div class="metrics-row" style="grid-template-columns: 1fr;">
+              <div class="metric-item">
+                <span class="metric-label">Effective Cost:</span>
+                <span class="metric-value">{{ formatCurrency(item.cost_per_egg || 0) }}</span>
               </div>
             </div>
 
-            <div class="gc-stats-mini">
-              <span class="ms-label">Effective Cost:</span>
-              <span class="ms-val font-mono">{{ formatCurrency(item.cost_per_egg || 0) }}</span>
-            </div>
-
-            <div class="gc-footer">
+            <div class="card-footer">
               <div class="safety-info">
-                <span class="info-label">Safety:</span>
-                <span class="info-val font-mono">{{ item.safety_stock || 20 }}</span>
+                <span class="safety-label">Safety:</span>
+                <span class="safety-value">{{ item.safety_stock || 20 }} units</span>
               </div>
-              <button class="btn-restock-outline" @click="openPackagingPurchase(item)">
-                <span>RESTOCK</span>
+              <button class="supply-manage-btn" @click="openPackagingPurchase(item)">
+                <PlusIcon class="icon-xs" />
+                <span>MANAGE</span>
               </button>
             </div>
           </div>
@@ -177,69 +193,136 @@
       </section>
 
     <!-- ━━━ SECTION: AUDIT TRAIL ━━━ -->
-    <section class="logs-section glass-panel elevated">
-      <div class="logs-header-elite">
+    <section class="audit-trail-section glass-panel">
+      <div class="audit-header">
         <div>
-          <h3 class="hero-font text-heading">Audit Trail</h3>
-          <span class="text-muted text-xs">Last 20 operations</span>
+          <h3 class="audit-title hero-font">Audit Trail</h3>
+          <span class="audit-subtitle">Last 20 operations</span>
+        </div>
+        <div class="search-box-mini glass-panel audit-search">
+          <SearchIcon class="icon-xs" />
+          <input v-model="searchAuditLogQuery" placeholder="Filter log..." />
         </div>
       </div>
       
-      <div class="logs-container mt-6">
+      <div class="audit-table-wrapper">
+        <!-- FILTER PILLS -->
+        <div class="filter-pills mb-4">
+          <button
+            v-for="type in ['ALL', 'ARRIVAL', 'SALE', 'SALE_OUT', 'MANUAL_ADJUSTMENT', 'OPNAME']"
+            :key="type"
+            class="filter-pill"
+            :class="{ active: activeAuditFilter === type }"
+            :style="activeAuditFilter === type ? {
+              background: getAuditConfig(type).bg,
+              borderColor: getAuditConfig(type).border,
+              color: getAuditConfig(type).text
+            } : {}"
+            @click="activeAuditFilter = type"
+          >
+            {{ type.replace('_', ' ') }}
+          </button>
+        </div>
+
         <div v-if="loading" class="skeleton-table-rows">
           <div v-for="i in 5" :key="i" class="skeleton-row"></div>
         </div>
         
         <div v-else-if="logs.length > 0">
-          <!-- 🖥️ DESKTOP TABLE -->
-          <table class="audit-table table-desktop">
-            <thead>
-              <tr>
-                <th>TIMESTAMP</th>
-                <th>TYPE</th>
-                <th>CHANGE</th>
-                <th>REASON</th>
-                <th>ADMIN</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="log in logs" :key="log.id" class="audit-row">
-                <td class="time-cell font-mono">
-                  <span class="rel-time">{{ formatRelativeDate(log.created_at) }}</span>
-                  <span class="exact-time">• {{ formatExactTime(log.created_at) }}</span>
-                </td>
-                <td class="type-cell">
-                  <span class="audit-badge" :class="log.log_type.toLowerCase()">
-                    {{ log.log_type.toUpperCase().replace('_', ' ') }}
-                  </span>
-                </td>
-                <td class="change-cell font-mono" :class="log.change > 0 ? 'text-green' : 'text-red'">
+          <!-- 🖥️ PREMIUM GRID LIST (DESKTOP) -->
+          <div class="audit-list-premium table-desktop">
+            <div class="audit-header-grid">
+              <span>TIMESTAMP</span>
+              <span>TYPE</span>
+              <span>CHANGE</span>
+              <span>REASON</span>
+              <span>ADMIN</span>
+            </div>
+            
+            <div
+              v-for="log in filteredLogs"
+              :key="log.id"
+              class="audit-row"
+              :class="{ 'is-void': log.log_type?.includes('void') }"
+              :style="{
+                background: getAuditConfig(log.log_type).rowBg,
+                borderLeft: `3px solid ${getAuditConfig(log.log_type).rowBorder}`
+              }"
+            >
+              <!-- TIMESTAMP -->
+              <div class="col-timestamp">
+                <span class="time-relative">{{ formatRelativeDate(log.created_at) }}</span>
+                <span class="time-exact">• {{ formatExactTime(log.created_at) }}</span>
+              </div>
+
+              <!-- TYPE BADGE -->
+              <div class="col-type">
+                <span
+                  class="type-badge"
+                  :style="{
+                    background: getAuditConfig(log.log_type).bg,
+                    border: `1px solid ${getAuditConfig(log.log_type).border}`,
+                    color: getAuditConfig(log.log_type).text
+                  }"
+                >
+                  <span class="type-icon">{{ getAuditConfig(log.log_type).icon }}</span>
+                  {{ log.log_type?.replace('_', ' ').toUpperCase() }}
+                </span>
+              </div>
+
+              <!-- CHANGE -->
+              <div class="col-change">
+                <span
+                  class="change-value"
+                  :class="{
+                    'is-positive': log.change > 0,
+                    'is-negative': log.change < 0,
+                    'is-zero': log.change === 0
+                  }"
+                >
                   {{ log.change > 0 ? '+' : '' }}{{ log.change.toLocaleString('id-ID') }}
-                </td>
-                <td class="notes-cell">
-                  <span class="note-pill" :class="{ 'void-line': log.log_type === 'void_return' || log.notes?.toLowerCase().includes('void') }">
-                    {{ log.notes || '-' }}
-                  </span>
-                </td>
-                <td class="admin-cell">System Admin</td>
-              </tr>
-            </tbody>
-          </table>
+                </span>
+              </div>
+
+              <!-- REASON -->
+              <div class="col-reason">
+                <span
+                  class="reason-text"
+                  :style="{ color: !log.log_type?.includes('void') ? getAuditConfig(log.log_type).text : 'rgba(255,255,255,0.4)' }"
+                >
+                  {{ log.notes || '-' }}
+                </span>
+              </div>
+
+              <!-- ADMIN -->
+              <div class="col-admin">
+                <span class="admin-text">System Admin</span>
+              </div>
+            </div>
+          </div>
 
           <!-- 📱 MOBILE CARDS -->
           <div class="cards-mobile">
-            <div v-for="log in logs" :key="'m-'+log.id" class="mobile-audit-card glass-panel">
+            <div 
+              v-for="log in filteredLogs" 
+              :key="'m-'+log.id" 
+              class="mobile-audit-card glass-panel"
+              :style="{ borderLeft: `3px solid ${getAuditConfig(log.log_type).text}` }"
+            >
               <div class="mac-header">
-                <span class="audit-badge" :class="log.log_type.toLowerCase()">
-                  {{ log.log_type.toUpperCase().replace('_', ' ') }}
+                <span 
+                  class="type-badge-mini" 
+                  :style="{ color: getAuditConfig(log.log_type).text }"
+                >
+                  {{ getAuditConfig(log.log_type).icon }} {{ log.log_type?.replace('_', ' ').toUpperCase() }}
                 </span>
                 <span class="mac-time font-mono">{{ formatRelativeDate(log.created_at) }}</span>
               </div>
               <div class="mac-body">
-                <div class="mac-change" :class="log.change > 0 ? 'text-green' : 'text-red'">
+                <div class="mac-change" :class="{ 'is-positive': log.change > 0, 'is-negative': log.change < 0 }">
                   {{ log.change > 0 ? '+' : '' }}{{ log.change.toLocaleString('id-ID') }} butir
                 </div>
-                <div class="mac-notes">{{ log.notes || '-' }}</div>
+                <div class="mac-notes" :style="{ color: getAuditConfig(log.log_type).text }">{{ log.notes || '-' }}</div>
               </div>
             </div>
           </div>
@@ -250,201 +333,148 @@
     </div>
 
     <!-- ━━━ TAB 2: PEMBELIAN & GRADING ━━━ -->
-    <div v-else-if="activeTab === 'pembelian'" class="tab-content animate-fade">
-      <div class="purchase-layout">
-        <!-- PURCHASE HISTORY -->
-        <div class="glass-panel purchase-history-panel">
-          <div class="section-header-flex">
-            <div>
-              <h3 class="hero-font" style="font-size:18px;">Riwayat Pembelian</h3>
-              <p class="text-dim text-xs">Catatan seluruh pembelian dari supplier</p>
-            </div>
-            <button class="btn-secondary" @click="showChoiceModal = true">
-              <PlusIcon class="icon-xs" />
-              <span>+ Catat Pembelian Baru</span>
-            </button>
+    <div v-else-if="activeTab === 'pembelian'" class="tab-content pembelian-tab animate-fade">
+      <div class="pembelian-card">
+        <div class="pembelian-card-header">
+          <div>
+            <h3 class="pembelian-card-title hero-font">Riwayat Pembelian</h3>
+            <p class="pembelian-card-sub">Catatan seluruh pembelian dari supplier</p>
           </div>
+          <button class="catat-btn" @click="showChoiceModal = true">
+            <PlusIcon class="icon-xs" />
+            + Catat Pembelian Baru
+          </button>
+        </div>
 
-          <!-- SUMMARY STATS -->
-          <div class="purchase-stats-row mt-4">
-            <div class="ps-card glass-panel">
-              <span class="ps-label">TOTAL PEMBELIAN</span>
-              <span class="ps-val font-mono">{{ formatCurrency(purchaseStats.totalCost) }}</span>
-            </div>
-            <div class="ps-card glass-panel">
-              <span class="ps-label">TOTAL BUTIR</span>
-              <span class="ps-val font-mono">{{ purchaseStats.totalEggs.toLocaleString('id-ID') }}</span>
-            </div>
-            <div class="ps-card glass-panel">
-              <span class="ps-label">UTANG AKTIF</span>
-              <span class="ps-val font-mono" :class="purchaseStats.totalDebt > 0 ? 'text-red' : 'text-green'">{{ formatCurrency(purchaseStats.totalDebt) }}</span>
-            </div>
+        <div class="pembelian-kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-label">TOTAL PEMBELIAN</div>
+            <div class="kpi-value">{{ formatCurrency(purchaseStats.totalCost) }}</div>
           </div>
-
-          <div class="table-container-elite mt-4">
-            <!-- 🖥️ DESKTOP TABLE -->
-            <table v-if="purchases.length > 0" class="logs-table v-middle table-desktop">
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Supplier</th>
-                  <th>Qty (butir)</th>
-                  <th>Harga/Butir</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th>Sisa Utang</th>
-                  <th>Grading</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="p in purchases" :key="p.id" class="log-row">
-                  <td class="font-bold">{{ formatDate(p.purchase_date || p.created_at) }}</td>
-                  <td>{{ suppliers.find(s => s.id === p.supplier_id)?.name || '-' }}</td>
-                  <td>{{ p.total_eggs_bought.toLocaleString('id-ID') }}</td>
-                  <td>{{ formatCurrency(p.price_per_egg) }}</td>
-                  <td class="font-bold">{{ formatCurrency(p.total_cost) }}</td>
-                  <td>
-                    <span class="status-badge" :class="p.status">{{ p.status === 'lunas' ? 'LUNAS' : p.status === 'cicilan' ? 'CICILAN' : 'UTANG' }}</span>
-                  </td>
-                  <td :class="p.remaining_debt > 0 ? 'text-red font-bold' : 'text-green'">
-                    {{ formatCurrency(p.remaining_debt || 0) }}
-                  </td>
-                  <td>
-                    <button 
-                      v-if="!purchaseHasGrading(p.id)"
-                      class="btn-secondary" 
-                      @click="openGradingForPurchase(p)"
-                    >⏳ Grading →</button>
-                    <span v-else class="text-dim text-xs">✓ Graded</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <!-- 📱 MOBILE CARDS -->
-            <div v-if="purchases.length > 0" class="cards-mobile">
-              <div v-for="p in purchases" :key="'p-m-'+p.id" class="purchase-mobile-card glass-panel">
-                <div class="pmc-header">
-                  <span class="pmc-date font-mono">{{ formatDate(p.purchase_date || p.created_at) }}</span>
-                  <span class="status-badge" :class="p.status">{{ p.status.toUpperCase() }}</span>
-                </div>
-                <div class="pmc-supplier">{{ suppliers.find(s => s.id === p.supplier_id)?.name || 'Unknown Supplier' }}</div>
-                <div class="pmc-stats">
-                  <div class="pmc-stat">
-                    <span class="label">QTY</span>
-                    <span class="val">{{ p.total_eggs_bought.toLocaleString('id-ID') }}</span>
-                  </div>
-                  <div class="pmc-stat">
-                    <span class="label">TOTAL</span>
-                    <span class="val">{{ formatCurrency(p.total_cost) }}</span>
-                  </div>
-                </div>
-                <div class="pmc-footer">
-                  <div v-if="p.remaining_debt > 0" class="pmc-debt text-red">
-                    Sisa: {{ formatCurrency(p.remaining_debt) }}
-                  </div>
-                  <button 
-                    v-if="!purchaseHasGrading(p.id)"
-                    class="btn-primary-xs" 
-                    @click="openGradingForPurchase(p)"
-                  >Grading →</button>
-                  <span v-else class="text-green text-xs">Grading ✓</span>
-                </div>
-              </div>
-            </div>
-
-            <EmptyState v-else icon="TruckIcon" title="Belum Ada Pembelian" message="Klik '+ Catat Pembelian Baru' untuk mencatat batch pertama." />
+          <div class="kpi-card">
+            <div class="kpi-label">TOTAL BUTIR</div>
+            <div class="kpi-value">{{ purchaseStats.totalEggs.toLocaleString('id-ID') }}</div>
+          </div>
+          <div class="kpi-card utang">
+            <div class="kpi-label">UTANG AKTIF</div>
+            <div class="kpi-value">{{ formatCurrency(purchaseStats.totalDebt) }}</div>
           </div>
         </div>
+
+        <div class="pembelian-divider"></div>
+
+        <div v-if="purchases.length === 0" class="empty-state">
+          <div class="empty-icon">📦</div>
+          <h4 class="empty-title">Belum Ada Pembelian</h4>
+          <p class="empty-sub">Klik tombol '+ Catat Pembelian Baru' di atas untuk mencatat batch pertama.</p>
+        </div>
+
+        <table v-else class="pembelian-table">
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>Supplier</th>
+              <th>Qty (butir)</th>
+              <th>Harga/Butir</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th>Sisa Utang</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in purchases" :key="p.id">
+              <td><strong>{{ formatDate(p.purchase_date || p.created_at) }}</strong></td>
+              <td>{{ suppliers.find(s => s.id === p.supplier_id)?.name || '-' }}</td>
+              <td>{{ p.total_eggs_bought.toLocaleString('id-ID') }}</td>
+              <td>{{ formatCurrency(p.price_per_egg) }}</td>
+              <td><strong>{{ formatCurrency(p.total_cost) }}</strong></td>
+              <td>
+                <span class="status-badge" :class="p.status">
+                  {{ p.status === 'lunas' ? 'LUNAS' : p.status === 'cicilan' ? 'CICILAN' : 'UTANG' }}
+                </span>
+              </td>
+              <td :class="p.remaining_debt > 0 ? 'text-red font-bold' : 'text-green'">
+                {{ formatCurrency(p.remaining_debt || 0) }}
+              </td>
+              <td>
+                <button 
+                  v-if="p.remaining_debt > 0"
+                  class="btn-secondary" 
+                  @click="openDetails(p)"
+                >Detail →</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
     <!-- ━━━ FEATURE 1: STOK OPNAME SECTION ━━━ -->
-    <div v-else-if="activeTab === 'stok_opname'" class="tab-content animate-fade">
-      <!-- INFO BANNER -->
-      <div class="info-banner-premium glass-panel mb-6">
-        <div class="ib-icon">💡</div>
-        <div class="ib-text">
+    <div v-else-if="activeTab === 'stok_opname'" class="tab-content opname-tab animate-fade">
+      <!-- INFO BANNER FULL WIDTH -->
+      <div class="tips-banner">
+        <div class="tips-icon">💡</div>
+        <div class="tips-text">
           <strong>Tips:</strong> Gunakan tab ini khusus untuk pencatatan verifikasi fisik bulanan/mingguan. Untuk input barang datang (Restock), gunakan tombol <strong>TAMBAH STOK BARU</strong> di pojok kanan atas.
         </div>
       </div>
 
       <div class="stok-opname-layout">
         <!-- Dashboard / History -->
-        <div v-if="!activeStokTake" class="so-dashboard glass-panel elite-hub">
-          <div class="so-header-premium">
-            <div class="sh-left">
-              <h2 class="hero-font hub-title">Pusat Verifikasi Stok</h2>
-              <p class="text-dim hub-desc">Audit dan sinkronisasi stok fisik dengan pencatatan digital secara akurat.</p>
+        <div v-if="!activeStokTake" class="opname-card">
+          <div class="opname-card-header">
+            <div>
+              <h2 class="opname-title hero-font">Pusat Verifikasi Stok</h2>
+              <p class="opname-sub">Audit dan sinkronisasi stok fisik dengan pencatatan digital secara akurat.</p>
             </div>
             <button 
               v-if="authStore.profile?.role === 'admin'"
-              class="btn-primary" 
+              class="opname-start-btn" 
               @click="startNewStokOpname"
               :disabled="loadingSO"
             >
               <PlusIcon class="icon-sm" />
-              <span>MULAI STOK OPNAME BARU</span>
+              MULAI STOK OPNAME BARU
             </button>
           </div>
 
-          <div class="so-history-section mt-10">
-            <div class="section-title-wrapper mb-6">
-                <h4 class="section-label-elite">Riwayat Verifikasi</h4>
-                <div class="accent-line"></div>
-            </div>
-            <div class="table-container-elite">
-                <!-- 🖥️ DESKTOP TABLE -->
-                <table class="logs-table v-middle table-desktop" v-if="opnameHistory.length > 0">
-                    <thead>
-                        <tr>
-                        <th>Tanggal</th>
-                        <th>Oleh</th>
-                        <th>Selisih Total</th>
-                        <th>Status</th>
-                        <th class="text-right">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="so in opnameHistory" :key="so.id" class="log-row">
-                        <td class="font-bold">{{ formatDate(so.opname_date) }}</td>
-                        <td class="text-dim">{{ so.conducted_by }}</td>
-                        <td :class="so.total_difference < 0 ? 'text-red' : 'text-green'" class="font-mono text-lg">
-                            {{ so.total_difference > 0 ? '+' : '' }}{{ formatStockCount(so.total_difference || 0) }}
-                        </td>
-                        <td>
-                            <span class="status-badge" :class="so.status">{{ so.status === 'completed' ? 'SELESAI' : 'DRAFT' }}</span>
-                        </td>
-                        <td class="text-right">
-                            <button class="btn-secondary" @click="viewStokTake(so)">Detail</button>
-                        </td>
-                        </tr>
-                    </tbody>
-                </table>
+          <div class="riwayat-header">
+             <div class="riwayat-label">RIWAYAT VERIFIKASI</div>
+             <div class="riwayat-line"></div>
+          </div>
 
-                <!-- 📱 MOBILE CARDS -->
-                <div v-if="opnameHistory.length > 0" class="cards-mobile">
-                  <div v-for="so in opnameHistory" :key="'so-m-'+so.id" class="so-history-card glass-panel" @click="viewStokTake(so)">
-                    <div class="sohc-header">
-                      <span class="font-bold">{{ formatDate(so.opname_date) }}</span>
-                      <span class="status-badge" :class="so.status">{{ so.status.toUpperCase() }}</span>
-                    </div>
-                    <div class="sohc-body">
-                      <div class="sohc-diff" :class="so.total_difference < 0 ? 'text-red' : 'text-green'">
-                        Selisih: {{ so.total_difference > 0 ? '+' : '' }}{{ formatStockCount(so.total_difference || 0) }}
-                      </div>
-                      <span class="text-muted text-xs">Oleh: {{ so.conducted_by }}</span>
-                    </div>
-                  </div>
-                </div>
+          <table class="opname-table table-desktop" v-if="opnameHistory.length > 0">
+              <thead>
+                  <tr>
+                  <th>Tanggal</th>
+                  <th>Oleh</th>
+                  <th>Selisih Total</th>
+                  <th>Status</th>
+                  <th class="text-right">Aksi</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  <tr v-for="so in opnameHistory" :key="so.id">
+                  <td><strong>{{ formatDate(so.opname_date) }}</strong></td>
+                  <td>{{ so.conducted_by }}</td>
+                  <td :class="so.total_difference < 0 ? 'text-red' : 'text-green'">
+                      <strong>{{ so.total_difference > 0 ? '+' : '' }}{{ formatStockCount(so.total_difference || 0) }}</strong>
+                  </td>
+                  <td>
+                      <span class="status-badge" :class="so.status">{{ so.status === 'completed' ? 'SELESAI' : 'DRAFT' }}</span>
+                  </td>
+                  <td class="text-right">
+                      <button class="btn-secondary" @click="viewStokTake(so)">Detail</button>
+                  </td>
+                  </tr>
+              </tbody>
+          </table>
 
-                <EmptyState 
-                    v-else 
-                    icon="ClipboardCheckIcon" 
-                    title="Riwayat Masih Kosong" 
-                    message="Belum ada riwayat verifikasi. Klik 'MULAI STOK OPNAME BARU' untuk sinkronisasi stok fisik pertama Anda."
-                />
-            </div>
+          <div v-if="opnameHistory.length === 0" class="empty-state">
+              <div class="empty-icon">📋</div>
+              <h4 class="empty-title">Riwayat Masih Kosong</h4>
+              <p class="empty-sub">Belum ada riwayat verifikasi. Klik 'MULAI STOK OPNAME BARU' untuk sinkronisasi stok fisik pertama Anda.</p>
           </div>
         </div>
 
@@ -532,18 +562,10 @@
       @purchaseCreated="handlePurchaseCreated"
     />
 
-    <GradingModal 
-      :show="showGradingModal" 
-      :purchase="gradingPurchase"
-      :supplierName="gradingSupplierName"
-      @close="showGradingModal = false"
-      @gradingDone="handleGradingDone"
-    />
-
     <RestockSuppliesSlideOver 
       :show="showSuppliesSlideOver" 
       @close="showSuppliesSlideOver = false"
-      @restockDone="handleRestockDone"
+      @restockDone="fetchData"
     />
 
     <!-- QUICK ADJUST MODAL (kept for waste/price-update/manual on grade cards) -->
@@ -609,11 +631,11 @@
 
             <div class="form-group">
               <label>Catatan / Alasan</label>
-              <textarea v-model="form.notes" placeholder="Tuliskan alasan perubahan..."></textarea>
+              <textarea v-model="form.notes" v-titlecase placeholder="Tuliskan alasan perubahan..."></textarea>
             </div>
 
             <div class="modal-actions">
-              <button type="button" class="btn-secondary" @click="showAdjustmentModal = false">Batal</button>
+              <button type="button" class="btn-secondary" @click="showAdjustmentModal = false">BATAL</button>
               <button type="submit" class="btn-primary" :disabled="submitting">
                 {{ submitting ? 'MENYIMPAN...' : 'SIMPAN KOREKSI' }}
               </button>
@@ -629,53 +651,85 @@
     <Teleport to="body">
       <div v-if="showPackagingModal" class="modal-overlay" @click.self="showPackagingModal = false">
         <div class="modal-card glass-panel animate-pop">
-          <h2 class="hero-font">Restock Packaging</h2>
-          <p class="text-dim">Calculate effective HPP including shipping and waste.</p>
+          <h2 class="hero-font">Manage {{ packForm.label }}</h2>
+          <p class="text-dim">Update stock levels manually or via purchase.</p>
 
           <form @submit.prevent="submitPackagingPurchase" class="modal-form">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Total Item Price</label>
-                <input type="number" v-model.number="packForm.price" placeholder="e.g. 30000" required />
-              </div>
-              <div class="form-group">
-                <label>Shipping Cost</label>
-                <input type="number" v-model.number="packForm.shipping" placeholder="e.g. 5000" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Quantity Ordered</label>
-                <input type="number" v-model.number="packForm.qty" placeholder="30" required />
-              </div>
-              <div class="form-group">
-                <label>Quantity Damaged</label>
-                <input type="number" v-model.number="packForm.damaged" placeholder="0" />
-              </div>
-            </div>
-
+            <!-- Mode Selector -->
             <div class="form-group">
-              <CustomDropdown 
-                v-model="packForm.supplier" 
-                :options="supplierOptions" 
-                label="Supplier (Optional)" 
-                placeholder="Select vendor..."
-              />
+              <div class="segmented-control">
+                <button 
+                  type="button" 
+                  :class="{ active: packForm.mode === 'restock' }"
+                  @click="packForm.mode = 'restock'"
+                >PEMBELIAN</button>
+                <button 
+                  type="button" 
+                  :class="{ active: packForm.mode === 'adjust' }"
+                  @click="packForm.mode = 'adjust'"
+                >KOREKSI</button>
+              </div>
             </div>
 
-            <div class="form-group info-box">
-              <label>Effective HPP per Unit</label>
-              <div class="calc-result">
-                {{ formatCurrency(calculateEffectivePackCost()) }}
+            <!-- RESTOCK MODE FIELDS -->
+            <template v-if="packForm.mode === 'restock'">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Total Item Price</label>
+                  <input type="number" v-model.number="packForm.price" placeholder="e.g. 30000" required />
+                </div>
+                <div class="form-group">
+                  <label>Shipping Cost</label>
+                  <input type="number" v-model.number="packForm.shipping" placeholder="e.g. 5000" />
+                </div>
               </div>
-              <p class="text-dim mini-text">Formula: (Price + Shipping) / (Total - Damaged)</p>
-            </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Quantity Ordered</label>
+                  <input type="number" v-model.number="packForm.qty" placeholder="30" required />
+                </div>
+                <div class="form-group">
+                  <label>Quantity Damaged</label>
+                  <input type="number" v-model.number="packForm.damaged" placeholder="0" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <CustomDropdown 
+                  v-model="packForm.supplier" 
+                  :options="supplierOptions" 
+                  label="Supplier (Optional)" 
+                  placeholder="Select vendor..."
+                />
+              </div>
+
+              <div class="form-group info-box">
+                <label>Effective HPP per Unit</label>
+                <div class="calc-result">
+                  {{ formatCurrency(calculateEffectivePackCost()) }}
+                </div>
+                <p class="text-dim mini-text">Formula: (Price + Shipping) / (Total - Damaged)</p>
+              </div>
+            </template>
+
+            <!-- ADJUST MODE FIELDS -->
+            <template v-else>
+              <div class="form-group">
+                <label>Perubahan Stok (+ / -)</label>
+                <input type="number" v-model.number="packForm.qty" placeholder="e.g. -5 to reduce" required />
+                <p class="text-dim mini-text">Gunakan tanda minus (-) untuk mengurangi stok.</p>
+              </div>
+              <div class="form-group">
+                <label>Catatan Koreksi</label>
+                <textarea v-model="packForm.notes" v-titlecase placeholder="Contoh: Stok rusak atau hilang..." rows="2"></textarea>
+              </div>
+            </template>
 
             <div class="modal-actions">
               <button type="button" class="btn-secondary" @click="showPackagingModal = false">Cancel</button>
               <button type="submit" class="btn-primary" :disabled="submitting">
-                {{ submitting ? 'PROCESSING...' : 'CONFIRM PURCHASE' }}
+                {{ submitting ? 'PROCESSING...' : (packForm.mode === 'restock' ? 'CONFIRM PURCHASE' : 'UPDATE STOCK') }}
               </button>
             </div>
           </form>
@@ -710,32 +764,31 @@ import CustomDropdown from '../components/ui/CustomDropdown.vue';
 import StockHistoryModal from '../components/modals/StockHistoryModal.vue';
 import AddStockChoiceModal from '../components/inventory/AddStockChoiceModal.vue';
 import PembelianTelurSlideOver from '../components/inventory/PembelianTelurSlideOver.vue';
-import GradingModal from '../components/inventory/GradingModal.vue';
 import RestockSuppliesSlideOver from '../components/inventory/RestockSuppliesSlideOver.vue';
+import { sanitizePayload } from '../utils/sanitize';
 import { 
+  PlusIcon,
+  SearchIcon,
+  SettingsIcon,
   TruckIcon,
   ClipboardListIcon,
-  PlusIcon,
   PackageIcon,
   RefreshCwIcon
 } from 'lucide-vue-next';
 
 // @ts-ignore
-import { GRADES } from '../constants/grades';
-// @ts-ignore
+import { GRADES, getGradeLabel as getGlobalLabel, normalizeGrade } from '../constants/grades';
+
 import { formatCurrency, formatStock, formatRelativeDate, formatExactTime } from '../utils/formatters';
-// @ts-ignore
-import { calcHppPerPack, calcMargin, calcMaxPacks } from '../utils/calculations';
+
+import { calcMaxPacks } from '../utils/calculations';
 
 function formatStockCount(val: number) {
-  return val.toLocaleString('id-ID');
+  return formatStock(val);
 }
 
 function getGradeLabel(id: string) {
-  if (id === 'hero_size') return GRADES.hero.label;
-  if (id === 'standard_size' || id === 'medium_size') return GRADES.medium.label;
-  if (id === 'small_size' || id === 'salted_egg') return GRADES.small.label;
-  return id;
+  return getGlobalLabel(id)
 }
 
 import EmptyState from '../components/ui/EmptyState.vue';
@@ -751,6 +804,9 @@ const opnameHistory = ref<any[]>([]);
 const activeStokTake = ref<any>(null);
 const activeSOItems = ref<any[]>([]);
 const loading = ref(true);
+const searchInventoryQuery = ref('');
+const searchAuditLogQuery = ref('');
+const activeAuditFilter = ref('ALL');
 const loadingSO = ref(false);
 const submittingSO = ref(false);
 const recalculating = ref(false);
@@ -763,10 +819,7 @@ const showPackagingModal = ref(false);
 const showConfirmModal = ref(false);
 const showChoiceModal = ref(false);
 const showPembelianSlideOver = ref(false);
-const showGradingModal = ref(false);
 const showSuppliesSlideOver = ref(false);
-const gradingPurchase = ref<any>(null);
-const gradingSupplierName = ref('');
 const confirmData = reactive({
   title: '',
   message: '',
@@ -776,13 +829,25 @@ const submitting = ref(false);
 
 // removed priceHistory as it's folded into adjustment flow
 
-// ━━━ PURCHASE & GRADING STATE ━━━
+// ━━━ PURCHASE STATE ━━━
 const purchases = ref<any[]>([]);
-const gradings = ref<any[]>([]);
 const bankAccounts = ref<any[]>([]);
+const purchaseStats = reactive({
+  totalEggs: 0,
+  totalCost: 0,
+  totalDebt: 0
+});
 
-function purchaseHasGrading(purchaseId: string) {
-  return gradings.value.some((g: any) => g.purchase_id === purchaseId);
+function calculatePurchaseStats() {
+  let totalCost = 0, totalEggs = 0, totalDebt = 0;
+  purchases.value.forEach(p => {
+    totalCost += (p.total_cost || 0);
+    totalEggs += (p.total_eggs_bought || 0);
+    totalDebt += (p.remaining_debt || 0);
+  });
+  purchaseStats.totalCost = totalCost;
+  purchaseStats.totalEggs = totalEggs;
+  purchaseStats.totalDebt = totalDebt;
 }
 
 
@@ -795,9 +860,9 @@ function getStockStatus(item: any) {
 }
 
 function getChipClass(id: string) {
-  if (id === 'hero_size' || id === 'hero') return 'chip-hero'
-  if (id === 'standard_size' || id === 'medium_size' || id === 'medium') return 'chip-medium'
-  if (id === 'small_size' || id === 'salted_egg' || id === 'small') return 'chip-small'
+  const normalized = normalizeGrade(id)
+  if (normalized === 'hero') return 'chip-hero'
+  if (normalized === 'salted_egg') return 'chip-small'
   return ''
 }
 
@@ -807,16 +872,134 @@ function getStockProgress(item: any) {
   return Math.min((item.current_stock / max) * 100, 100);
 }
 
+const AUDIT_TYPE_CONFIG: Record<string, any> = {
+  'ARRIVAL': {
+    bg:     'rgba(16, 185, 129, 0.12)',
+    border: 'rgba(16, 185, 129, 0.25)',
+    text:   '#10b981',
+    icon:   '↙',
+    rowBg:  'rgba(16, 185, 129, 0.03)',
+    rowBorder: 'rgba(16, 185, 129, 0.08)'
+  },
+  'PURCHASE': {
+    bg:     'rgba(16, 185, 129, 0.12)',
+    border: 'rgba(16, 185, 129, 0.25)',
+    text:   '#10b981',
+    icon:   '↙',
+    rowBg:  'rgba(16, 185, 129, 0.03)',
+    rowBorder: 'rgba(16, 185, 129, 0.08)'
+  },
+  'SALE': {
+    bg:     'rgba(56, 189, 248, 0.12)',
+    border: 'rgba(56, 189, 248, 0.25)',
+    text:   '#38bdf8',
+    icon:   '↗',
+    rowBg:  'rgba(56, 189, 248, 0.03)',
+    rowBorder: 'rgba(56, 189, 248, 0.08)'
+  },
+  'SALE_OUT': {
+    bg:     'rgba(239, 68, 68, 0.12)',
+    border: 'rgba(239, 68, 68, 0.25)',
+    text:   '#ef4444',
+    icon:   '↗',
+    rowBg:  'rgba(239, 68, 68, 0.03)',
+    rowBorder: 'rgba(239, 68, 68, 0.08)'
+  },
+  'MANUAL_ADJUSTMENT': {
+    bg:     'rgba(245, 158, 11, 0.12)',
+    border: 'rgba(245, 158, 11, 0.25)',
+    text:   '#f59e0b',
+    icon:   '⚙',
+    rowBg:  'rgba(245, 158, 11, 0.03)',
+    rowBorder: 'rgba(245, 158, 11, 0.08)'
+  },
+  'SORTING_WASTE': {
+    bg:     'rgba(245, 158, 11, 0.12)',
+    border: 'rgba(245, 158, 11, 0.25)',
+    text:   '#f59e0b',
+    icon:   '⚙',
+    rowBg:  'rgba(245, 158, 11, 0.03)',
+    rowBorder: 'rgba(245, 158, 11, 0.08)'
+  },
+  'OPNAME': {
+    bg:     'rgba(139, 92, 246, 0.12)',
+    border: 'rgba(139, 92, 246, 0.25)',
+    text:   '#8b5cf6',
+    icon:   '📋',
+    rowBg:  'rgba(139, 92, 246, 0.03)',
+    rowBorder: 'rgba(139, 92, 246, 0.08)'
+  },
+  'VOID': {
+    bg:     'rgba(239, 68, 68, 0.08)',
+    border: 'rgba(239, 68, 68, 0.20)',
+    text:   '#ef4444',
+    icon:   '✕',
+    rowBg:  'rgba(239, 68, 68, 0.04)',
+    rowBorder: 'rgba(239, 68, 68, 0.10)'
+  },
+  'VOID_RETURN': {
+    bg:     'rgba(239, 68, 68, 0.08)',
+    border: 'rgba(239, 68, 68, 0.20)',
+    text:   '#ef4444',
+    icon:   '✕',
+    rowBg:  'rgba(239, 68, 68, 0.04)',
+    rowBorder: 'rgba(239, 68, 68, 0.10)'
+  }
+};
+
+function getAuditConfig(type: string) {
+  return AUDIT_TYPE_CONFIG[type?.toUpperCase()] ?? {
+    bg: 'rgba(100,116,139,0.10)',
+    border: 'rgba(100,116,139,0.20)',
+    text: '#64748b',
+    icon: '•',
+    rowBg: 'transparent',
+    rowBorder: 'transparent'
+  };
+}
+
+
+const filteredLogs = computed(() => {
+  let list = logs.value;
+  
+  if (activeAuditFilter.value !== 'ALL') {
+    list = list.filter(l => l.log_type?.toUpperCase() === activeAuditFilter.value);
+  }
+  
+  if (searchAuditLogQuery.value.trim()) {
+    const q = searchAuditLogQuery.value.toLowerCase();
+    list = list.filter(l => 
+      l.notes?.toLowerCase().includes(q) || 
+      l.log_type?.toLowerCase().includes(q)
+    );
+  }
+  
+  return list;
+});
+
 
 async function fetchPurchases() {
   const { data: pData } = await supabase.from('purchases').select('*').order('created_at', { ascending: false }).limit(50);
   if (pData) purchases.value = pData;
-  const { data: gData } = await supabase.from('gradings').select('*');
-  if (gData) gradings.value = gData;
+  calculatePurchaseStats();
 }
 
-const eggInventory = computed(() => inventory.value.filter(i => i.item_type !== 'packaging'));
-const supplyInventory = computed(() => inventory.value.filter(i => i.item_type === 'packaging'));
+const eggInventory = computed(() => {
+  const items = inventory.value.filter(i => i.item_type !== 'packaging');
+  if (!searchInventoryQuery.value) return items;
+  const q = searchInventoryQuery.value.toLowerCase();
+  return items.filter(i => 
+    i.label?.toLowerCase().includes(q) || 
+    getGradeLabel(i.id).toLowerCase().includes(q)
+  );
+});
+
+const supplyInventory = computed(() => {
+  const items = inventory.value.filter(i => i.item_type === 'packaging');
+  if (!searchInventoryQuery.value) return items;
+  const q = searchInventoryQuery.value.toLowerCase();
+  return items.filter(i => i.label?.toLowerCase().includes(q));
+});
 
 const eggTypeOptions = computed(() => inventory.value
   .filter(item => item.item_type === 'egg')
@@ -838,16 +1021,6 @@ const adjustOperationTypes = [
   { label: 'Update Spesifikasi (Harga/HPP)', value: 'price_update' }
 ];
 
-const purchaseStats = computed(() => {
-  let totalCost = 0, totalEggs = 0, totalDebt = 0;
-  purchases.value.forEach(p => {
-    totalCost += (p.total_cost || 0);
-    totalEggs += (p.total_eggs_bought || 0);
-    totalDebt += (p.remaining_debt || 0);
-  });
-  return { totalCost, totalEggs, totalDebt };
-});
-
 function handleChoiceSelect(type: 'telur' | 'supplies') {
   showChoiceModal.value = false;
   if (type === 'telur') {
@@ -857,30 +1030,15 @@ function handleChoiceSelect(type: 'telur' | 'supplies') {
   }
 }
 
-function handlePurchaseCreated(purchase: any) {
+async function handlePurchaseCreated() {
   showPembelianSlideOver.value = false;
-  gradingPurchase.value = purchase;
-  gradingSupplierName.value = suppliers.value.find(s => s.id === purchase?.supplier_id)?.name || 'Supplier';
-  showGradingModal.value = true;
-  fetchPurchases();
+  fetchData();
 }
 
-async function handleGradingDone() {
-  showGradingModal.value = false;
-  gradingPurchase.value = null;
-  await fetchData();
-  await fetchPurchases();
-}
 
-async function handleRestockDone() {
-  showSuppliesSlideOver.value = false;
-  await fetchData();
-}
 
-function openGradingForPurchase(purchase: any) {
-  gradingPurchase.value = purchase;
-  gradingSupplierName.value = suppliers.value.find(s => s.id === purchase?.supplier_id)?.name || 'Supplier';
-  showGradingModal.value = true;
+function openDetails(purchase: any) {
+  showToast(`Detail pembelian ${purchase.id.slice(0,8)}...`, 'warning');
 }
 
 const form = reactive({
@@ -917,7 +1075,9 @@ const packForm = reactive({
   shipping: 0,
   qty: 0,
   damaged: 0,
-  supplier: ''
+  supplier: '',
+  notes: '',
+  mode: 'restock' // 'restock' or 'adjust'
 });
 
 async function fetchData() {
@@ -1056,13 +1216,16 @@ async function finalizeStokOpname() {
             .update({ current_stock: item.physical_count })
             .eq('id', item.inventory_id);
           
-          // Log Adjustment
-          await supabase.from('stock_logs').insert({
-            egg_type: item.inventory_id,
-            change: item.difference,
-            log_type: 'manual_adjustment',
-            notes: `Stok Opname Adjustment (Ref: ${activeStokTake.value.id.slice(0,8)})`
-          });
+          // Insert adjusting log for initial SO alignment
+          const soId = activeStokTake.value.id.slice(0,8);
+          const difference = item.difference;
+          await supabase.from('stock_logs').insert(sanitizePayload({
+            inventory_id: item.inventory_id,
+            log_type: 'stock_opname',
+            change: difference,
+            notes: `Penyesuaian awal Stock Opname #${soId}`,
+            created_by: authStore.profile?.id
+          }));
         }
       }
 
@@ -1123,14 +1286,7 @@ function formatDate(date: any) {
 }
 
 
-function formatExactTime(date: string) {
-  return new Date(date).toLocaleString('id-ID', { 
-    day: '2-digit', 
-    month: 'short', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
-}
+
 
 
 
@@ -1169,6 +1325,8 @@ function openPackagingPurchase(item: any) {
   packForm.qty = 0;
   packForm.damaged = 0;
   packForm.supplier = '';
+  packForm.notes = '';
+  packForm.mode = 'restock';
   showPackagingModal.value = true;
 }
 
@@ -1181,66 +1339,82 @@ function calculateEffectivePackCost() {
 
 async function submitPackagingPurchase() {
   submitting.value = true;
-  const effectiveCost = calculateEffectivePackCost();
-  const goodQty = packForm.qty - packForm.damaged;
+  
+  const isRestock = packForm.mode === 'restock';
+  const effectiveCost = isRestock ? calculateEffectivePackCost() : 0;
+  const changeQty = isRestock ? (packForm.qty - packForm.damaged) : packForm.qty;
 
   try {
-    // 1. Update Packaging Inventory
     const currentItem = inventory.value.find(i => i.id === packForm.id);
-    const newStock = (currentItem?.current_stock ?? 0) + goodQty;
+    const newStock = (currentItem?.current_stock ?? 0) + changeQty;
+
+    // 1. Update Packaging Inventory
+    const updatePayload: any = { 
+      current_stock: newStock, 
+      updated_at: new Date().toISOString() 
+    };
+    
+    // Only update cost if it's a restock/purchase
+    if (isRestock) {
+      updatePayload.cost_per_egg = effectiveCost;
+    }
 
     const { error: invError } = await supabase.from('inventory')
-      .update({ 
-        current_stock: newStock, 
-        cost_per_egg: effectiveCost, // We use this field to store unit cost for supplies
-        updated_at: new Date().toISOString() 
-      })
+      .update(updatePayload)
       .eq('id', packForm.id);
 
     if (invError) throw invError;
 
     // 2. Log Transaction
-    const purchaseNotes = `Purchase: Rp${packForm.price.toLocaleString('id-ID')} + Rp${packForm.shipping.toLocaleString('id-ID')} ship (Waste: ${packForm.damaged})`;
-    const supplierNote = packForm.supplier ? ` | Supplier: ${packForm.supplier}` : '';
+    let finalNotes = '';
+    if (isRestock) {
+      const purchaseNotes = `Purchase: Rp${packForm.price.toLocaleString('id-ID')} + Rp${packForm.shipping.toLocaleString('id-ID')} ship (Waste: ${packForm.damaged})`;
+      const supplierNote = packForm.supplier ? ` | Supplier: ${packForm.supplier}` : '';
+      finalNotes = purchaseNotes + supplierNote;
+    } else {
+      finalNotes = packForm.notes || 'Koreksi stok manual';
+    }
 
     await supabase.from('stock_logs').insert({
       egg_type: packForm.id,
-      change: goodQty,
-      log_type: 'arrival',
-      notes: purchaseNotes + supplierNote
+      change: changeQty,
+      log_type: isRestock ? 'arrival' : 'manual_adjustment',
+      notes: finalNotes
     });
 
     // Create Notification
     await supabase.from('notifications').insert({
-      type: 'restock_done',
-      title: 'Stok Diperbarui',
-      message: `${packForm.label} ditambah ${goodQty} unit`,
+      type: isRestock ? 'restock_done' : 'stock_alert',
+      title: isRestock ? 'Stok Diperbarui' : 'Koreksi Stok',
+      message: `${packForm.label}: ${changeQty > 0 ? '+' : ''}${changeQty} unit`,
       link: '/stock'
     });
 
-    // 3. Proactive: Update Egg products HPP based on supply type
-    if (packForm.id === 'packaging_standard') {
-      await supabase.from('inventory').update({ cost_per_packaging: effectiveCost }).eq('item_type', 'egg');
-    } else if (packForm.id === 'sticker_label') {
-      await supabase.from('inventory').update({ cost_per_sticker: effectiveCost }).eq('item_type', 'egg');
-    } else if (packForm.id === 'mini_card') {
-      await supabase.from('inventory').update({ cost_per_card: effectiveCost }).eq('item_type', 'egg');
-    }
-    
-    // Recalculate total cost_price for all eggs
-    const { data: eggs } = await supabase.from('inventory').select('*').eq('item_type', 'egg');
-    if (eggs) {
-      for (const egg of eggs) {
-        const totalHpp = (egg.cost_per_egg * 10) + (egg.cost_per_packaging || 0) + (egg.cost_per_sticker || 0) + (egg.cost_per_card || 0);
-        await supabase.from('inventory').update({ cost_price: totalHpp }).eq('id', egg.id);
+    // 3. Proactive Updates - ONLY for restock
+    if (isRestock) {
+      if (packForm.id === 'packaging_standard') {
+        await supabase.from('inventory').update({ cost_per_packaging: effectiveCost }).eq('item_type', 'egg');
+      } else if (packForm.id === 'sticker_label') {
+        await supabase.from('inventory').update({ cost_per_sticker: effectiveCost }).eq('item_type', 'egg');
+      } else if (packForm.id === 'mini_card') {
+        await supabase.from('inventory').update({ cost_per_card: effectiveCost }).eq('item_type', 'egg');
+      }
+      
+      // Recalculate total cost_price for all eggs
+      const { data: eggs } = await supabase.from('inventory').select('*').eq('item_type', 'egg');
+      if (eggs) {
+        for (const egg of eggs) {
+          const totalHpp = (egg.cost_per_egg * 10) + (egg.cost_per_packaging || 0) + (egg.cost_per_sticker || 0) + (egg.cost_per_card || 0);
+          await supabase.from('inventory').update({ cost_price: totalHpp }).eq('id', egg.id);
+        }
       }
     }
 
     showPackagingModal.value = false;
     fetchData();
-    showToast(`Stok ${packForm.label} diperbarui & HPP telur dihitung ulang`);
+    showToast(isRestock ? `Stok ${packForm.label} diperbarui & HPP telur dihitung ulang` : `Stok ${packForm.label} berhasil dikoreksi`);
   } catch (err: any) {
-    showToast('Gagal restock packaging', 'error');
+    showToast('Gagal memproses stok', 'error');
   } finally {
     submitting.value = false;
   }
@@ -1291,26 +1465,30 @@ async function submitAdjustment() {
   // 0. Handle Price Update (folded logic)
   if (form.log_type === 'price_update') {
     const newCostPrice = (editForm.cost_per_egg * 10) + editForm.cost_per_packaging + editForm.cost_per_sticker + editForm.cost_per_card;
-    const { error } = await supabase.from('inventory').update({
+    const updateInventory = supabase.from('inventory').update({
       base_price_per_pack: editForm.base_price_per_pack,
       cost_per_egg: editForm.cost_per_egg,
       cost_price: newCostPrice,
       updated_at: new Date().toISOString()
     }).eq('id', editForm.id);
 
-    if (!error) {
-       // Audit Price Changes
-       const authorName = authStore.profile?.full_name || 'Admin';
-       if (editForm.base_price_per_pack !== editForm.old_base_price) {
-         await supabase.from('price_history').insert({
-           inventory_id: editForm.id,
-           price_type: 'selling',
-           old_value: editForm.old_base_price,
-           new_value: editForm.base_price_per_pack,
-           changed_by: authorName,
-           reason: form.notes
-         });
-       }
+    const priceHistoryTask = (async () => {
+      const authorName = authStore.profile?.full_name || 'Admin';
+      if (editForm.base_price_per_pack !== editForm.old_base_price) {
+        return supabase.from('price_history').insert({
+          inventory_id: editForm.id,
+          price_type: 'selling',
+          old_value: editForm.old_base_price,
+          new_value: editForm.base_price_per_pack,
+          changed_by: authorName,
+          reason: form.notes
+        });
+      }
+    })();
+
+    const [invRes] = await Promise.all([updateInventory, priceHistoryTask]);
+
+    if (!invRes.error) {
        showToast('Spesifikasi produk diperbarui');
        showAdjustmentModal.value = false;
        fetchData();
@@ -1343,13 +1521,14 @@ async function submitAdjustment() {
     finalNotes = `${initialNotes} (Waste: ${wasteAmount} butir)`.trim();
   }
 
-  const { data: logData, error: logError } = await supabase.from('stock_logs').insert({
-    egg_type: form.egg_type,
-    change: finalChange,
+  const { data: logData, error: logError } = await supabase.from('stock_logs').insert(sanitizePayload({
+    inventory_id: form.egg_type,
     log_type: form.log_type,
+    change: finalChange,
     unit_price: form.log_type === 'arrival' ? effectiveEggCost : 0,
-    notes: finalNotes
-  }).select();
+    notes: finalNotes,
+    created_by: authStore.profile?.id
+  })).select();
 
     // Create Notification if it was a restock (arrival)
     if (!logError && form.log_type === 'arrival') {
@@ -1462,11 +1641,27 @@ watch(() => route.path, () => {
 
 <style scoped>
 .stock-page {
+  padding: 32px 40px 64px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 40px;
-  padding-bottom: 60px;
+  gap: 0;
+  box-sizing: border-box;
 }
+
+/* Gap between PAGE HEADER and TABS */
+.header { margin-bottom: 32px; width: 100%; }
+
+/* Gap between TABS and CONTENT */
+.tab-content { margin-top: 0; width: 100%; }
+
+/* Gap between PRIMARY PRODUCTS section and SUPPLIES section */
+.section-primary-products { margin-bottom: 40px; }
+
+/* Gap between SUPPLIES section and AUDIT TRAIL */
+.section-supplies { margin-bottom: 40px; }
 
 /* PURCHASE STATS ROW */
 .purchase-stats-row {
@@ -1476,6 +1671,7 @@ watch(() => route.path, () => {
 }
 
 @media (max-width: 768px) {
+  .stock-page { padding: 16px; }
   .purchase-stats-row {
     grid-template-columns: 1fr;
   }
@@ -1572,10 +1768,10 @@ watch(() => route.path, () => {
 
 /* ━━━ TABS ━━━ */
 .tab-nav-wrapper {
-  margin: -16px;
-  margin-bottom: 24px;
-  padding: 16px;
-  -webkit-overflow-scrolling: touch;
+  margin: 0 0 32px 0;
+  padding: 0;
+  display: flex;
+  justify-content: flex-start;
 }
 
 .tab-nav {
@@ -1617,22 +1813,91 @@ watch(() => route.path, () => {
 }
 
 /* ━━━ GRID SYSTEM ━━━ */
-.inventory-grid {
+.primary-products-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+}
+
+@media (max-width: 900px) {
+  .primary-products-grid { grid-template-columns: 1fr; }
+}
+
+.supplies-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-top: 20px;
 }
 
-@media (min-width: 1201px) { .inventory-grid { grid-template-columns: repeat(3, 1fr) !important; } }
-@media (max-width: 1200px) { .inventory-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 768px) { .inventory-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+  .supplies-grid { grid-template-columns: 1fr; }
+}
 
 /* ━━━ SECTION HEADERS ━━━ */
-.section-header-flex {
+.section-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.section-badge {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 2px;
+  background: rgba(245, 158, 11, 0.10);
+  padding: 6px 14px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  border: 1px solid rgba(245, 158, 11, 0.20);
+  white-space: nowrap;
+}
+
+.section-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, rgba(245,158,11,0.25), rgba(245,158,11,0.02));
+}
+
+.search-box-mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+.search-box-mini:focus-within {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
+}
+
+.search-box-mini input {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 13px;
+  outline: none;
+  width: 150px;
+}
+
+.search-box-mini input::placeholder {
+  color: var(--muted);
 }
 
 .section-badge {
@@ -1668,32 +1933,32 @@ watch(() => route.path, () => {
   border-color: white;
 }
 
-/* ━━━ GRADE CARDS ━━━ */
-.grade-card {
+/* ━━━ PRODUCT CARDS ━━━ */
+.product-card, .supply-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  gap: 20px;
   position: relative;
+  transition: border-color 200ms, box-shadow 200ms;
 }
 
-.grade-card:hover {
+.product-card:hover, .supply-card:hover {
   transform: translateY(-4px);
   border-color: var(--border-hover);
   box-shadow: var(--shadow-premium);
 }
 
-.gc-header {
+.card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.grade-chip {
+.card-name {
   padding: 4px 12px;
   border-radius: 100px;
   font-size: 12px;
@@ -1702,9 +1967,9 @@ watch(() => route.path, () => {
   font-family: var(--font-ui);
 }
 
-.grade-chip.hero_size, .grade-chip.hero { background: var(--gold); color: black; }
-.grade-chip.standard_size, .grade-chip.medium { background: var(--violet); color: white; }
-.grade-chip.salted_egg, .grade-chip.small { background: var(--sky); color: black; }
+/* Base chips from getChipClass */
+.chip-hero { background: var(--gold); color: black; }
+.chip-small { background: var(--sky); color: black; }
 
 .status-badge {
   padding: 4px 10px;
@@ -1717,9 +1982,9 @@ watch(() => route.path, () => {
   border: 1px solid transparent;
 }
 
-.status-badge.optimal { background: rgba(16, 185, 129, 0.15); color: var(--green); border-color: rgba(16, 185, 129, 0.3); }
-.status-badge.low { background: rgba(245, 158, 11, 0.15); color: var(--gold); border-color: rgba(245, 158, 11, 0.3); }
-.status-badge.kritis { 
+.badge-optimal { background: rgba(16, 185, 129, 0.15); color: var(--green); border-color: rgba(16, 185, 129, 0.3); }
+.badge-low { background: rgba(245, 158, 11, 0.15); color: var(--gold); border-color: rgba(245, 158, 11, 0.3); }
+.badge-kritis { 
   background: rgba(239, 68, 68, 0.15); 
   color: var(--red); 
   border-color: var(--red);
@@ -1741,19 +2006,13 @@ watch(() => route.path, () => {
 }
 
 /* ━━━ MAIN STOCK ━━━ */
-.gc-main {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .stock-display {
   display: flex;
   align-items: baseline;
   gap: 8px;
 }
 
-.stock-val-large {
+.stock-number {
   font-size: 3.5rem;
   font-weight: 700;
   color: white;
@@ -1767,248 +2026,279 @@ watch(() => route.path, () => {
   font-weight: 600;
 }
 
-/* ━━━ PROGRESS BAR ━━━ */
-.progress-container {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.progress-meta {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .pack-count {
   font-size: 18px;
   font-weight: 600;
   color: white;
+  text-align: right;
+  margin-top: -12px;
 }
 
-.progress-track {
+/* ━━━ PROGRESS BAR ━━━ */
+.progress-bar-track {
   height: 6px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 100px;
   overflow: hidden;
+  margin-top: 4px;
 }
 
-.progress-bar {
+.progress-bar-fill {
   height: 100%;
   border-radius: 100px;
   transition: width 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.progress-bar.optimal { background: var(--green); }
-.progress-bar.low { background: var(--gold); }
-.progress-bar.kritis { background: var(--red); }
+.bg-optimal { background: var(--green); }
+.bg-low { background: var(--gold); }
+.bg-kritis { background: var(--red); }
 
 /* ━━━ MICRO STATS ━━━ */
-.gc-stats-grid {
+.metrics-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   padding: 16px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+  margin-top: 8px;
 }
 
-.ms-item {
+.metric-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.ms-label {
+.metric-label {
   font-size: 10px;
   font-weight: 700;
   color: var(--muted);
 }
 
-.ms-val {
+.metric-value {
   font-size: 13px;
   font-weight: 600;
   color: white;
 }
 
 /* ━━━ FOOTER ━━━ */
-.gc-footer {
+.card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-top: 4px;
 }
 
 .safety-info {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   font-size: 12px;
 }
 
-.info-label { color: var(--muted); }
-.info-val { color: white; font-weight: 600; }
+.safety-label { color: var(--muted); }
+.safety-value { color: white; font-weight: 600; }
 
-.btn-adjust {
+.manage-btn, .supply-manage-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.manage-btn {
   background: var(--gold);
   color: black;
-  font-weight: 700;
-  font-size: 12px;
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
   border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.btn-adjust:hover {
+.manage-btn:hover {
   filter: brightness(1.1);
-  transform: scale(1.02);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
 }
 
-/* ━━━ SUPPLIES STYLES ━━━ */
-.supply-label {
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
-}
-
-.gc-main.mini {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.stock-val-medium {
-  font-size: 2.2rem;
-  font-weight: 700;
-}
-
-.stock-unit-mini {
-  color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.progress-track.mini { margin-top: 8px; }
-
-.gc-stats-mini {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 13px;
-}
-
-.btn-restock {
+.supply-manage-btn {
   background: transparent;
-  border: 1px solid var(--green);
-  color: var(--green);
-  font-weight: 700;
-  font-size: 12px;
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 140, 0, 0.3);
+  color: var(--gold);
 }
 
-.btn-restock:hover {
-  background: rgba(16, 185, 129, 0.05);
-  border-color: white;
+.supply-manage-btn:hover {
+  background: rgba(255, 140, 0, 0.05);
+  border-color: var(--gold);
   color: white;
 }
 
 /* ━━━ AUDIT TRAIL ━━━ */
-.logs-section.elevated {
+.audit-trail-section {
   background: var(--bg-card);
-  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.text-heading { font-size: 1.1rem; color: white; font-weight: 600; }
-
-.audit-table {
-  width: 100%;
-  border-collapse: collapse;
+.audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 16px;
 }
 
-.audit-table th {
-  text-align: left;
-  padding: 12px;
+.audit-title { font-size: 1.25rem; color: white; margin-bottom: 2px; }
+.audit-subtitle { font-size: 0.85rem; color: var(--muted); }
+
+.audit-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.audit-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.audit-list-premium {
+  display: flex;
+  flex-direction: column;
+}
+
+.audit-header-grid {
+  display: grid;
+  grid-template-columns: 160px 180px 80px 1fr 140px;
+  gap: 16px;
+  padding: 12px 20px;
+  padding-left: 17px;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 1px;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
 }
 
-.audit-row { transition: all 0.2s ease; }
-.audit-row:nth-child(odd) { background: rgba(255, 255, 255, 0.01); }
-.audit-row:hover { background: rgba(255, 255, 255, 0.02); }
+.audit-row {
+  display: grid;
+  grid-template-columns: 160px 180px 80px 1fr 140px;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  min-height: 64px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 150ms;
+  padding-left: 17px;
+}
+.audit-row:hover { background: rgba(255,255,255,0.02); }
+.audit-row:last-child { border-bottom: none; }
 
-.audit-table td {
-  padding: 16px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+.audit-row.is-void {
+  opacity: 0.5;
+}
+.audit-row.is-void .reason-text {
+  text-decoration: line-through;
+}
+
+/* Timestamp */
+.col-timestamp { display: flex; flex-direction: column; gap: 2px; }
+.time-relative {
   font-size: 13px;
+  font-weight: 600;
+  color: white;
+}
+.time-exact {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
 }
 
-.time-cell { display: flex; flex-direction: column; gap: 2px; }
-.rel-time { color: white; font-weight: 600; }
-.exact-time { color: var(--muted); font-size: 11px; }
-
-.audit-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 800;
-  display: inline-block;
-  border-width: 1px;
-  border-style: solid;
-}
-
-.audit-badge.sale { background: rgba(239, 68, 68, 0.12); color: var(--red); border-color: rgba(239, 68, 68, 0.2); }
-.audit-badge.arrival { background: rgba(16, 185, 129, 0.12); color: var(--green); border-color: rgba(16, 185, 129, 0.2); }
-.audit-badge.opname { background: rgba(99, 102, 241, 0.12); color: #818cf8; border-color: rgba(99, 102, 241, 0.2); }
-.audit-badge.void { background: rgba(239, 68, 68, 0.2); color: var(--red); border-color: rgba(239, 68, 68, 0.3); }
-
-/* 📱 MOBILE AUDIT CARDS */
-.mobile-audit-card {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.mac-header {
-  display: flex;
-  justify-content: space-between;
+/* Type badge */
+.type-badge {
+  display: inline-flex;
   align-items: center;
-}
-
-.mac-time {
-  font-size: 10px;
-  color: var(--muted);
-}
-
-.mac-body {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.mac-change {
-  font-size: 0.95rem;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
   font-weight: 700;
-}
-
-.mac-notes {
-  font-size: 0.8rem;
-  color: var(--muted);
-  max-width: 60%;
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: 0.5px;
   white-space: nowrap;
 }
+.type-icon {
+  font-size: 12px;
+}
 
-.note-pill { color: white; font-weight: 500; }
-.void-line { text-decoration: line-through; opacity: 0.6; }
+/* Change value */
+.change-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+.is-positive { color: var(--green); }
+.is-negative { color: var(--red); }
+.is-zero     { color: #64748b; }
+
+/* Reason */
+.reason-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Admin */
+.admin-text {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+}
+
+/* Filter Pills */
+.filter-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  transition: all 150ms;
+  text-transform: uppercase;
+}
+.filter-pill:hover {
+  color: white;
+  border-color: rgba(255,255,255,0.20);
+}
+.filter-pill.active {
+  font-weight: 800;
+}
+
+/* Mobile Adjustments */
+.type-badge-mini {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.mac-change.is-positive { color: var(--green); }
+.mac-change.is-negative { color: var(--red); }
 
 /* ━━━ UTILITIES ━━━ */
 .animate-spin { animation: spin 1s linear infinite; }
@@ -2028,66 +2318,196 @@ watch(() => route.path, () => {
 }
 
 /* ━━━ REFINED MODAL & FORM ELEMENTS ━━━ */
-.purchase-form-card {
-  border: 1px solid rgba(255, 140, 0, 0.2);
-  border-radius: 16px;
-  padding: 20px;
-  margin-top: 10px;
-  background: rgba(255, 255, 255, 0.02);
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start; /* Permudah scroll dari atas */
+  justify-content: center;
+  padding: 40px 20px; /* Tambah padding atas bawah agar tidak nempel layar */
+  overflow-y: auto; /* Aktifkan scroll pada overlay */
 }
 
-.summary-line {
-  display: flex;
-  justify-content: space-between;
+.modal-card {
+  width: 100%;
+  max-width: 500px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow: 0 40px 100px -20px rgba(0,0,0,0.8);
+  position: relative;
+  margin-bottom: 40px; /* Margin bawah agar tidak nempel ujung saat scroll */
+}
+
+.modal-card .hero-font {
+  font-size: 1.8rem;
   margin-bottom: 8px;
-  font-size: 0.9rem;
+}
+
+.modal-form {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   color: var(--muted);
 }
 
-.summary-line.highlight {
-  font-weight: 800;
-  color: white;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.1);
-}
-
-.summary-line .val {
-  color: white;
-  font-weight: 700;
-}
-
-.btn-primary-action {
+.form-group input,
+.form-group textarea {
   width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: white;
+  font-family: inherit;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+/* Neutralize number spinners */
+.form-group input[type="number"]::-webkit-inner-spin-button,
+.form-group input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.form-group input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: var(--gold);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
+}
+
+.form-group textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.info-box {
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.segmented-control button {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  padding: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.segmented-control button.active {
+  background: var(--gold);
+  color: black;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.calc-result {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: white;
+  margin: 12px 0;
+  font-family: var(--font-mono);
+}
+
+.btn-link-xs {
+  background: transparent;
+  border: none;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s ease;
+}
+
+.btn-link-xs:hover {
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  padding: 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary {
   background: var(--gold);
   color: black;
   border: none;
-  padding: 16px;
+  padding: 14px;
   border-radius: 12px;
-  font-weight: 900;
-  font-size: 0.9rem;
+  font-weight: 800;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-top: 10px;
 }
 
-.btn-primary-action:hover:not(:disabled) {
+.btn-primary:hover {
+  filter: brightness(1.1);
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(245, 158, 11, 0.3);
-}
-
-.btn-primary-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.animate-fade {
-  animation: fadeIn 0.4s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 /* ━━━ STOK OPNAME UI ━━━ */
@@ -2479,87 +2899,7 @@ watch(() => route.path, () => {
   margin-bottom: 24px;
 }
 
-.grading-card {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
 
-.grading-card:hover {
-  transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.gc-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.gc-badge {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 900;
-}
-
-.gc-badge.hero { background: var(--gold); color: black; }
-.gc-badge.medium { background: #4ecdc4; color: black; }
-.gc-badge.small { background: #ff6b6b; color: black; }
-
-.gc-rule {
-  font-size: 0.65rem;
-  font-weight: 800;
-  color: var(--muted);
-}
-
-.gc-input {
-  width: 100% !important;
-  font-size: 1.8rem !important;
-  text-align: center !important;
-  font-weight: 900 !important;
-  background: rgba(0, 0, 0, 0.3) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.gc-unit {
-  font-size: 0.7rem;
-  font-weight: 800;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-
-.grading-validation {
-  padding: 16px 24px;
-  border-radius: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 800;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-  margin-bottom: 24px;
-}
-
-.grading-validation.invalid {
-  background: rgba(255, 62, 62, 0.1);
-  border: 1px solid rgba(255, 62, 62, 0.2);
-  color: var(--red);
-}
-
-.grading-validation.valid {
-  background: rgba(0, 255, 157, 0.1);
-  border: 1px solid rgba(0, 255, 157, 0.2);
-  color: var(--green);
-}
-
-.check-text { display: flex; align-items: center; gap: 8px; }
-.warning-text { font-size: 0.8rem; opacity: 0.8; }
 
 .status-badge {
   text-transform: uppercase;
@@ -2573,14 +2913,7 @@ watch(() => route.path, () => {
 .status-badge.cicilan { background: rgba(255, 140, 0, 0.1); color: var(--gold); }
 .status-badge.utang { background: rgba(255, 62, 62, 0.1); color: var(--red); }
 
-.red-highlight {
-  background: rgba(255, 62, 62, 0.1) !important;
-  border-color: rgba(255, 62, 62, 0.2) !important;
-}
 
-.red-highlight .fs-val {
-  color: var(--red) !important;
-}
 
 @media (max-width: 768px) {
   .grading-cards {
@@ -2669,12 +3002,6 @@ watch(() => route.path, () => {
     align-items: flex-end;
   }
   
-  .sohc-diff {
-    font-weight: 700;
-    font-size: 1.1rem;
-    font-family: var(--font-mono);
-  }
-  
   .btn-primary-xs {
     background: var(--gold);
     color: black;
@@ -2685,4 +3012,316 @@ watch(() => route.path, () => {
     border: none;
   }
 }
+
+/* ========================================================================= */
+/* FIX TAB LAYOUT WIDTHS                                                     */
+/* ========================================================================= */
+.tab-content,
+.tab-panel,
+[class*="tab-content"],
+[class*="pembelian"],
+[class*="opname"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+}
+
+.stock-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 4px;
+  width: fit-content;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+  color: rgba(255,255,255,0.45);
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+}
+.tab-item.active { background: #f59e0b; color: #000; }
+.tab-item:not(.active):hover { color: white; background: rgba(255,255,255,0.06); }
+
+/* PEMBELIAN TAB REDESIGN */
+.pembelian-tab {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 28px;
+}
+.pembelian-card {
+  background: #141418;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 28px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.pembelian-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.pembelian-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 4px;
+}
+.pembelian-card-sub { font-size: 13px; color: rgba(255,255,255,0.40); }
+.catat-btn {
+  background: #f59e0b; color: #000; border: none; border-radius: 10px;
+  padding: 10px 20px; font-size: 13px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  transition: filter 150ms, transform 150ms; flex-shrink: 0;
+}
+.catat-btn:hover { filter: brightness(1.10); transform: scale(1.02); }
+.pembelian-kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+.kpi-card { 
+  background: rgba(255,255,255,0.03); 
+  border: 1px solid rgba(255,255,255,0.06); 
+  border-radius: 12px; 
+  padding: 20px; 
+  transition: border-color 200ms, transform 200ms;
+}
+.kpi-card:hover { 
+  border-color: rgba(255,255,255,0.15); 
+  transform: translateY(-2px); 
+}
+.kpi-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: rgba(255,255,255,0.45); text-transform: uppercase; margin-bottom: 8px; }
+.kpi-value { font-size: 24px; font-weight: 700; color: white; font-family: 'DM Mono', monospace; }
+.kpi-card.utang .kpi-value { color: #ef4444; }
+.kpi-card.utang { border-color: rgba(239,68,68,0.15); background: rgba(239,68,68,0.04); }
+.pembelian-divider { height: 1px; background: rgba(255,255,255,0.06); margin-bottom: 28px; }
+.pembelian-table { width: 100%; border-collapse: collapse; }
+.pembelian-table th { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: rgba(255,255,255,0.30); text-transform: uppercase; padding: 8px 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.pembelian-table td { padding: 16px 12px; font-size: 13px; color: rgba(255,255,255,0.80); border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+.pembelian-table tr:last-child td { border-bottom: none; }
+.pembelian-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ━━━ OPNAME TAB PREMIUM REDESIGN ━━━ */
+.opname-tab { 
+  width: 100%; 
+  margin-top: 32px; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 24px; 
+}
+
+/* ━━━ TIPS BANNER ━━━ */
+.tips-banner { 
+  width: 100%; 
+  background: rgba(56, 189, 248, 0.04); 
+  border: 1px solid rgba(56, 189, 248, 0.12); 
+  border-radius: 12px; 
+  padding: 16px 20px; 
+  display: flex; 
+  align-items: center; 
+  gap: 14px; 
+  box-sizing: border-box; 
+}
+.tips-icon { 
+  font-size: 20px; 
+  flex-shrink: 0; 
+  line-height: 1;
+}
+.tips-text { 
+  font-size: 13px; 
+  color: rgba(255, 255, 255, 0.50); 
+  line-height: 1.6; 
+  margin: 0; 
+}
+.tips-text strong { 
+  color: #38bdf8; 
+  font-weight: 700; 
+}
+
+/* ━━━ MAIN CARD ━━━ */
+.stok-opname-layout { width: 100%; }
+.opname-card { 
+  background: #111114; 
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  border-radius: 20px; 
+  padding: 40px; 
+  width: 100%; 
+  box-sizing: border-box; 
+  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
+}
+
+/* ━━━ REFINED HEADER (FIXED BOX MODEL) ━━━ */
+.opname-card-header { 
+  display: flex; 
+  align-items: flex-start; /* Align to top to prevent weird centering */
+  justify-content: space-between; 
+  gap: 40px; 
+  margin-bottom: 32px; 
+  padding-bottom: 32px; 
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04); 
+}
+.opname-card-header > div:first-child {
+  flex: 1; /* Title container takes sremaining space */
+  min-width: 300px; /* Ensure title doesn't squeeze too much */
+}
+.opname-title { 
+  font-size: 24px; 
+  font-weight: 800; 
+  color: #fff; 
+  margin: 0 0 10px; 
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+.opname-sub { 
+  font-size: 14px; 
+  color: rgba(255, 255, 255, 0.35); 
+  margin: 0; 
+  line-height: 1.6; 
+  max-width: 500px;
+}
+
+/* ━━━ BUTTON STYLING (FIXED WIDTH) ━━━ */
+.opname-start-btn { 
+  width: auto !important; /* Force override of any global resets */
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #000; 
+  border: none; 
+  border-radius: 12px; 
+  padding: 14px 28px; 
+  font-size: 13px; 
+  font-weight: 800; 
+  cursor: pointer; 
+  display: flex; 
+  align-items: center; 
+  gap: 10px; 
+  white-space: nowrap; 
+  flex-shrink: 0; /* Important: prevents button from squashing */
+  transition: all 200ms ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+.opname-start-btn:hover { 
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+  filter: brightness(1.1);
+}
+.opname-start-btn:active { transform: translateY(0); }
+
+/* ━━━ SECTION DIVIDER ━━━ */
+.riwayat-header { 
+  display: flex; 
+  align-items: center; 
+  gap: 20px; 
+  margin-bottom: 28px; 
+}
+.riwayat-label { 
+  font-size: 11px; 
+  font-weight: 700; 
+  letter-spacing: 2.5px; 
+  color: rgba(255, 255, 255, 0.35); 
+  text-transform: uppercase; 
+  white-space: nowrap; 
+}
+.riwayat-line { 
+  flex: 1; 
+  height: 1px; 
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0%, transparent 100%); 
+}
+
+/* ━━━ TABLE REFINEMENT ━━━ */
+.opname-table { width: 100%; border-collapse: collapse; }
+.opname-table th { 
+  font-size: 10px; 
+  font-weight: 700; 
+  letter-spacing: 1.5px; 
+  color: rgba(255, 255, 255, 0.30); 
+  text-transform: uppercase; 
+  padding: 12px; 
+  text-align: left; 
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06); 
+}
+.opname-table td { 
+  padding: 20px 12px; 
+  font-size: 14px; 
+  color: rgba(255, 255, 255, 0.70); 
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03); 
+  vertical-align: middle; 
+}
+.opname-table tr:hover td { background: rgba(255, 255, 255, 0.015); }
+.opname-table tr:last-child td { border-bottom: none; }
+
+/* ━━━ EMPTY STATE ━━━ */
+.empty-state { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center; 
+  padding: 80px 40px; 
+  text-align: center; 
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.04);
+}
+.empty-icon { 
+  font-size: 56px; 
+  margin-bottom: 24px; 
+  line-height: 1;
+}
+.empty-title { 
+  font-size: 18px; 
+  font-weight: 700; 
+  color: #fff; 
+  margin: 0 0 10px; 
+}
+.empty-sub { 
+  font-size: 14px; 
+  color: rgba(255, 255, 255, 0.35); 
+  margin: 0; 
+  max-width: 400px; 
+  line-height: 1.6; 
+}
+
+/* HELPER CLASSES */
+.status-badge { 
+  display: inline-flex; 
+  align-items: center; 
+  padding: 4px 12px; 
+  border-radius: 30px; 
+  font-size: 11px; 
+  font-weight: 700; 
+  letter-spacing: 0.5px;
+}
+.status-badge.completed { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.1); }
+.status-badge.draft { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.1); }
+
+.mono { font-family: 'DM Mono', monospace; font-weight: 500; }
+.text-red { color: #ef4444; }
+.text-green { color: #10b981; }
+
+
+/* RESPONSIVE OVERRIDES */
+@media (max-width: 768px) {
+  .pembelian-card { padding: 16px; }
+  .pembelian-card-header { flex-direction: column; }
+  .pembelian-kpi-row { grid-template-columns: 1fr; gap: 10px; }
+  .catat-btn { width: 100%; justify-content: center; }
+  .opname-card { padding: 16px; }
+  .opname-card-header { flex-direction: column; gap: 16px; }
+  .opname-start-btn { width: 100%; justify-content: center; }
+  .tips-banner { padding: 12px 14px; }
+  .opname-table { display: none; }
+}
 </style>
+

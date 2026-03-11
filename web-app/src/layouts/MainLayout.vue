@@ -85,7 +85,8 @@ import {
   TruckIcon,
   InstagramIcon,
   TrendingUpIcon,
-  SettingsIcon
+  SettingsIcon,
+  MessageSquareIcon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
@@ -137,7 +138,9 @@ const navCards = computed<NavSection[]>(() => {
       label: 'Management',
       links: [
         { label: 'Financial Terminal', path: '/financial', icon: TrendingUpIcon, premium: true },
-        { label: 'Team Members', path: '/employees', icon: UsersIcon }
+        { label: 'Tactical Drivers', path: '/drivers', icon: TruckIcon },
+        { label: 'Team Members', path: '/employees', icon: UsersIcon },
+        { label: 'Activity Log', path: '/activity-log', icon: ClipboardListIcon }
       ]
     });
   }
@@ -149,11 +152,20 @@ const navCards = computed<NavSection[]>(() => {
     ]
   });
 
+  const systemLinks = [
+    { label: 'My Profile', path: '/profile', icon: UsersIcon }
+  ];
+
+  if (authStore.isAdmin) {
+    systemLinks.push(
+      { label: 'Customer Services', path: '/customer-service', icon: MessageSquareIcon },
+      { label: 'Company Settings', path: '/settings', icon: SettingsIcon }
+    );
+  }
+
   sections.push({
-    label: 'Account',
-    links: [
-      { label: 'My Profile', path: '/profile', icon: SettingsIcon }
-    ]
+    label: 'System',
+    links: systemLinks
   });
 
   return sections;

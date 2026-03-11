@@ -50,6 +50,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useAuthStore } from '../../stores/auth';
 import { 
   XIcon, 
   LayoutDashboardIcon, 
@@ -60,43 +62,73 @@ import {
   TruckIcon, 
   WalletIcon, 
   UserCircleIcon,
-  InstagramIcon
+  InstagramIcon,
+  SettingsIcon,
+  MessageSquareIcon
 } from 'lucide-vue-next';
 
 defineProps<{ show: boolean }>();
 defineEmits(['close']);
 
-const menuGroups = [
-  {
-    title: 'OPERATIONS',
-    items: [
-      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
-      { path: '/stock', label: 'Inventory Matrix', icon: PackageIcon },
-    ]
-  },
-  {
-    title: 'REVENUE',
-    items: [
-      { path: '/sales/new', label: 'New Order', icon: PlusCircleIcon },
-      { path: '/sales', label: 'Order List', icon: ClipboardListIcon },
-      { path: '/customers', label: 'CRM Database', icon: UsersIcon },
-      { path: '/suppliers', label: 'Suppliers', icon: TruckIcon },
-    ]
-  },
-  {
-    title: 'MANAGEMENT',
-    items: [
-      { path: '/financial', label: 'Financial Terminal', icon: WalletIcon },
-      { path: '/employees', label: 'Team Members', icon: UserCircleIcon },
-    ]
-  },
-  {
+const authStore = useAuthStore();
+
+const menuGroups = computed(() => {
+  const groups = [
+    {
+      title: 'OPERATIONS',
+      items: [
+        { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
+        { path: '/stock', label: 'Inventory Matrix', icon: PackageIcon },
+      ]
+    },
+    {
+      title: 'REVENUE',
+      items: [
+        { path: '/sales/new', label: 'New Order', icon: PlusCircleIcon },
+        { path: '/sales', label: 'Order List', icon: ClipboardListIcon },
+        { path: '/customers', label: 'CRM Database', icon: UsersIcon },
+        { path: '/suppliers', label: 'Suppliers', icon: TruckIcon },
+      ]
+    }
+  ];
+
+  if (authStore.isAdmin) {
+    groups.push({
+      title: 'MANAGEMENT',
+      items: [
+        { path: '/financial', label: 'Financial Terminal', icon: WalletIcon },
+        { path: '/drivers', label: 'Tactical Drivers', icon: TruckIcon },
+        { path: '/employees', label: 'Team Members', icon: UserCircleIcon },
+        { path: '/activity-log', label: 'Activity Log', icon: ClipboardListIcon }
+      ]
+    });
+  }
+
+  groups.push({
     title: 'CREATIVE',
     items: [
       { path: 'https://drive.google.com/drive/u/7/folders/1SXW4vNSc6ju2w7PRnp70Fh-Q75OAfMWx?usp=sharing', label: 'Instagram Content', icon: InstagramIcon },
     ]
+  });
+
+  const systemItems = [
+    { path: '/profile', label: 'My Profile', icon: UserCircleIcon }
+  ];
+
+  if (authStore.isAdmin) {
+    systemItems.push(
+      { path: '/customer-service', label: 'Customer Services', icon: MessageSquareIcon },
+      { path: '/settings', label: 'Company Settings', icon: SettingsIcon }
+    );
   }
-];
+
+  groups.push({
+    title: 'SYSTEM',
+    items: systemItems
+  });
+
+  return groups;
+});
 </script>
 
 <style scoped>

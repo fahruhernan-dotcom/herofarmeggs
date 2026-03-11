@@ -9,6 +9,31 @@
  */
 
 /**
+ * Capitalize each word — Indonesian-aware
+ * Examples:
+ *   "ibu sari"        → "Ibu Sari"
+ *   "boyolali eggs"   → "Boyolali Eggs"
+ *   "stok telah habis"→ "Stok Telah Habis"
+ *   "FAS-TOP"         → "Fas-Top"  (handles hyphen)
+ *   "  spasi  lebih " → "Spasi Lebih"  (trims + cleans)
+ */
+export function toTitleCase(str: string | null | undefined): string {
+    if (!str) return ''
+    return str
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')           // collapse multiple spaces
+        .split(' ')
+        .map(word =>
+            word
+                .split('-')                  // handle hyphenated words
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                .join('-')
+        )
+        .join(' ')
+}
+
+/**
  * Format a value as Indonesian Rupiah currency.
  * Returns "Rp 0" for NaN, null, or undefined values.
  */
@@ -105,5 +130,46 @@ export function formatDateShort(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('id-ID', {
         day: 'numeric',
         month: 'short'
+    })
+}
+
+/**
+ * Format stock number with Indonesian separator
+ */
+export function formatStock(value: number | null | undefined): string {
+    if (value === null || value === undefined || isNaN(value)) return '0'
+    return value.toLocaleString('id-ID')
+}
+
+/**
+ * Format date relatively (e.g. "2 jam yang lalu")
+ */
+export function formatRelativeDate(dateStr: string | null | undefined): string {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+    if (diffInSeconds < 60) return 'Baru saja'
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} menit lalu`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} jam lalu`
+    if (diffInSeconds < 172800) return 'Kemarin'
+
+    return date.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short'
+    })
+}
+
+/**
+ * Format exact time with day and month
+ */
+export function formatExactTime(dateStr: string | null | undefined): string {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
     })
 }

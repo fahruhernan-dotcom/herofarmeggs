@@ -1,0 +1,191 @@
+{
+    "name": "Hero Farm - Message Forwarder (Safe Bridge)",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "seconds",
+                            "secondsInterval": 30
+                        }
+                    ]
+                }
+            },
+            "id": "1",
+            "name": "Every 30s",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                100,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "table": {
+                    "__fixedValue": "waha_config"
+                },
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "is_active",
+                            "condition": "isTrue"
+                        }
+                    ]
+                }
+            },
+            "id": "2",
+            "name": "Get Config (Online)",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                300,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_ONLINE_CREDS",
+                    "name": "Online Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "table": {
+                    "__fixedValue": "wa_message_log"
+                },
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "status",
+                            "value": "pending"
+                        }
+                    ]
+                }
+            },
+            "id": "3",
+            "name": "Get Pending Msg (Local)",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                500,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_LOCAL_CREDS",
+                    "name": "Local Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $node[\"Get Config (Online)\"].json[\"base_url\"] }}/api/sendText",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "X-Api-Key",
+                            "value": "={{ $node[\"Get Config (Online)\"].json[\"api_key\"] }}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"chatId\": \"{{ $json.phone }}@c.us\",\n  \"text\": \"{{ $json.message }}\",\n  \"session\": \"{{ $node[\\\"Get Config (Online)\\\"].json[\\\"session_name\\\"] }}\"\n}",
+                "options": {}
+            },
+            "id": "4",
+            "name": "Send via WAHA",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                750,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "table": {
+                    "__fixedValue": "wa_message_log"
+                },
+                "id": "={{ $node[\"Get Pending Msg (Local)\"].json[\"id\"] }}",
+                "columns": {
+                    "value": [
+                        {
+                            "column": "status",
+                            "value": "sent"
+                        }
+                    ]
+                }
+            },
+            "id": "5",
+            "name": "Mark as Sent (Local)",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                950,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_LOCAL_CREDS",
+                    "name": "Local Supabase"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Every 30s": {
+            "main": [
+                [
+                    {
+                        "node": "Get Config (Online)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Config (Online)": {
+            "main": [
+                [
+                    {
+                        "node": "Get Pending Msg (Local)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Pending Msg (Local)": {
+            "main": [
+                [
+                    {
+                        "node": "Send via WAHA",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send via WAHA": {
+            "main": [
+                [
+                    {
+                        "node": "Mark as Sent (Local)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

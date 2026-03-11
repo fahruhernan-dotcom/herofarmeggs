@@ -69,10 +69,20 @@
             <ShieldIcon v-if="staff.role === 'admin'" class="icon-xs" />
             <span class="label">{{ staff.role.toUpperCase() }} LEVEL</span>
           </div>
+          <div class="position-badge glass-panel text-xs">
+            {{ staff.staff_positions?.name || 'OPERATIVE' }}
+          </div>
           <div class="status-pill-tactical" :class="staff.is_active ? 'active' : 'suspended'">
             {{ staff.is_active ? 'OPERATIONAL' : 'SUSPENDED' }}
           </div>
         </div>
+
+        <!-- NEW: PERSONNEL LEDGER ACTION -->
+        <button class="btn-ledger-access" @click="openPersonnelLedger(staff)">
+          <BookTextIcon class="icon-xs" />
+          <span>PERSONNEL LEDGER</span>
+          <ArrowRightIcon class="icon-xs ms-auto" />
+        </button>
 
         <!-- ACTIONS: Hidden for Super Admin card, visible for others -->
         <div class="card-actions-terminal" v-if="!isSuperAdmin(staff) && authStore.isAdmin">
@@ -197,6 +207,166 @@
           </form>
         </div>
       </div>
+    <!-- PERSONNEL LEDGER MODAL (PHASE 2) -->
+    <Teleport to="body">
+      <div v-if="showLedgerModal" class="modal-overlay" @click.self="showLedgerModal = false">
+        <div class="modal-card ledger-modal glass-panel animate-pop">
+          <div class="ledger-header">
+            <div class="staff-header-tactical">
+              <div class="avatar-terminal">
+                <span class="avatar-text">{{ (activeOperative?.full_name || activeOperative?.email).charAt(0).toUpperCase() }}</span>
+              </div>
+              <div class="staff-title">
+                <h2 class="hero-font">{{ activeOperative?.full_name || 'Personnel Profile' }}</h2>
+                <p class="text-dim">{{ activeOperative?.email }}</p>
+              </div>
+            </div>
+            <button class="btn-close" @click="showLedgerModal = false">✕</button>
+          </div>
+
+          <!-- TACTICAL TABS -->
+          <div class="tabs-tactical">
+            <button 
+              v-for="tab in ['OVERVIEW', 'CONTRACT', 'FINANCE', 'PAYROLL']" 
+              :key="tab"
+              class="tab-btn" 
+              :class="{ 'active': activeLedgerTab === tab }"
+              @click="activeLedgerTab = tab"
+            >
+              {{ tab }}
+            </button>
+          </div>
+
+          <div class="ledger-content scroll-y">
+            <!-- TAB: OVERVIEW -->
+            <div v-if="activeLedgerTab === 'OVERVIEW'" class="tab-pane animate-fade">
+              <div class="form-grid">
+                <div class="form-group-tactical">
+                  <label>Service Position</label>
+                  <CustomDropdown 
+                    v-model="activeOperative.position_id" 
+                    :options="staffPositions.map(p => ({ label: p.name, value: p.id }))"
+                    placeholder="Select position..."
+                  />
+                </div>
+                <div class="form-group-tactical">
+                  <label>Employment Status</label>
+                  <CustomDropdown 
+                    v-model="activeOperative.employment_status" 
+                    :options="[
+                      { label: 'Active Service', value: 'active' },
+                      { label: 'On Leave', value: 'on_leave' },
+                      { label: 'Inactive / Record Only', value: 'inactive' },
+                      { label: 'Terminated', value: 'terminated' }
+                    ]"
+                  />
+                </div>
+                <div class="form-group-tactical">
+                  <label>Base Monthly Salary</label>
+                  <div class="input-terminal">
+                    <DollarSignIcon class="icon-xs" />
+                    <input type="number" v-model="activeOperative.salary" placeholder="0" />
+                  </div>
+                </div>
+                <div class="form-group-tactical">
+                  <label>Start of Operations</label>
+                  <div class="input-terminal">
+                    <ActivityIcon class="icon-xs" />
+                    <input type="date" v-model="activeOperative.start_date" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB: CONTRACT -->
+            <div v-if="activeLedgerTab === 'CONTRACT'" class="tab-pane animate-fade">
+              <div class="contract-status-box glass-panel" v-if="!activeOperative.contract">
+                <InfoIcon class="icon-sm" />
+                <span>No active electronic contract found for this operative.</span>
+                <button class="btn-action-small">AUTHORIZE CONTRACT</button>
+              </div>
+              <div v-else class="contract-details card-row">
+                 <FileTextIcon />
+                 <div class="info">
+                   <p class="label">PERMANENT CONTRACT</p>
+                   <p class="value">CN-2026-03948</p>
+                 </div>
+                 <button class="btn-icon-terminal">VIEW</button>
+              </div>
+            </div>
+
+            <!-- TAB: FINANCE (Allowances & Bank) -->
+            <div v-if="activeLedgerTab === 'FINANCE'" class="tab-pane animate-fade">
+              <h4 class="section-title">BANKING INFRASTRUCTURE</h4>
+              <div class="form-grid">
+                <div class="form-group-tactical">
+                  <label>Bank Institution</label>
+                  <div class="input-terminal">
+                    <CreditCardIcon class="icon-xs" />
+                    <input type="text" v-model="activeOperative.bank_name" placeholder="e.g. BCA, BRI" />
+                  </div>
+                </div>
+                <div class="form-group-tactical">
+                  <label>Account Number</label>
+                  <div class="input-terminal">
+                    <CreditCardIcon class="icon-xs" />
+                    <input type="text" v-model="activeOperative.bank_account" placeholder="Account identifier" />
+                  </div>
+                </div>
+                <div class="form-group-tactical full-width">
+                  <label>Account Holder Name</label>
+                  <div class="input-terminal">
+                    <UserIcon class="icon-xs" />
+                    <input type="text" v-model="activeOperative.bank_holder" placeholder="Matches bank records" />
+                  </div>
+                </div>
+              </div>
+
+              <h4 class="section-title mt-24">TACTICAL ALLOWANCES</h4>
+              <div class="allowance-list">
+                <div class="allowance-item glass-panel">
+                  <span>Transport Allowance</span>
+                  <span class="text-green">Rp 250,000</span>
+                  <button class="btn-icon-danger">✕</button>
+                </div>
+                <button class="btn-add-allowance">
+                  <PlusIcon class="icon-xs" />
+                  <span>ADD ALLOWANCE</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- TAB: PAYROLL -->
+            <div v-if="activeLedgerTab === 'PAYROLL'" class="tab-pane animate-fade">
+              <div class="payroll-action-summary glass-panel mb-24">
+                <div class="p-info">
+                  <p class="p-label">Next Processing Date</p>
+                  <p class="p-value">April 01, 2026</p>
+                </div>
+                <button class="btn-primary-glow">GENERATE SLIP</button>
+              </div>
+
+              <h4 class="section-title">COMPENSATION HISTORY</h4>
+              <div class="history-list">
+                 <div class="history-item glass-panel">
+                   <div class="h-date">MAR 2026</div>
+                   <div class="h-status paid">PAID</div>
+                   <div class="h-amount">Rp {{ formatNumber(activeOperative.salary) }}</div>
+                   <button class="btn-icon-terminal">SLIP</button>
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-actions-ledger">
+            <div class="status-msg" v-if="saveStatus">{{ saveStatus }}</div>
+            <button class="btn-secondary-tactical" @click="showLedgerModal = false">DISMISS</button>
+            <button class="btn-primary-glow" @click="savePersonnelData" :disabled="saving">
+              {{ saving ? 'UPDATING ARCHIVE...' : 'SYNC LEDGER DATA' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -221,7 +391,15 @@ import {
   KeyIcon,
   MailIcon,
   UserIcon,
-  Trash2Icon
+  Trash2Icon,
+  BookTextIcon,
+  ArrowRightIcon,
+  DollarSignIcon,
+  InfoIcon,
+  HistoryIcon,
+  CreditCardIcon,
+  PlusIcon,
+  FileTextIcon
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
@@ -243,6 +421,18 @@ const deleteTarget = ref<any>(null);
 const deleting = ref(false);
 const submitting = ref(false);
 const regError = ref('');
+
+// Personnel Ledger View
+const showLedgerModal = ref(false);
+const activeOperative = ref<any>(null);
+const staffPositions = ref<any[]>([]);
+const activeLedgerTab = ref('OVERVIEW');
+const saving = ref(false);
+const saveStatus = ref('');
+
+function formatNumber(num: number) {
+  return new Intl.NumberFormat('id-ID').format(num || 0);
+}
 
 const filteredTeam = computed(() => {
   if (!searchQuery.value) return team.value;
@@ -268,10 +458,60 @@ const roleOptions = [
 async function fetchTeam() {
   const { data } = await supabase
     .from('profiles')
-    .select('*')
+    .select('*, staff_positions(*)')
     .order('full_name');
   
   if (data) team.value = data;
+}
+
+async function fetchPositions() {
+  const { data } = await supabase
+    .from('staff_positions')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+  
+  if (data) staffPositions.value = data;
+}
+
+function openPersonnelLedger(staff: any) {
+  activeOperative.value = { ...staff };
+  activeLedgerTab.value = 'OVERVIEW';
+  showLedgerModal.value = true;
+}
+
+async function savePersonnelData() {
+  if (!activeOperative.value) return;
+  saving.value = true;
+  saveStatus.value = '';
+
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        position_id: activeOperative.value.position_id,
+        salary: activeOperative.value.salary,
+        bank_name: activeOperative.value.bank_name,
+        bank_account: activeOperative.value.bank_account,
+        bank_holder: activeOperative.value.bank_holder,
+        employment_status: activeOperative.value.employment_status,
+        start_date: activeOperative.value.start_date
+      })
+      .eq('id', activeOperative.value.id);
+
+    if (error) throw error;
+    
+    saveStatus.value = '✅ Ledger synchronized successfully.';
+    fetchTeam();
+    
+    setTimeout(() => {
+      saveStatus.value = '';
+    }, 3000);
+  } catch (err: any) {
+    saveStatus.value = '❌ Error: ' + err.message;
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function handleRegister() {
@@ -359,6 +599,7 @@ async function executeDelete() {
 const route = useRoute();
 onMounted(() => {
   fetchTeam();
+  fetchPositions();
 });
 
 onUnmounted(() => {
@@ -788,4 +1029,236 @@ watch(() => route.path, () => {
 }
 
 .empty-icon { width: 48px; height: 48px; opacity: 0.1; }
+
+/* NEW UI ELEMENTS: Personnel Ledger & Position */
+.position-badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: var(--color-primary);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  background: rgba(255, 140, 0, 0.05);
+}
+
+.btn-ledger-access {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.btn-ledger-access:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateX(4px);
+}
+
+/* LEDGER MODAL */
+.ledger-modal {
+  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ledger-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.tabs-tactical {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-dim);
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.tab-btn.active {
+  background: var(--color-primary);
+  color: black;
+}
+
+.ledger-content {
+  max-height: 50vh;
+  min-height: 300px;
+  padding-right: 12px;
+}
+
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: var(--color-primary);
+  letter-spacing: 0.15em;
+  margin-bottom: 20px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 140, 0, 0.1);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.full-width { grid-column: 1 / -1; }
+
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
+}
+
+.contract-status-box {
+  padding: 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--color-text-dim);
+}
+
+.btn-action-small {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.allowance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.allowance-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+}
+
+.btn-add-allowance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--color-text-dim);
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.75rem;
+  width: 100%;
+}
+
+.btn-add-allowance:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: white;
+}
+
+.payroll-action-summary {
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.05), transparent);
+}
+
+.p-label { font-size: 0.7rem; color: var(--color-text-dim); font-weight: 700; }
+.p-value { font-size: 1.1rem; color: white; font-weight: 900; margin-top: 4px; }
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+}
+
+.h-date { flex: 1; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+.h-status.paid { color: #00ff9d; font-size: 0.65rem; font-weight: 900; background: rgba(0, 255, 157, 0.1); padding: 4px 10px; border-radius: 6px; }
+.h-amount { font-weight: 950; min-width: 120px; text-align: right; }
+
+.btn-icon-terminal {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: white;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.modal-actions-ledger {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.status-msg {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.mt-24 { margin-top: 24px; }
+.mb-24 { margin-bottom: 24px; }
+.ms-auto { margin-left: auto; }
+.text-green { color: #00ff9d; font-weight: 800; }
+
+.scroll-y { overflow-y: auto; }
+.scroll-y::-webkit-scrollbar { width: 6px; }
+.scroll-y::-webkit-scrollbar-thumb { background: rgba(255, 140, 0, 0.2); border-radius: 10px; }
+
+.animate-fade { animation: fadeIn 0.4s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 </style>

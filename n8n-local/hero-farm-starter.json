@@ -1,0 +1,50 @@
+{
+    "name": "Hero Farm - WA Auto Confirmation",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "waha-webhook",
+                "options": {}
+            },
+            "id": "7778b663-36c1-4b1a-8c1a-8b9cad0e1f20",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                250,
+                300
+            ],
+            "webhookId": "waha-webhook"
+        },
+        {
+            "parameters": {
+                "content": "## Hero Farm Starter Workflow\nThis workflow is triggered by WAHA when a new message arrives. \n\n**Next Steps:**\n1. Connect this to Supabase to fetch stock data.\n2. Send response back via WAHA HTTP Request node."
+            },
+            "id": "a3b8d1b6-0b3b-4b1a-9c1a-1a2b3c4d5e6f",
+            "name": "Note",
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                500,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Note",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {},
+    "hash": "51a0f474-ddc5-473e-a866-495b89647da7"
+}

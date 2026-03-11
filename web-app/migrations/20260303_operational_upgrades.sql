@@ -26,8 +26,8 @@ CREATE TABLE IF NOT EXISTS price_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   inventory_id TEXT REFERENCES inventory(id),
   price_type TEXT NOT NULL CHECK (price_type IN ('selling', 'hpp', 'cost_per_egg', 'packaging')),
-  old_value DECIMAL(15,2),
-  new_value DECIMAL(15,2),
+  old_price DECIMAL(15,2),
+  new_price DECIMAL(15,2),
   changed_by TEXT,
   changed_at TIMESTAMPTZ DEFAULT NOW(),
   reason TEXT
@@ -44,17 +44,17 @@ BEGIN
   v_changed_by := COALESCE(current_setting('app.current_user', true), 'System');
 
   IF NEW.base_price_per_pack IS DISTINCT FROM OLD.base_price_per_pack THEN
-    INSERT INTO price_history(inventory_id, price_type, old_value, new_value, changed_by)
+    INSERT INTO price_history(inventory_id, price_type, old_price, new_price, changed_by)
     VALUES (NEW.id, 'selling', OLD.base_price_per_pack, NEW.base_price_per_pack, v_changed_by);
   END IF;
 
-  IF NEW.cost_price IS DISTINCT FROM OLD.cost_price THEN
-    INSERT INTO price_history(inventory_id, price_type, old_value, new_value, changed_by)
-    VALUES (NEW.id, 'hpp', OLD.cost_price, NEW.cost_price, v_changed_by);
+  IF NEW.hpp_per_pack IS DISTINCT FROM OLD.hpp_per_pack THEN
+    INSERT INTO price_history(inventory_id, price_type, old_price, new_price, changed_by)
+    VALUES (NEW.id, 'hpp', OLD.hpp_per_pack, NEW.hpp_per_pack, v_changed_by);
   END IF;
 
   IF NEW.cost_per_egg IS DISTINCT FROM OLD.cost_per_egg THEN
-    INSERT INTO price_history(inventory_id, price_type, old_value, new_value, changed_by)
+    INSERT INTO price_history(inventory_id, price_type, old_price, new_price, changed_by)
     VALUES (NEW.id, 'cost_per_egg', OLD.cost_per_egg, NEW.cost_per_egg, v_changed_by);
   END IF;
 

@@ -1,0 +1,258 @@
+{
+    "name": "Hero Farm - Interactive Customer Bot",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "waha-bot-webhook",
+                "options": {}
+            },
+            "id": "1",
+            "name": "WA Message In",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                100,
+                300
+            ],
+            "webhookId": "waha-bot-webhook"
+        },
+        {
+            "parameters": {
+                "conditions": [
+                    {
+                        "keyName": "body.payload.body",
+                        "condition": "regex",
+                        "value": "/(stok|harga|egg|telur)/i"
+                    }
+                ]
+            },
+            "id": "2",
+            "name": "Cek Stok Keyword?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                350,
+                150
+            ]
+        },
+        {
+            "parameters": {
+                "table": {
+                    "__fixedValue": "inventory"
+                },
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "item_type",
+                            "value": "egg"
+                        }
+                    ]
+                }
+            },
+            "id": "3",
+            "name": "Fetch Stock",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                550,
+                100
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "PLEASE_CONNECT_LOCAL_SUPABASE",
+                    "name": "Local Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:3000/api/sendText",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"chatId\": \"{{ $node[\\\"WA Message In\\\"].json[\\\"body\\\"][\\\"payload\\\"][\\\"from\\\"] }}\",\n  \"text\": \"🥚 *STOK TELUR HERO FARM*\\n\\n{{ $json.map(i => '• ' + i.label + ': ' + (i.current_stock / 10).toFixed(0) + ' pack (' + (i.base_price_per_pack).toLocaleString('id-ID') + ')').join('\\\\n') }}\\n\\nKetik *PESAN* untuk mulai order!\"\n}",
+                "options": {}
+            },
+            "id": "4",
+            "name": "Reply Stock",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                750,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": [
+                    {
+                        "keyName": "body.payload.body",
+                        "condition": "regex",
+                        "value": "/^PESAN\\s+(\\w+)\\s+(\\d+)$/i"
+                    }
+                ]
+            },
+            "id": "5",
+            "name": "Pattern PESAN?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                350,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const msg = $node[\"WA Message In\"].json[\"body\"][\"payload\"][\"body\"];\nconst match = msg.match(/^PESAN\\s+(\\w+)\\s+(\\d+)$/i);\nreturn {\n  grade: match[1].toUpperCase(),\n  packs: parseInt(match[2]),\n  phone: $node[\"WA Message In\"].json[\"body\"][\"payload\"][\"from\"],\n  customer_name: $node[\"WA Message In\"].json[\"body\"][\"payload\"][\"pushName\"] || 'Pelanggan WA'\n};"
+            },
+            "id": "6",
+            "name": "Parse Order",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                550,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "insert",
+                "table": {
+                    "__fixedValue": "wa_bot_drafts"
+                },
+                "columns": {
+                    "value": [
+                        {
+                            "column": "phone",
+                            "value": "={{ $json.phone }}"
+                        },
+                        {
+                            "column": "customer_name",
+                            "value": "={{ $json.customer_name }}"
+                        },
+                        {
+                            "column": "egg_grade",
+                            "value": "={{ $json.grade }}"
+                        },
+                        {
+                            "column": "packs",
+                            "value": "={{ $json.packs }}"
+                        }
+                    ]
+                }
+            },
+            "id": "7",
+            "name": "Save Draft",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                750,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "PLEASE_CONNECT_LOCAL_SUPABASE",
+                    "name": "Local Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:3000/api/sendText",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"chatId\": \"{{ $node[\\\"Parse Order\\\"].json[\\\"phone\\\"] }}\",\n  \"text\": \"✅ *PESANAN DICATAT*\\n\\nGrade: {{ $node[\\\"Parse Order\\\"].json[\\\"grade\\\"] }}\\nJumlah: {{ $node[\\\"Parse Order\\\"].json[\\\"packs\\\"] }} Pack\\n\\nStatus: *PENDING*\\nAdmin kami akan segera menghubungi Anda untuk konfirmasi. Terima kasih!\"\n}",
+                "options": {}
+            },
+            "id": "8",
+            "name": "Confirm Reply",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                950,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "WA Message In": {
+            "main": [
+                [
+                    {
+                        "node": "Cek Stok Keyword?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Cek Stok Keyword?": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Stock",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Pattern PESAN?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Stock": {
+            "main": [
+                [
+                    {
+                        "node": "Reply Stock",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Pattern PESAN?": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Order",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Order": {
+            "main": [
+                [
+                    {
+                        "node": "Save Draft",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save Draft": {
+            "main": [
+                [
+                    {
+                        "node": "Confirm Reply",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

@@ -59,6 +59,12 @@ const router = createRouter({
                     meta: { requiresAuth: true, requiresAdmin: true }
                 },
                 {
+                    path: 'drivers',
+                    name: 'drivers',
+                    component: () => import('../views/Drivers.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
                     path: 'financial',
                     name: 'financial',
                     component: () => import('../views/FinancialTerminal.vue'),
@@ -69,6 +75,26 @@ const router = createRouter({
                     name: 'profile',
                     component: () => import('../views/Profile.vue'),
                     meta: { requiresAuth: true }
+                },
+                {
+                    path: 'activity-log',
+                    name: 'activity-log',
+                    component: () => import('../views/ActivityLog.vue'),
+                    alias: '/logs',
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
+                    path: 'customer-service',
+                    name: 'customer-service',
+                    component: () => import('../views/CustomerService.vue'),
+                    alias: '/waha',
+                    meta: { requiresAuth: true, requiresAdmin: true }
+                },
+                {
+                    path: 'settings',
+                    name: 'settings',
+                    component: () => import('../views/CompanySettings.vue'),
+                    meta: { requiresAuth: true, requiresAdmin: true }
                 }
             ]
         }

@@ -261,7 +261,7 @@ async function fetchData() {
   if (error) console.error('CRM Error:', error);
   
   if (data) {
-    const { data: piutangData } = await supabase.from('piutang_v2').select('customer_id, remaining').gt('remaining', 0);
+    const { data: piutangData } = await supabase.from('piutang').select('customer_id, remaining').gt('remaining', 0);
     const piutangMap: Record<string, number> = {};
     if (piutangData) {
       piutangData.forEach(p => {

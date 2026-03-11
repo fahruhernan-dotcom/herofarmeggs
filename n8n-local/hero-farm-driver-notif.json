@@ -1,0 +1,124 @@
+{
+    "name": "Hero Farm - Driver Notification (Advanced)",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "driver-event",
+                "options": {}
+            },
+            "id": "1",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                100,
+                300
+            ],
+            "webhookId": "driver-event"
+        },
+        {
+            "parameters": {
+                "conditions": [
+                    {
+                        "keyName": "status",
+                        "condition": "equal",
+                        "value": "picked_up"
+                    }
+                ]
+            },
+            "id": "2",
+            "name": "Is Picked Up?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                350,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:3000/api/sendText",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"chatId\": \"{{ $json.phone }}@c.us\",\n  \"text\": \"🚚 Pesanan *{{ $json.invoice_number }}* sudah dibawa Sopir. Pantau kedatangannya ya!\"\n}",
+                "options": {}
+            },
+            "id": "3",
+            "name": "Notify Pickup",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                600,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:3000/api/sendText",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"chatId\": \"{{ $json.phone }}@c.us\",\n  \"text\": \"✅ Pesanan *{{ $json.invoice_number }}* telah sampai! Terima kasih sudah berbelanja di Hero Farm.\"\n}",
+                "options": {}
+            },
+            "id": "4",
+            "name": "Notify Delivered",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                600,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "content": "### LOGISTIK HUB\nWorkflow ini opsional jika Anda ingin memindahkan logika pesan dari Database ke n8n.\n1. Webhook dipicu oleh Supabase Function\n2. Cek status (Picked up / Delivered)\n3. Kirim via WAHA"
+            },
+            "id": "5",
+            "name": "Note",
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                100,
+                150
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Is Picked Up?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Picked Up?": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Pickup",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Notify Delivered",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

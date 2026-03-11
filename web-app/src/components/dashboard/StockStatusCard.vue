@@ -39,7 +39,7 @@
 
 <script setup lang="ts">
 // @ts-ignore
-import { GRADES, getGradeLabel } from '../../constants/grades'
+import { GRADES, getGradeLabel, normalizeGrade } from '../../constants/grades'
 // @ts-ignore
 import { formatCurrency, formatStock } from '../../utils/formatters'
 
@@ -47,11 +47,10 @@ defineProps<{
   grades: any[]
   potentialRevenue: number
 }>()
-
 function getChipClass(id: string) {
-  if (id === 'hero_size' || id === 'hero') return 'chip-hero'
-  if (id === 'standard_size' || id === 'medium') return 'chip-medium'
-  if (id === 'salted_egg' || id === 'small') return 'chip-small'
+  const normalized = normalizeGrade(id)
+  if (normalized === 'hero') return 'chip-hero'
+  if (normalized === 'salted_egg') return 'chip-small'
   return ''
 }
 

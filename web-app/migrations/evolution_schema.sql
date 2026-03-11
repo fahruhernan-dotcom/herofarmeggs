@@ -34,9 +34,8 @@ ALTER TABLE inventory
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Seed grade data onto existing inventory rows (safe to re-run)
-UPDATE inventory SET grade = 'Hero',   size_rule = '>65g',   retail_price_per_pack = COALESCE(base_price_per_pack, 35000), hpp_per_egg = COALESCE(cost_per_egg, 2600) WHERE id = 'hero'   AND grade IS NULL;
-UPDATE inventory SET grade = 'Medium', size_rule = '55-65g', retail_price_per_pack = COALESCE(base_price_per_pack, 27000), hpp_per_egg = COALESCE(cost_per_egg, 2600) WHERE id = 'medium' AND grade IS NULL;
-UPDATE inventory SET grade = 'Small',  size_rule = '<55g',   retail_price_per_pack = COALESCE(base_price_per_pack, 20000), hpp_per_egg = COALESCE(cost_per_egg, 2600) WHERE id = 'small'  AND grade IS NULL;
+UPDATE inventory SET label = 'Telur Bebek Hero', grade = 'HERO', size_rule = '>65g', retail_price_per_pack = 35000, hpp_per_pack = 20000 WHERE id = 'hero';
+UPDATE inventory SET label = 'Telur Asin', grade = 'SMALL', size_rule = 'Salted', retail_price_per_pack = 31000, hpp_per_pack = 16000 WHERE id = 'salted_egg';
 
 -- ─── sales: add structured columns ───
 ALTER TABLE sales
@@ -64,7 +63,8 @@ ALTER TABLE sale_items
   ADD COLUMN IF NOT EXISTS hpp_per_pack DECIMAL(10,2),
   ADD COLUMN IF NOT EXISTS revenue DECIMAL(15,2),
   ADD COLUMN IF NOT EXISTS hpp_total DECIMAL(15,2),
-  ADD COLUMN IF NOT EXISTS gross_profit DECIMAL(15,2);
+  ADD COLUMN IF NOT EXISTS gross_profit DECIMAL(15,2),
+  ADD COLUMN IF NOT EXISTS price_at_sale DECIMAL(10,2);
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- SECTION 2: NEW TABLES
@@ -91,8 +91,7 @@ CREATE TABLE IF NOT EXISTS gradings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   purchase_id UUID REFERENCES purchases(id),
   hero_qty INTEGER DEFAULT 0,
-  medium_qty INTEGER DEFAULT 0,
-  small_qty INTEGER DEFAULT 0,
+  salted_qty INTEGER DEFAULT 0,
   total_graded INTEGER,
   graded_at TIMESTAMPTZ DEFAULT NOW(),
   notes TEXT
@@ -206,8 +205,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Run initial HPP calculation
 SELECT recalculate_hpp('hero');
-SELECT recalculate_hpp('medium');
-SELECT recalculate_hpp('small');
+SELECT recalculate_hpp('salted_egg');
 
 -- ─── FUNCTION 2: Create Purchase + Auto-Create Utang ───
 CREATE OR REPLACE FUNCTION create_purchase_with_utang(
@@ -273,13 +271,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION create_grading(
   p_purchase_id UUID,
   p_hero_qty INTEGER,
-  p_medium_qty INTEGER,
-  p_small_qty INTEGER,
+  p_salted_qty INTEGER,
   p_notes TEXT DEFAULT NULL
 ) RETURNS JSONB AS $$
 DECLARE
   v_expected INTEGER;
-  v_total_graded INTEGER := p_hero_qty + p_medium_qty + p_small_qty;
+  v_total_graded INTEGER := p_hero_qty + p_salted_qty;
   v_grading_id UUID;
   v_new_hpp DECIMAL;
 BEGIN
@@ -296,8 +293,8 @@ BEGIN
     );
   END IF;
 
-  INSERT INTO gradings (purchase_id, hero_qty, medium_qty, small_qty, total_graded, notes)
-  VALUES (p_purchase_id, p_hero_qty, p_medium_qty, p_small_qty, v_total_graded, p_notes)
+  INSERT INTO gradings (purchase_id, hero_qty, salted_qty, total_graded, notes)
+  VALUES (p_purchase_id, p_hero_qty, p_salted_qty, v_total_graded, p_notes)
   RETURNING id INTO v_grading_id;
 
   IF p_hero_qty > 0 THEN
@@ -306,28 +303,21 @@ BEGIN
     VALUES ('hero', 'grading_in', p_hero_qty, v_grading_id, 'Grading masuk');
   END IF;
 
-  IF p_medium_qty > 0 THEN
-    UPDATE inventory SET current_stock = current_stock + p_medium_qty, updated_at = NOW() WHERE id = 'medium';
+  IF p_salted_qty > 0 THEN
+    UPDATE inventory SET current_stock = current_stock + p_salted_qty, updated_at = NOW() WHERE id = 'salted_egg';
     INSERT INTO stock_logs (inventory_id, log_type, quantity_change, reference_id, note)
-    VALUES ('medium', 'grading_in', p_medium_qty, v_grading_id, 'Grading masuk');
-  END IF;
-
-  IF p_small_qty > 0 THEN
-    UPDATE inventory SET current_stock = current_stock + p_small_qty, updated_at = NOW() WHERE id = 'small';
-    INSERT INTO stock_logs (inventory_id, log_type, quantity_change, reference_id, note)
-    VALUES ('small', 'grading_in', p_small_qty, v_grading_id, 'Grading masuk');
+    VALUES ('salted_egg', 'grading_in', p_salted_qty, v_grading_id, 'Grading masuk');
   END IF;
 
   SELECT price_per_egg INTO v_new_hpp FROM purchases WHERE id = p_purchase_id;
-  UPDATE inventory SET hpp_per_egg = v_new_hpp WHERE id IN ('hero','medium','small');
+  UPDATE inventory SET hpp_per_egg = v_new_hpp WHERE id IN ('hero','salted_egg');
   PERFORM recalculate_hpp('hero');
-  PERFORM recalculate_hpp('medium');
-  PERFORM recalculate_hpp('small');
+  PERFORM recalculate_hpp('salted_egg');
 
   PERFORM check_safety_stock();
 
   RETURN jsonb_build_object('success', true, 'grading_id', v_grading_id,
-    'hero_added', p_hero_qty, 'medium_added', p_medium_qty, 'small_added', p_small_qty);
+    'hero_added', p_hero_qty, 'salted_added', p_salted_qty);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -337,7 +327,7 @@ RETURNS VOID AS $$
 DECLARE
   v_item RECORD;
 BEGIN
-  FOR v_item IN SELECT * FROM inventory WHERE id IN ('hero','medium','small') LOOP
+  FOR v_item IN SELECT * FROM inventory WHERE id IN ('hero','salted_egg') LOOP
     IF v_item.current_stock <= COALESCE(v_item.safety_stock, 20) THEN
       INSERT INTO notifications (type, title, message, link)
       SELECT 'critical_stock', '🔴 Stok Kritis: ' || COALESCE(v_item.grade, v_item.id),
@@ -410,9 +400,9 @@ BEGIN
     v_eggs_out := (item->>'packs_sold')::INTEGER * COALESCE(v_inv.pack_size, 10);
     v_price := COALESCE((item->>'override_price')::DECIMAL, v_inv.retail_price_per_pack, v_inv.base_price_per_pack);
 
-    INSERT INTO sale_items (sale_id, inventory_id, grade, packs_sold, eggs_out,
+    INSERT INTO sale_items (sale_id, inventory_id, grade, packs_sold, eggs_out, 
       price_per_pack, hpp_per_pack, revenue, hpp_total, gross_profit,
-      egg_type, quantity, unit_price, subtotal, unit_cost)
+      egg_type, quantity, unit_price, subtotal, unit_cost, price_at_sale)
     VALUES (v_sale_id, v_inv.id, COALESCE(v_inv.grade, v_inv.id),
             (item->>'packs_sold')::INTEGER, v_eggs_out,
             v_price, COALESCE(v_inv.hpp_per_pack, 0),
@@ -421,7 +411,7 @@ BEGIN
             (item->>'packs_sold')::INTEGER * (v_price - COALESCE(v_inv.hpp_per_pack, 0)),
             v_inv.id, (item->>'packs_sold')::INTEGER, v_price,
             (item->>'packs_sold')::INTEGER * v_price,
-            COALESCE(v_inv.hpp_per_pack, 0));
+            COALESCE(v_inv.hpp_per_pack, 0), v_price);
 
     IF v_price != COALESCE(v_inv.retail_price_per_pack, v_inv.base_price_per_pack) THEN
       INSERT INTO price_overrides (sale_id, inventory_id, original_price, override_price,
@@ -440,8 +430,15 @@ BEGIN
       updated_at = NOW()
     WHERE id = v_inv.id;
 
+    -- [SUPPLIES AUTOMATION]
+    -- Deduct 1 Box, 1 Sticker, 1 Card per pack sold
+    UPDATE inventory SET current_stock = GREATEST(0, current_stock - (item->>'packs_sold')::INTEGER), updated_at = NOW() 
+    WHERE id IN ('packaging_standard', 'sticker_label', 'mini_card');
+
+    -- Log Supplies Change
     INSERT INTO stock_logs (inventory_id, log_type, quantity_change, reference_id, note)
-    VALUES (v_inv.id, 'sale_out', -v_eggs_out, v_sale_id, 'Sale: ' || v_invoice_no);
+    SELECT id, 'sale_out_supplies', -(item->>'packs_sold')::INTEGER, v_sale_id, 'Supplies for ' || v_invoice_no
+    FROM inventory WHERE id IN ('packaging_standard', 'sticker_label', 'mini_card') AND (item->>'packs_sold')::INTEGER > 0;
 
     v_revenue := v_revenue + ((item->>'packs_sold')::INTEGER * v_price);
     v_hpp_total := v_hpp_total + ((item->>'packs_sold')::INTEGER * COALESCE(v_inv.hpp_per_pack, 0));
@@ -518,6 +515,19 @@ BEGIN
     INSERT INTO stock_logs (inventory_id, log_type, quantity_change, reference_id, note)
     VALUES (COALESCE(v_item.inventory_id, v_item.egg_type), 'void_return',
             COALESCE(v_item.eggs_out, v_item.quantity * 10), p_sale_id, 'Void: ' || p_reason);
+  END LOOP;
+
+  -- [SUPPLIES RESTORATION]
+  -- Count total packs in this sale to restore boxes, stickers, and cards
+  FOR v_item IN SELECT COALESCE(SUM(packs_sold), 0) as total_packs FROM sale_items WHERE sale_id = p_sale_id LOOP
+    IF v_item.total_packs > 0 THEN
+      UPDATE inventory SET current_stock = current_stock + v_item.total_packs
+      WHERE id IN ('packaging_standard', 'sticker_label', 'mini_card');
+
+      INSERT INTO stock_logs (inventory_id, log_type, quantity_change, reference_id, note)
+      SELECT id, 'void_return_supplies', v_item.total_packs, p_sale_id, 'Restore Supplies: ' || p_reason
+      FROM inventory WHERE id IN ('packaging_standard', 'sticker_label', 'mini_card');
+    END IF;
   END LOOP;
 
   UPDATE sales SET
@@ -631,42 +641,26 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION get_dashboard_kpis()
 RETURNS JSONB AS $$
 DECLARE
-  v_total_revenue DECIMAL;
-  v_total_hpp DECIMAL;
-  v_gross_profit DECIMAL;
-  v_total_utang DECIMAL;
-  v_total_piutang DECIMAL;
-  v_total_purchase_cost DECIMAL;
-  v_net_position DECIMAL;
+  v_rev DECIMAL := 0; v_profit DECIMAL := 0; v_piu DECIMAL := 0; v_modal DECIMAL := 0;
 BEGIN
-  SELECT COALESCE(SUM(COALESCE(total_revenue, total_price, 0)), 0),
-         COALESCE(SUM(COALESCE(total_hpp, 0)), 0)
-  INTO v_total_revenue, v_total_hpp
-  FROM sales WHERE voided_at IS NULL AND payment_status != 'voided';
+  -- Revenue & Profit dari Sales
+  SELECT COALESCE(SUM(total_revenue), 0), COALESCE(SUM(gross_profit), 0) 
+  INTO v_rev, v_profit FROM sales WHERE voided_at IS NULL;
+  
+  -- Piutang (Gabungkan status pending & unpaid)
+  SELECT COALESCE(SUM(remaining), 0) INTO v_piu FROM piutang WHERE status IN ('belum_bayar', 'sebagian');
 
-  v_gross_profit := v_total_revenue - v_total_hpp;
-
-  SELECT COALESCE(SUM(remaining), 0) INTO v_total_utang
-  FROM utang_supplier WHERE status != 'lunas';
-
-  SELECT COALESCE(SUM(remaining), 0) INTO v_total_piutang
-  FROM piutang WHERE status != 'lunas';
-
-  SELECT COALESCE(SUM(total_cost), 0) INTO v_total_purchase_cost FROM purchases;
-
-  v_net_position := v_total_revenue - v_total_purchase_cost;
+  -- Modal Pembelian
+  SELECT COALESCE(SUM(total_cost), 0) INTO v_modal FROM purchases;
 
   RETURN jsonb_build_object(
-    'total_revenue', v_total_revenue,
-    'total_hpp', v_total_hpp,
-    'gross_profit', v_gross_profit,
-    'overall_margin', CASE WHEN v_total_revenue > 0 THEN (v_gross_profit / v_total_revenue) * 100 ELSE 0 END,
-    'total_utang_aktif', v_total_utang,
-    'total_piutang_aktif', v_total_piutang,
-    'total_purchase_cost', v_total_purchase_cost,
-    'net_position', v_net_position,
-    'modal_belum_kembali', CASE WHEN v_net_position < 0 THEN ABS(v_net_position) ELSE 0 END,
-    'is_profitable', v_net_position >= 0
+    'total_revenue', v_rev,
+    'net_profit', v_profit,
+    'net_position', (v_rev - v_modal),
+    'total_piutang', v_piu,
+    'piutang_count', (SELECT COUNT(*) FROM piutang WHERE status IN ('belum_bayar', 'sebagian')),
+    'total_utang', (SELECT COALESCE(SUM(remaining), 0) FROM utang_supplier WHERE status != 'lunas'),
+    'last_sync', NOW()
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

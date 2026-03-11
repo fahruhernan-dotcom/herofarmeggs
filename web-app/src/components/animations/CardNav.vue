@@ -42,7 +42,10 @@
                 v-for="(lnk, i) in item.links" 
                 :key="`${lnk.label}-${i}`" 
                 class="nav-card-link" 
-                :class="{ 'premium-link': lnk.premium }"
+                :class="{ 
+                  'premium-link': lnk.premium,
+                  'active-link': route.path === lnk.path 
+                }"
                 href="#"
                 @click.prevent="navigate(lnk.path)"
               >
@@ -63,7 +66,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { gsap } from 'gsap';
 import { ArrowUpRightIcon } from 'lucide-vue-next';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 
 const props = withDefaults(defineProps<{
   items: any[];
@@ -81,6 +84,7 @@ const contentRef = ref<HTMLElement | null>(null);
 const cardsRef = ref<HTMLElement[]>([]);
 const tlRef = ref<gsap.core.Timeline | null>(null);
 const router = useRouter();
+const route = useRoute();
 
 const navigate = (path: string) => {
   if (path) {
@@ -336,19 +340,36 @@ watch(() => props.items, () => {
   align-items: center;
   gap: 12px;
   text-decoration: none;
-  color: white;
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 700;
-  font-size: 1.2rem;
-  transition: opacity 0.2s ease;
+  font-size: 1.15rem;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 8px 4px;
+  border-radius: 8px;
 }
 
 .nav-card-link:hover {
-  opacity: 1;
+  color: white;
+  text-shadow: 0 0 20px rgba(255, 140, 0, 0.6);
+  transform: translateX(8px) scale(1.02);
 }
 
-.nav-card-link:hover .link-label {
-  transform: translateX(4px);
+.nav-card-link:hover .nav-card-link-icon {
   color: var(--color-primary);
+  filter: drop-shadow(0 0 10px rgba(255, 140, 0, 0.8));
+  transform: scale(1.15);
+}
+
+/* Active Page Highlights */
+.nav-card-link.active-link {
+  color: #f59e0b;
+  text-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+  font-weight: 900;
+}
+
+.nav-card-link.active-link .nav-card-link-icon {
+  color: #f59e0b;
+  filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.8));
 }
 
 .link-label {
@@ -370,38 +391,28 @@ watch(() => props.items, () => {
 .nav-card-link-icon {
   width: 20px;
   height: 20px;
-  color: var(--color-primary);
+  color: var(--color-text-dim);
+  transition: all 0.3s ease;
 }
 
-/* Premium Link Styling */
-.nav-card-link.premium-link {
-  color: white; /* Changed to white to match other text */
-  text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
-  animation: premiumPulse 3s infinite ease-in-out;
-}
-
-.nav-card-link.premium-link .nav-card-link-icon {
-  color: #f59e0b;
-  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
-}
-
+/* Premium Link Styling (Enhanced for Global Aesthetic) */
 .nav-card-link.premium-link:hover {
-  text-shadow: 0 0 15px rgba(245, 158, 11, 0.8);
+  animation: premiumPulse 2s infinite ease-in-out;
 }
 
-.nav-card-link.premium-link:hover .nav-card-link-icon {
-  filter: drop-shadow(0 0 12px rgba(245, 158, 11, 1));
-  transform: scale(1.1);
+.nav-card-link.premium-link:hover .nav-card-link-icon,
+.nav-card-link.premium-link.active-link .nav-card-link-icon {
+  color: #f59e0b;
 }
 
 @keyframes premiumPulse {
   0%, 100% { 
-    opacity: 1; 
-    text-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    transform: translateX(8px) scale(1.02);
+    text-shadow: 0 0 20px rgba(255, 140, 0, 0.6);
   }
   50% { 
-    opacity: 0.9; 
-    text-shadow: 0 0 4px rgba(245, 158, 11, 0.2);
+    transform: translateX(12px) scale(1.04);
+    text-shadow: 0 0 30px rgba(255, 140, 0, 0.8);
   }
 }
 </style>

@@ -1,0 +1,154 @@
+{
+    "name": "Hero Farm - Daily Sales Recap",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "triggerAtHour": 18
+                        }
+                    ]
+                }
+            },
+            "id": "1",
+            "name": "Every Day 18:00",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                100,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "table": {
+                    "__fixedValue": "sales"
+                },
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "created_at",
+                            "condition": "gte",
+                            "value": "={{ $today.substring(0, 10) }}T00:00:00Z"
+                        }
+                    ]
+                }
+            },
+            "id": "2",
+            "name": "Get Today Sales",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                300,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "PLEASE_CONNECT_LOCAL_SUPABASE",
+                    "name": "Local Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "### DAILY RECAP LOGIC\n1. Ambil semua transaksi hari ini\n2. Hitung total revenue\n3. Kirim rincian ke WA Owner"
+            },
+            "id": "3",
+            "name": "Note",
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                100,
+                150
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "set",
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "total_revenue",
+                            "name": "total_revenue",
+                            "value": "={{ $json.reduce((acc, curr) => acc + curr.total_amount, 0) }}",
+                            "type": "number"
+                        },
+                        {
+                            "id": "order_count",
+                            "name": "order_count",
+                            "value": "={{ $json.length }}",
+                            "type": "number"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "4",
+            "name": "Calculate Stats",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                500,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:3000/api/sendText",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"chatId\": \"REPLACE_WITH_OWNER_PHONE@c.us\",\n  \"text\": \"📊 *REKAP HARIAN HERO FARM* ({{ $today.substring(0, 10) }})\\n\\n💰 Total Penjualan: Rp {{ $json.total_revenue.toLocaleString('id-ID') }}\\n📦 Jumlah Pesanan: {{ $json.order_count }}\\n\\nSemangat untuk hari esok! 🥚🔥\"\n}",
+                "options": {}
+            },
+            "id": "5",
+            "name": "Notify Owner",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                700,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Every Day 18:00": {
+            "main": [
+                [
+                    {
+                        "node": "Get Today Sales",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Today Sales": {
+            "main": [
+                [
+                    {
+                        "node": "Calculate Stats",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Calculate Stats": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Owner",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

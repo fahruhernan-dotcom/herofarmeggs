@@ -1,0 +1,16 @@
+version: '3.1'
+services:
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: waha_local
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - WHATSAPP_MAX_SESSIONS=1
+      # Secara default WAHA jalan di port 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      # Data autentikasi WhatsApp (Session/QR) agar tidak ter-logout jika container restart
+      - ./waha_data/.sessions:/app/.sessions
+      - ./waha_data/.schemas:/app/.schemas
+    restart: unless-stopped

@@ -1,5 +1,6 @@
 import { ref, reactive, computed } from 'vue'
 import { supabase } from '../lib/supabase'
+import { toCanonicalId, normalizeGrade } from '../constants/grades'
 import { useAuthStore } from '../stores/auth'
 
 /**
@@ -57,53 +58,47 @@ export function useDashboard() {
     }
 
     // ─── COMPUTED ────────────────────────
-    const eggInventory = computed(() => inventory.value.filter((i: any) => i.item_type !== 'packaging'))
+    const eggInventory = computed(() => {
+        const canonicalItems = ['hero', 'salted_egg']
+        return inventory.value.filter((i: any) => canonicalItems.includes(i.id) || canonicalItems.includes(toCanonicalId(i.id)))
+    })
     const packagingInventory = computed(() => inventory.value.filter((i: any) => i.item_type === 'packaging'))
 
+    // Laba Kotor = Total Penjualan Produk (gross sales revenue)
     const totalRevenue = computed(() => {
-        const current = getPeriodStats(allSales.value, 0)
-        return current.total // Sum of all sales including pending? No, usually revenue is what we earned.
-        // Let's stick to paid + pending for "potential" or just total. 
-        // But current.paid is what's shown as Revenue in the card.
+        return kpiData.value.total_revenue || getPeriodStats(allSales.value, 0).total
     })
 
+    // Total Modal = Biaya pembelian bahan baku
     const totalCost = computed(() => {
-        return financeEntries.value
-            .filter((f: any) => f.entry_type === 'expense')
-            .reduce((acc: number, f: any) => acc + Number(f.amount || 0), 0)
+        return kpiData.value.total_hpp || 0
     })
 
+    // Pendapatan (Net Profit) = Harga Jual - HPP
+    const grossProfit = computed(() => {
+        return kpiData.value.net_profit || 0
+    })
+
+    // Net Position = Revenue - Total Pembelian Modal (purchases)
     const netPosition = computed(() => {
-        // Cash from finance entries
-        const recordedCash = financeEntries.value.reduce((acc: number, f: any) => {
-            if (f.entry_type === 'income') return acc + Number(f.amount)
-            if (f.entry_type === 'expense') return acc - Number(f.amount)
-            return acc
-        }, 0)
-
-        // Add revenue from paid sales that might NOT have a finance entry yet
-        // However, this might double count if triggers are working.
-        // For now, let's just use the RPC kpiData if it's more reliable.
-        return recordedCash + (kpiData.value.total_piutang || 0) - (kpiData.value.total_utang || 0)
+        return kpiData.value.net_position || 0
     })
 
+    // Persentase modal kembali
     const modalKembaliPct = computed(() => {
-        const cost = totalCost.value
-        if (cost === 0) return 0
+        const cost = kpiData.value.total_purchase_cost || 0
+        if (cost === 0) return totalRevenue.value > 0 ? 100 : 0
         return Math.min((totalRevenue.value / cost) * 100, 100)
     })
 
     const revenueWidget = computed(() => {
         const current = getPeriodStats(allSales.value, 0)
         const previous = getPeriodStats(allSales.value, 1)
-        const growth = calculateGrowth(current.paid, previous.paid)
+        const growth = calculateGrowth(current.total, previous.total)
         return { current, growth }
     })
 
-    const grossProfit = computed(() => {
-        return kpiData.value.gross_profit || 0
-    })
-
+    // Margin % = Net Profit / Revenue × 100
     const grossMarginPct = computed(() => {
         const rev = totalRevenue.value
         if (rev === 0) return 0
@@ -124,7 +119,6 @@ export function useDashboard() {
         const days = 7
         const labels: string[] = []
         const heroData: number[] = []
-        const mediumData: number[] = []
         const saltedData: number[] = []
         const today = new Date()
 
@@ -141,12 +135,11 @@ export function useDashboard() {
             })
 
             const dayItems = daySales.flatMap((s: any) => s.sale_items || [])
-            heroData.push(dayItems.filter((i: any) => i.egg_type === 'hero_size').reduce((a: number, i: any) => a + (i.subtotal || 0), 0))
-            mediumData.push(dayItems.filter((i: any) => i.egg_type === 'standard_size').reduce((a: number, i: any) => a + (i.subtotal || 0), 0))
-            saltedData.push(dayItems.filter((i: any) => i.egg_type === 'salted_egg').reduce((a: number, i: any) => a + (i.subtotal || 0), 0))
+            heroData.push(dayItems.filter((i: any) => normalizeGrade(i.egg_type || i.inventory_id) === 'hero').reduce((a: number, i: any) => a + (i.subtotal || 0), 0))
+            saltedData.push(dayItems.filter((i: any) => normalizeGrade(i.egg_type || i.inventory_id) === 'salted_egg').reduce((a: number, i: any) => a + (i.subtotal || 0), 0))
         }
 
-        return { labels, heroData, mediumData, saltedData }
+        return { labels, heroData, saltedData }
     })
 
     // Top Customers (this month)
@@ -298,11 +291,10 @@ export function useDashboard() {
     function setupRealtime() {
         inventorySubscription = supabase
             .channel('dashboard-updates')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
-                fetchData()
-            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'piutang' }, () => fetchData())
             .subscribe()
-
     }
 
     function cleanup() {

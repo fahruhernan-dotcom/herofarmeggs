@@ -1,0 +1,146 @@
+{
+    "name": "Hero Farm - AI Sales Agent (Safe Bridge)",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "ai-bot-webhook",
+                "options": {}
+            },
+            "id": "1",
+            "name": "WA Message In",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                100,
+                300
+            ],
+            "webhookId": "ai-bot-webhook"
+        },
+        {
+            "parameters": {
+                "options": {
+                    "systemMessage": "=Anda adalah Asisten Penjualan Hero Farm (Peternakan Telur Bebek). \n\nTugas Anda:\n1. Bantu pelanggan mengecek stok dan harga telur.\n2. Catat pesanan pelanggan sebagai DRAFT.\n3. Gunakan nada bicara yang sopan, profesional, dan sedikit santai (Ramah).\n\nHanya gunakan tool yang tersedia untuk mengambil data atau menyimpan pesanan."
+                }
+            },
+            "id": "2",
+            "name": "AI Agent",
+            "type": "n8n-nodes-base.aiAgent",
+            "typeVersion": 1,
+            "position": [
+                400,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "model": "gpt-4o",
+                "options": {}
+            },
+            "id": "3",
+            "name": "OpenAI Chat Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+            "typeVersion": 1,
+            "position": [
+                300,
+                500
+            ],
+            "credentials": {
+                "openAiApi": {
+                    "id": "YOUR_OPENAI_KEY",
+                    "name": "OpenAI Account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "name": "check_inventory_standard",
+                "description": "Cek stok dan harga telur dari ONLINE database inventory.",
+                "workflowId": "Optional_Sub_Or_Direct_Node"
+            },
+            "id": "4",
+            "name": "Inventory Tool (Online)",
+            "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+            "typeVersion": 1,
+            "position": [
+                550,
+                500
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_ONLINE_CREDS",
+                    "name": "Online Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "name": "create_order_draft_local",
+                "description": "Simpan draf pesanan ke LOCAL database wa_bot_drafts.",
+                "workflowId": "Optional_Sub_Or_Direct_Node"
+            },
+            "id": "5",
+            "name": "Order Tool (Local)",
+            "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+            "typeVersion": 1,
+            "position": [
+                650,
+                450
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "SUPABASE_LOCAL_CREDS",
+                    "name": "Local Supabase"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "WA Message In": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "OpenAI Chat Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Inventory Tool (Online)": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Order Tool (Local)": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {}
+}
