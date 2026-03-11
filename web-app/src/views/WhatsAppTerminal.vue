@@ -8,9 +8,19 @@
         <h1 class="waha-title">WhatsApp Terminal</h1>
         <p class="waha-sub">Secure communication powered by WAHA Engine</p>
       </div>
-      <div class="status-badge" :class="'status-' + status">
-        <span class="status-dot"></span>
-        <span class="status-text">{{ statusLabel }}</span>
+      <div class="header-actions">
+        <button 
+          class="btn-refresh-manual" 
+          @click="manualRefresh" 
+          :disabled="isRefreshing"
+          title="Refresh Manual"
+        >
+          <span :class="{ 'spin-anim': isRefreshing }">🔄</span>
+        </button>
+        <div class="status-badge" :class="'status-' + status">
+          <span class="status-dot"></span>
+          <span class="status-text">{{ statusLabel }}</span>
+        </div>
       </div>
     </div>
 
@@ -74,7 +84,7 @@
             v-for="chat in filteredChats"
             :key="chat.id"
             class="chat-item"
-            :class="{ active: selectedChat?.id === chat.id }"
+            :class="{ active: selectedChatId === chat.id }"
             @click="selectChat(chat)"
           >
             <div class="chat-avatar">{{ getChatAvatar(chat) }}</div>
@@ -91,34 +101,42 @@
           </div>
         </div>
 
-        <!-- Engine info -->
-        <div class="engine-info">
-          <p>&gt; Engine: {{ WAHA_BASE }}</p>
-          <p>&gt; Session: {{ SESSION }}</p>
-          <p>&gt; Status: {{ status }}</p>
+        <!-- Technical Info (Collapsible) -->
+        <div class="technical-section">
+          <button class="tech-toggle" @click="showTechnical = !showTechnical">
+            <span>{{ showTechnical ? '▼' : '▶' }} Technical Engine Info</span>
+          </button>
+          
+          <div v-if="showTechnical" class="engine-info">
+            <p>&gt; Engine: {{ WAHA_BASE }}</p>
+            <p>&gt; Session: {{ SESSION }}</p>
+            <p>&gt; Status: {{ status }}</p>
+            <button class="btn-retry-small" @click="handleRetry">
+              🔄 Pulse Check Signal
+            </button>
+          </div>
         </div>
-        <button class="btn-retry" @click="checkStatus">🔄 Retry Signal</button>
       </div>
 
       <!-- RIGHT: Message Panel -->
       <div class="message-panel">
 
         <!-- No chat selected -->
-        <div v-if="!selectedChat" class="standby-state">
+        <div v-if="!selectedChatId" class="standby-state">
           <div class="standby-icon">((o))</div>
           <h3 class="standby-title">Signal Hub Standby</h3>
           <p class="standby-sub">Pilih kontak untuk memulai komunikasi.</p>
         </div>
 
         <!-- Chat open -->
-        <template v-else>
+        <div v-else-if="selectedChatId && selectedChat" class="chat-viewport">
 
           <!-- Chat header -->
           <div class="msg-header">
             <div class="msg-avatar">{{ getChatAvatar(selectedChat) }}</div>
             <div>
               <p class="msg-name">{{ getChatName(selectedChat) }}</p>
-              <p class="msg-phone">{{ selectedChat.id?.replace('@c.us','') }}</p>
+              <p class="msg-phone">{{ extractChatId(selectedChat).replace('@c.us','') }}</p>
             </div>
           </div>
 
@@ -149,8 +167,7 @@
               ➤
             </button>
           </div>
-
-        </template>
+        </div>
       </div>
     </div>
 
@@ -170,7 +187,7 @@ import { supabase } from '../lib/supabase';
 
 // ── TYPES ──
 interface Chat {
-  id: string;
+  id: any;
   name?: string;
   unreadCount?: number;
   lastMessage?: { body: string; timestamp: number };
@@ -202,13 +219,16 @@ function wahaHeaders() {
 const status         = ref('LOADING');
 const chats          = ref<Chat[]>([]);
 const selectedChat   = ref<Chat | null>(null);
+const selectedChatId = ref<string | null>(null);
 const messages       = ref<Message[]>([]);
 const newMessage     = ref('');
 const searchQuery    = ref('');
 const isLoadingChats = ref(false);
 const isLoadingMsgs  = ref(false);
+const isRefreshing   = ref(false);
 const qrCode         = ref<string | null>(null);
 const msgListRef     = ref<HTMLElement | null>(null);
+const showTechnical  = ref(false);
 let   pollingTimer: ReturnType<typeof setInterval> | null = null;
 
 // ── COMPUTED ──
@@ -243,6 +263,12 @@ async function fetchConfig() {
     }
   } catch {
     // Use defaults
+  }
+}
+
+async function handleRetry() {
+  if (confirm('Refresh koneksi ke WAHA Engine?')) {
+    await checkStatus();
   }
 }
 
@@ -331,26 +357,47 @@ async function fetchChats() {
   }
 }
 
+// ── EXTRACT CHAT ID ──
+function extractChatId(chat: Chat | null): string {
+  if (!chat) return '';
+  if (typeof chat.id === 'string') return chat.id;
+  return chat.id?._serialized ?? `${chat.id?.user}@${chat.id?.server ?? 'c.us'}`;
+}
+
+function extractRawId(id: any): string {
+  if (typeof id === 'string') return id;
+  return id?._serialized ?? `${id?.user}@${id?.server ?? 'c.us'}`;
+}
+
 // ── 4. FETCH MESSAGES ──
-async function fetchMessages(chatId: string) {
+async function fetchMessages(rawChatId: any) {
+  const chatId = extractRawId(rawChatId);
+  if (!chatId) return;
   isLoadingMsgs.value = true;
   try {
-    const res = await fetch(
-      `${WAHA_BASE.value}/api/${SESSION.value}/chats/${encodeURIComponent(chatId)}/messages?limit=30`,
-      { headers: wahaHeaders() }
-    );
+    const url = `${WAHA_BASE.value}/api/messages?session=${encodeURIComponent(SESSION.value)}&chatId=${encodeURIComponent(chatId)}&limit=40`;
+    console.log('Fetching messages from:', url);
+    const res = await fetch(url, { headers: wahaHeaders() });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const rawMessages = data?.messages ?? data ?? [];
-    messages.value = rawMessages.reverse().map((m: any) => ({
+    
+    // Normalize messages (handle both array or {messages: []} formats)
+    const rawMessages = Array.isArray(data) ? data : (data?.messages ?? []);
+    
+    messages.value = rawMessages.sort((a: any, b: any) => a.timestamp - b.timestamp).map((m: any) => ({
       id: m.id ?? m._id ?? String(Math.random()),
-      body: m.body ?? '',
-      timestamp: m.timestamp ?? 0,
+      body: m.body || m.text || '',
+      timestamp: m.timestamp ?? Math.floor(Date.now()/1000),
       fromMe: m.fromMe ?? m.from_me ?? false
     }));
+    
+    // Auto-scroll to newest message
+    await nextTick();
+    if (msgListRef.value) {
+      msgListRef.value.scrollTop = msgListRef.value.scrollHeight;
+    }
   } catch (err) {
     console.error('Messages fetch error:', err);
-    messages.value = [];
   } finally {
     isLoadingMsgs.value = false;
   }
@@ -358,10 +405,20 @@ async function fetchMessages(chatId: string) {
 
 // ── 5. SELECT CHAT ──
 async function selectChat(chat: Chat) {
+  if (!chat || !chat.id) return;
+  const cid = extractChatId(chat);
+  console.log('Force Selecting chat ID:', cid);
+  selectedChatId.value = cid;
   selectedChat.value = chat;
-  await fetchMessages(chat.id);
+  messages.value = []; // Clear previous messages immediately
+  
+  await fetchMessages(cid);
+  
+  // Force scroll to newest on first load
   await nextTick();
-  scrollToBottom();
+  if (msgListRef.value) {
+     msgListRef.value.scrollTop = msgListRef.value.scrollHeight;
+  }
 }
 
 // ── 6. SEND MESSAGE ──
@@ -369,7 +426,7 @@ async function sendMessage() {
   const text = newMessage.value.trim();
   if (!text || !selectedChat.value) return;
 
-  const chatId = selectedChat.value.id;
+  const chatId = extractChatId(selectedChat.value);
   newMessage.value = '';
 
   try {
@@ -413,13 +470,28 @@ function scrollToBottom() {
 // ── 8. POLLING ──
 function startPolling() {
   pollingTimer = setInterval(async () => {
-    if (selectedChat.value) {
-      await fetchMessages(selectedChat.value.id);
+    if (selectedChatId.value) {
+      await fetchMessages(selectedChatId.value);
     }
     if (status.value === 'WORKING') {
       await fetchChats();
     }
-  }, 5000);
+  }, 300000); // 5 Minutes
+}
+
+async function manualRefresh() {
+  if (isRefreshing.value) return;
+  isRefreshing.value = true;
+  try {
+    await checkStatus();
+    if (selectedChatId.value) {
+      await fetchMessages(selectedChatId.value);
+    }
+  } finally {
+    setTimeout(() => {
+      isRefreshing.value = false;
+    }, 1000);
+  }
 }
 
 // ── 9. HELPERS ──
@@ -439,11 +511,12 @@ function formatChatTime(timestamp?: number) {
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
 }
 
-function getChatName(chat: Chat) {
-  return chat.name ?? chat.id?.replace('@c.us', '') ?? 'Unknown';
+function getChatName(chat: Chat | null) {
+  if (!chat) return 'Unknown';
+  return chat.name ?? extractChatId(chat).replace('@c.us', '') ?? 'Unknown';
 }
 
-function getChatAvatar(chat: Chat) {
+function getChatAvatar(chat: Chat | null) {
   return getChatName(chat).charAt(0).toUpperCase();
 }
 
@@ -461,18 +534,46 @@ onUnmounted(() => {
 
 <style scoped>
 .waha-terminal {
-  width: 100%;
-  height: calc(100vh - 120px);
   display: flex;
   flex-direction: column;
-  gap: 0;
+  height: calc(100vh - 80px);   /* full viewport minus topbar height */
+  overflow: hidden;
 }
 
 /* HEADER */
 .waha-header {
-  display: flex; align-items: flex-start;
+  display: flex; align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-refresh-manual {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.btn-refresh-manual:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #f59e0b;
+}
+.spin-anim {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .waha-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #f59e0b; text-transform: uppercase; margin: 0 0 6px; }
 .waha-title   { font-size: 32px; font-weight: 900; color: white; margin: 0 0 4px; }
@@ -496,20 +597,21 @@ onUnmounted(() => {
 .terminal-layout {
   display: grid;
   grid-template-columns: 320px 1fr;
-  gap: 0;
-  flex: 1;
-  background: #141418;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 16px;
+  flex: 1;                      /* take remaining height from parent */
+  min-height: 0;                /* CRITICAL — allows flex child to shrink */
   overflow: hidden;
-  min-height: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: #141418;
 }
 
 /* SIDEBAR */
 .chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;                /* CRITICAL */
+  overflow: hidden;
   border-right: 1px solid rgba(255,255,255,0.08);
-  display: flex; flex-direction: column;
-  height: 100%; overflow: hidden;
 }
 
 .search-box {
@@ -525,7 +627,9 @@ onUnmounted(() => {
 .search-input::placeholder { color: rgba(255,255,255,0.30); }
 
 .chat-list {
-  flex: 1; overflow-y: auto;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;                /* CRITICAL */
 }
 .chat-list::-webkit-scrollbar { width: 4px; }
 .chat-list::-webkit-scrollbar-track { background: transparent; }
@@ -556,19 +660,61 @@ onUnmounted(() => {
 .unread-badge { background: #10b981; color: white; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
 
 .engine-info {
-  padding: 12px 16px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
   font-family: 'DM Mono', monospace;
   font-size: 10px;
   color: rgba(255,255,255,0.25);
-  border-top: 1px solid rgba(255,255,255,0.06);
   line-height: 1.8;
+  border-radius: 8px;
+  margin: 0 16px 16px;
 }
 .engine-info p { margin: 0; }
 
+.technical-section { margin-top: auto; }
+.tech-toggle {
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.2);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.tech-toggle:hover { color: rgba(255, 255, 255, 0.4); }
+
+.btn-retry-small {
+  margin-top: 8px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 9px;
+  cursor: pointer;
+  width: 100%;
+}
+.btn-retry-small:hover { background: rgba(245, 158, 11, 0.2); }
+
 /* MESSAGE PANEL */
 .message-panel {
-  display: flex; flex-direction: column;
-  height: 100%; overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;                /* CRITICAL */
+  overflow: hidden;
+}
+
+.chat-viewport {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 .standby-state, .standby-full {
@@ -581,54 +727,94 @@ onUnmounted(() => {
 .standby-sub   { font-size: 13px; color: rgba(255,255,255,0.35); margin: 0; }
 
 .msg-header {
-  display: flex; align-items: center; gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
+  flex-shrink: 0;               /* NEVER shrink */
+  background: #141418;
 }
 .msg-avatar { width: 38px; height: 38px; border-radius: 50%; background: rgba(56,189,248,0.20); color: #38bdf8; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .msg-name   { font-size: 14px; font-weight: 700; color: white; margin: 0 0 2px; }
 .msg-phone  { font-size: 11px; color: rgba(255,255,255,0.35); margin: 0; font-family: 'DM Mono', monospace; }
 
 .messages-list {
-  flex: 1; overflow-y: auto;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;                /* CRITICAL */
   padding: 20px;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 8px;
 }
 .messages-list::-webkit-scrollbar { width: 4px; }
 .messages-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 2px; }
 
 .msg-bubble {
-  max-width: 70%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  display: flex; flex-direction: column; gap: 4px;
+  max-width: 75%;
+  padding: 12px 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  position: relative;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
-.msg-bubble.sent     { align-self: flex-end; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.20); }
-.msg-bubble.received { align-self: flex-start; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
-.msg-body { font-size: 13px; color: white; margin: 0; line-height: 1.5; word-break: break-word; }
-.msg-time { font-size: 10px; color: rgba(255,255,255,0.30); align-self: flex-end; }
+
+.msg-bubble.sent {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #000;
+  border-radius: 20px 20px 4px 20px;
+  font-weight: 500;
+}
+
+.msg-bubble.received {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-radius: 20px 20px 20px 4px;
+  backdrop-filter: blur(4px);
+}
+
+.msg-body { margin: 0; word-break: break-word; }
+.msg-time {
+  display: block;
+  font-size: 10px;
+  margin-top: 6px;
+  opacity: 0.6;
+  text-align: right;
+}
 
 .msg-input-row {
-  display: flex; gap: 10px;
+  display: flex;
+  gap: 10px;
   padding: 16px 20px;
   border-top: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
+  flex-shrink: 0;               /* NEVER shrink — always visible */
+  background: #141418;          /* solid bg so it doesn't show content behind */
 }
+
 .msg-input {
-  flex: 1; background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 10px; padding: 10px 16px;
-  font-size: 13px; color: white; outline: none;
-  transition: border-color 150ms;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px 20px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.msg-input:focus { border-color: rgba(245,158,11,0.40); }
-.msg-input::placeholder { color: rgba(255,255,255,0.25); }
+
+.msg-input:focus {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
+}
+
 .btn-send {
-  background: #f59e0b; color: #000;
-  border: none; border-radius: 10px;
-  width: 44px; height: 44px;
-  font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: filter 150ms;
   flex-shrink: 0;
