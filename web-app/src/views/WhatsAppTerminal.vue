@@ -31,9 +31,11 @@
 
     <!-- QR CODE STATE -->
     <div v-else-if="status === 'SCAN_QR_CODE'" class="qr-card">
-      <p class="qr-title">Scan QR Code</p>
-      <img v-if="qrCode" :src="qrCode" class="qr-image" alt="QR Code" />
-      <div v-else class="qr-loading">Memuat QR Code...</div>
+      <p class="qr-title">📱 Scan QR Code</p>
+      <div class="qr-frame">
+        <img v-if="qrCode" :src="qrCode" class="qr-image" alt="QR Code" />
+        <div v-else class="qr-loading">Memuat QR Code...</div>
+      </div>
       <p class="qr-sub">Buka WhatsApp → Perangkat Tertaut → Tautkan Perangkat</p>
       <button class="btn-retry" @click="checkStatus">🔄 Refresh QR</button>
     </div>
@@ -273,6 +275,29 @@ async function checkStatus() {
 
 // ── 2. FETCH QR CODE ──
 async function fetchQR() {
+  try {
+    // Try dedicated QR endpoint first (returns clean QR image)
+    const res = await fetch(
+      `${WAHA_BASE.value}/api/${SESSION.value}/auth/qr`,
+      { headers: wahaHeaders() }
+    );
+    if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('image')) {
+        const blob = await res.blob();
+        qrCode.value = URL.createObjectURL(blob);
+      } else {
+        // Some WAHA versions return JSON with base64
+        const data = await res.json();
+        if (data.mimetype && data.data) {
+          qrCode.value = `data:${data.mimetype};base64,${data.data}`;
+        }
+      }
+      return;
+    }
+  } catch { /* fallback below */ }
+
+  // Fallback to screenshot if QR endpoint unavailable
   try {
     const res = await fetch(
       `${WAHA_BASE.value}/api/screenshot?session=${SESSION.value}`,
@@ -627,8 +652,14 @@ onUnmounted(() => {
   color: rgba(255,255,255,0.30); background: rgba(0,0,0,0.30);
   padding: 12px 20px; border-radius: 8px; text-align: left; line-height: 2;
 }
-.qr-image { width: 220px; height: 220px; border-radius: 8px; border: 2px solid rgba(245,158,11,0.30); }
-.qr-title  { font-size: 18px; font-weight: 700; color: white; margin: 0; }
+.qr-frame {
+  padding: 16px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 0 60px rgba(245,158,11,0.15);
+}
+.qr-image { width: 300px; height: 300px; border-radius: 8px; display: block; }
+.qr-title  { font-size: 20px; font-weight: 700; color: white; margin: 0; }
 .qr-sub    { font-size: 12px; color: rgba(255,255,255,0.40); margin: 0; }
 .qr-loading { color: rgba(255,255,255,0.35); font-size: 13px; }
 
