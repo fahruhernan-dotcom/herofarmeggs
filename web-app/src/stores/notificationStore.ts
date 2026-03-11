@@ -204,18 +204,34 @@ export const useNotificationStore = defineStore('notifications', () => {
         requestBrowserPermission()
     }
 
+    // ── Ephemeral Toasts (Stock) ──────────────
+    const latestCriticalToast = ref<Notification | null>(null)
+    function dismissToast() {
+        latestCriticalToast.value = null
+    }
+
+    // Capture critical notifications for the toast
+    watch(notifications, (newNotifs) => {
+        const latest = newNotifs[0]
+        if (latest && latest.severity === 'danger' && !latest.is_read) {
+            latestCriticalToast.value = latest
+        }
+    }, { deep: true })
+
     return {
         notifications,
         unreadCount,
         unreadNotifications,
         allNotifications,
         isLoading,
+        latestCriticalToast,
         getSeverityConfig,
         fetchNotifications,
         markAsRead,
         markAllAsRead,
         subscribeRealtime,
         unsubscribeRealtime,
+        dismissToast,
         init
     }
 })

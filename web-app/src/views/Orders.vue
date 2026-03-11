@@ -410,7 +410,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, markRaw } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 // @ts-ignore
-import { GRADES, getGradeLabel as getGlobalLabel } from '../constants/grades';
+import { GRADES, getGradeLabel as getGlobalLabel, normalizeGrade } from '../constants/grades';
 // @ts-ignore
 import { formatCurrency, formatRelativeDate, formatExactTime } from '../utils/formatters';
 import { generateInvoicePDF } from '../utils/generateInvoice';

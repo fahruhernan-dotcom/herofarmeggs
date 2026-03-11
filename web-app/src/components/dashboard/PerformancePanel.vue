@@ -60,14 +60,12 @@ const props = defineProps<{
   salesChart: {
     labels: string[]
     heroData: number[]
-    mediumData: number[]
     saltedData: number[]
   }
 }>()
 
 const hasChartData = computed(() => {
   return props.salesChart.heroData.some(v => v > 0) ||
-    props.salesChart.mediumData.some(v => v > 0) ||
     props.salesChart.saltedData.some(v => v > 0)
 })
 
@@ -82,14 +80,7 @@ const chartData = computed(() => ({
       borderSkipped: false
     },
     {
-      label: 'Medium',
-      data: props.salesChart.mediumData,
-      backgroundColor: 'rgba(139, 92, 246, 0.85)',
-      borderRadius: 4,
-      borderSkipped: false
-    },
-    {
-      label: 'Small',
+      label: 'Salted Egg',
       data: props.salesChart.saltedData,
       backgroundColor: 'rgba(56, 189, 248, 0.85)',
       borderRadius: 4,

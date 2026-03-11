@@ -184,7 +184,7 @@ async function fetchDrivers() {
     .from('drivers')
     .select('*')
     .order('full_name');
-  if (data) drivers.length = 0; drivers.value = data || [];
+  drivers.value = data || [];
 }
 
 async function fetchStats() {

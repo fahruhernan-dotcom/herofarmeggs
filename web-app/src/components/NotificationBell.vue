@@ -154,7 +154,7 @@ const dropdownPosition = computed(() => {
   if (isMobile) return {}; // Mobile styles handled by CSS
 
   return {
-    position: 'fixed',
+    position: 'fixed' as const,
     top: `${rect.bottom + 8}px`,
     right: `${window.innerWidth - rect.right}px`,
     zIndex: 9999

@@ -207,6 +207,8 @@
           </form>
         </div>
       </div>
+    </Teleport>
+
     <!-- PERSONNEL LEDGER MODAL (PHASE 2) -->
     <Teleport to="body">
       <div v-if="showLedgerModal" class="modal-overlay" @click.self="showLedgerModal = false">
@@ -396,7 +398,6 @@ import {
   ArrowRightIcon,
   DollarSignIcon,
   InfoIcon,
-  HistoryIcon,
   CreditCardIcon,
   PlusIcon,
   FileTextIcon

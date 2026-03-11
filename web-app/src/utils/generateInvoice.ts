@@ -38,7 +38,6 @@ function formatRp(val: number) {
 export async function generateInvoicePDF(data: InvoiceData) {
     // 1. Fetch Company Settings for Header
     const { data: comp } = await supabase.from('company_settings').select('*').limit(1).single();
-    const { data: tax } = await supabase.from('tax_settings').select('rate').eq('is_active', true).limit(1).single();
 
     const companyName = comp?.brand_name || "HERO FARM EGGS";
     const companyAddress = comp?.address || "Bligo, Sidoarjo, Jawa Timur";
@@ -57,17 +56,17 @@ export async function generateInvoicePDF(data: InvoiceData) {
     // ─── BRAND HEADER ───
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
-    doc.setTextColor(...DEFAULT_COLORS.brand);
+    doc.setTextColor(DEFAULT_COLORS.brand[0], DEFAULT_COLORS.brand[1], DEFAULT_COLORS.brand[2]);
     doc.text(companyName, margin, y);
 
     doc.setFontSize(14);
-    doc.setTextColor(...DEFAULT_COLORS.black);
+    doc.setTextColor(DEFAULT_COLORS.black[0], DEFAULT_COLORS.black[1], DEFAULT_COLORS.black[2]);
     doc.text("INVOICE", pageW - margin, y, { align: "right" });
 
     y += 6;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...DEFAULT_COLORS.medGray);
+    doc.setTextColor(DEFAULT_COLORS.medGray[0], DEFAULT_COLORS.medGray[1], DEFAULT_COLORS.medGray[2]);
     doc.text(companyAddress, margin, y);
     doc.text(data.invoiceNumber, pageW - margin, y, { align: "right" });
 
@@ -77,7 +76,7 @@ export async function generateInvoicePDF(data: InvoiceData) {
 
     // Divider line
     y += 6;
-    doc.setDrawColor(...DEFAULT_COLORS.lightGray);
+    doc.setDrawColor(DEFAULT_COLORS.lightGray[0], DEFAULT_COLORS.lightGray[1], DEFAULT_COLORS.lightGray[2]);
     doc.setLineWidth(0.5);
     doc.line(margin, y, pageW - margin, y);
 
@@ -85,12 +84,12 @@ export async function generateInvoicePDF(data: InvoiceData) {
     y += 10;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(...DEFAULT_COLORS.medGray);
+    doc.setTextColor(DEFAULT_COLORS.medGray[0], DEFAULT_COLORS.medGray[1], DEFAULT_COLORS.medGray[2]);
     doc.text("BILL TO:", margin, y);
 
     y += 5;
     doc.setFontSize(10);
-    doc.setTextColor(...DEFAULT_COLORS.black);
+    doc.setTextColor(DEFAULT_COLORS.black[0], DEFAULT_COLORS.black[1], DEFAULT_COLORS.black[2]);
     doc.text(data.customerName, margin, y);
 
     if (data.customerPhone) {
@@ -122,14 +121,14 @@ export async function generateInvoicePDF(data: InvoiceData) {
         theme: 'grid',
         headStyles: {
             fillColor: DEFAULT_COLORS.brand,
-            textColor: [255, 255, 255],
+            textColor: [255, 255, 255] as [number, number, number],
             fontStyle: 'bold',
             fontSize: 8,
             halign: 'center'
         },
         bodyStyles: {
             fontSize: 8,
-            textColor: DEFAULT_COLORS.darkGray,
+            textColor: DEFAULT_COLORS.darkGray as [number, number, number],
         },
         columnStyles: {
             0: { cellWidth: 'auto' },
@@ -147,7 +146,7 @@ export async function generateInvoicePDF(data: InvoiceData) {
     if (data.notes) {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
-        doc.setTextColor(DEFAULT_COLORS.medGray);
+        doc.setTextColor(DEFAULT_COLORS.medGray[0], DEFAULT_COLORS.medGray[1], DEFAULT_COLORS.medGray[2]);
         doc.text("NOTES:", margin, finalY);
         finalY += 4;
         doc.setFont("helvetica", "normal");
@@ -160,7 +159,7 @@ export async function generateInvoicePDF(data: InvoiceData) {
     let totalY = (doc as any).lastAutoTable.finalY + 10;
 
     doc.setFontSize(9);
-    doc.setTextColor(DEFAULT_COLORS.darkGray);
+    doc.setTextColor(DEFAULT_COLORS.darkGray[0], DEFAULT_COLORS.darkGray[1], DEFAULT_COLORS.darkGray[2]);
     doc.text("Subtotal:", totalX, totalY);
     doc.text(formatRp(data.total), pageW - margin, totalY, { align: "right" });
 
@@ -175,7 +174,7 @@ export async function generateInvoicePDF(data: InvoiceData) {
         totalY += 6;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.setTextColor(DEFAULT_COLORS.black);
+        doc.setTextColor(DEFAULT_COLORS.black[0], DEFAULT_COLORS.black[1], DEFAULT_COLORS.black[2]);
         doc.text("GRAND TOTAL:", totalX, totalY);
         doc.text(formatRp(data.total + taxAmount), pageW - margin, totalY, { align: "right" });
     } else {
@@ -184,7 +183,7 @@ export async function generateInvoicePDF(data: InvoiceData) {
         totalY += 8;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.setTextColor(DEFAULT_COLORS.black);
+        doc.setTextColor(DEFAULT_COLORS.black[0], DEFAULT_COLORS.black[1], DEFAULT_COLORS.black[2]);
         doc.text("GRAND TOTAL:", totalX, totalY);
         doc.text(formatRp(data.total), pageW - margin, totalY, { align: "right" });
     }
@@ -192,18 +191,18 @@ export async function generateInvoicePDF(data: InvoiceData) {
     // ─── FOOTER & PAYMENT ───
     y = pageH - 30;
     doc.setFontSize(8);
-    doc.setTextColor(DEFAULT_COLORS.medGray);
+    doc.setTextColor(DEFAULT_COLORS.medGray[0], DEFAULT_COLORS.medGray[1], DEFAULT_COLORS.medGray[2]);
     doc.text("PAYMENT INFORMATION:", margin, y);
 
     y += 5;
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(DEFAULT_COLORS.black);
+    doc.setTextColor(DEFAULT_COLORS.black[0], DEFAULT_COLORS.black[1], DEFAULT_COLORS.black[2]);
     doc.text(bankInfo, margin, y);
 
     y = pageH - 12;
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7);
-    doc.setTextColor(DEFAULT_COLORS.medGray);
+    doc.setTextColor(DEFAULT_COLORS.medGray[0], DEFAULT_COLORS.medGray[1], DEFAULT_COLORS.medGray[2]);
     doc.text("Thank you for your business! - Hero Farm Tactical Operations", pageW / 2, y, { align: "center" });
 
     doc.save(`${data.invoiceNumber}.pdf`);
