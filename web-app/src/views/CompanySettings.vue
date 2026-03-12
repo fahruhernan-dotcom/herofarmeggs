@@ -158,13 +158,13 @@ const saving = ref(false);
 
 async function fetchSettings() {
   // Fetch Identity
-  const { data: comp } = await supabase.from('company_settings').select('*').limit(1).single();
+  const { data: comp } = await supabase.from('company_settings').select('*').maybeSingle();
   if (comp) {
     Object.assign(settings, comp);
   }
 
   // Fetch Tax
-  const { data: tax } = await supabase.from('tax_settings').select('rate').limit(1).single();
+  const { data: tax } = await supabase.from('tax_settings').select('rate').maybeSingle();
   if (tax) {
     taxRate.value = tax.rate;
   }

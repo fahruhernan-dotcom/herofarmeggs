@@ -188,6 +188,22 @@
             </div>
 
             <div class="form-group-tactical">
+              <label>Phone Number</label>
+              <div class="input-terminal">
+                <ActivityIcon class="icon-xs" />
+                <input type="text" v-model="regForm.phone" placeholder="e.g. 0812..." required />
+              </div>
+            </div>
+
+            <div class="form-group-tactical">
+              <label>Position</label>
+              <div class="input-terminal">
+                <BookTextIcon class="icon-xs" />
+                <input type="text" v-model="regForm.position" placeholder="e.g. Sales, Driver" required />
+              </div>
+            </div>
+
+            <div class="form-group-tactical">
               <label>Clearance Level</label>
               <CustomDropdown 
                 v-model="regForm.role" 
@@ -378,6 +394,7 @@ import { ref, onMounted, onUnmounted, reactive, computed, watch } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { useRoute } from 'vue-router';
+import { withTimeout } from '../utils/safeAsync';
 import CustomDropdown from '../components/ui/CustomDropdown.vue';
 import { 
   UsersIcon, 
@@ -448,6 +465,8 @@ const regForm = reactive({
   full_name: '',
   email: '',
   password: '',
+  phone: '',
+  position: '',
   role: 'staff'
 });
 
@@ -457,22 +476,51 @@ const roleOptions = [
 ];
 
 async function fetchTeam() {
-  const { data } = await supabase
-    .from('profiles')
-    .select('*, staff_positions(*)')
-    .order('full_name');
+  console.log('Fetching team from team_members...');
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('team_members')
+        .select('*')
+        .order('full_name'),
+      8000,
+      'fetchTeam'
+    );
   
-  if (data) team.value = data;
+  if (error) {
+    console.error('Fetch team error:', error);
+    return;
+  }
+  
+  if (data) {
+      // Map status to is_active for template compatibility
+      team.value = data.map(t => ({
+        ...t,
+        is_active: t.status === 'active'
+      }));
+      console.log('Team loaded:', team.value.length, 'members');
+    }
+  } catch (err) {
+    console.error('Fetch team timeout/error:', err);
+  }
 }
 
 async function fetchPositions() {
-  const { data } = await supabase
-    .from('staff_positions')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true });
-  
-  if (data) staffPositions.value = data;
+  try {
+    const { data } = await withTimeout(
+      supabase
+        .from('staff_positions')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
+      5000,
+      'fetchPositions'
+    );
+    
+    if (data) staffPositions.value = data;
+  } catch (err) {
+    console.error('Fetch positions error:', err);
+  }
 }
 
 function openPersonnelLedger(staff: any) {
@@ -487,18 +535,22 @@ async function savePersonnelData() {
   saveStatus.value = '';
 
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        position_id: activeOperative.value.position_id,
-        salary: activeOperative.value.salary,
-        bank_name: activeOperative.value.bank_name,
-        bank_account: activeOperative.value.bank_account,
-        bank_holder: activeOperative.value.bank_holder,
-        employment_status: activeOperative.value.employment_status,
-        start_date: activeOperative.value.start_date
-      })
-      .eq('id', activeOperative.value.id);
+    const { error } = await withTimeout(
+      supabase
+        .from('profiles')
+        .update({
+          position_id: activeOperative.value.position_id,
+          salary: activeOperative.value.salary,
+          bank_name: activeOperative.value.bank_name,
+          bank_account: activeOperative.value.bank_account,
+          bank_holder: activeOperative.value.bank_holder,
+          employment_status: activeOperative.value.employment_status,
+          start_date: activeOperative.value.start_date
+        })
+        .eq('id', activeOperative.value.id),
+      8000,
+      'updateProfile'
+    );
 
     if (error) throw error;
     
@@ -516,58 +568,109 @@ async function savePersonnelData() {
 }
 
 async function handleRegister() {
-  submitting.value = true;
-  regError.value = '';
+  console.log('1. Register started')
+  submitting.value = true
+  regError.value = ''
+
+  // Auto-reset safety net — 15 seconds max
+  const safetyTimer = setTimeout(() => {
+    console.warn('Safety timer triggered — resetting submitting')
+    submitting.value = false
+  }, 15000)
 
   try {
-    // We use an RPC call because regular signup would log the current admin out.
-    // This requires a database function 'register_new_staff' to be created first.
-    const { error } = await supabase.rpc('register_new_staff', {
-      new_email: regForm.email,
-      new_password: regForm.password,
-      new_full_name: regForm.full_name,
-      new_role: regForm.role
-    });
-
-    if (error) throw error;
-
-    alert('Success! Team member ' + regForm.full_name + ' has been registered.');
-    showRegisterModal.value = false;
+    console.log('2. Calling edge function...')
     
-    // Reset form
-    regForm.full_name = '';
-    regForm.email = '';
-    regForm.password = '';
-    regForm.role = 'staff';
+    const response = await withTimeout(
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/register-staff`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          email:     regForm.email,
+          password:  regForm.password,
+          full_name: regForm.full_name,
+          role:      regForm.role     ?? 'staff',
+          phone:     regForm.phone    ?? null,
+          position:  regForm.position ?? null,
+        })
+      }),
+      10000,
+      'register-staff edge function'
+    )
 
-    fetchTeam();
+    console.log('3. Response status:', response.status)
+    const result = await response.json()
+    console.log('4. Result:', result)
+
+    if (!result.success) throw new Error(result.error)
+
+    console.log('5. Success — refreshing team')
+    
+    await withTimeout(fetchTeam(), 5000, 'fetchTeam')
+    
+    console.log('6. Done — closing modal')
+    showRegisterModal.value = false
+
+    // Reset form
+    regForm.full_name = ''
+    regForm.email = ''
+    regForm.password = ''
+    regForm.phone = ''
+    regForm.position = ''
+    regForm.role = 'staff'
+
   } catch (err: any) {
-    console.error('Registration Error:', err);
-    regError.value = 'Gagal daftar: ' + (err.message || 'Cek SQL Editor Anda.');
+    console.error('ERROR:', err.message)
+    regError.value = err.message
   } finally {
-    submitting.value = false;
+    clearTimeout(safetyTimer)
+    submitting.value = false
+    console.log('7. Finally — submitting reset')
   }
 }
+
+
+
+
 
 async function toggleRole(staff: any) {
   if (isSuperAdmin(staff)) return alert('⛔ Cannot modify Owner account.');
   const newRole = staff.role === 'admin' ? 'staff' : 'admin';
-  const { error } = await supabase
-    .from('profiles')
-    .update({ role: newRole })
-    .eq('id', staff.id);
-  
-  if (!error) fetchTeam();
+  try {
+    const { error } = await withTimeout(
+      supabase
+        .from('team_members')
+        .update({ role: newRole })
+        .eq('id', staff.id),
+      5000,
+      'toggleRole'
+    );
+    if (!error) fetchTeam();
+  } catch (err) {
+    console.error('Toggle role error:', err);
+  }
 }
 
 async function toggleStatus(staff: any) {
   if (isSuperAdmin(staff)) return alert('⛔ Cannot modify Owner account.');
-  const { error } = await supabase
-    .from('profiles')
-    .update({ is_active: !staff.is_active })
-    .eq('id', staff.id);
-  
-  if (!error) fetchTeam();
+  const newStatus = staff.is_active ? 'inactive' : 'active';
+  try {
+    const { error } = await withTimeout(
+      supabase
+        .from('team_members')
+        .update({ status: newStatus })
+        .eq('id', staff.id),
+      5000,
+      'toggleStatus'
+    );
+    if (!error) fetchTeam();
+  } catch (err) {
+    console.error('Toggle status error:', err);
+  }
 }
 
 function confirmDelete(staff: any) {
@@ -578,24 +681,37 @@ function confirmDelete(staff: any) {
 
 async function executeDelete() {
   if (!deleteTarget.value || isSuperAdmin(deleteTarget.value)) return;
+  
+  console.log('=== TERMINATE STARTED ===');
   deleting.value = true;
+  
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', deleteTarget.value.id);
+    const { error } = await withTimeout(
+      supabase
+        .from('team_members')
+        .delete()
+        .eq('id', deleteTarget.value.id),
+      8000,
+      'executeDelete'
+    );
     
+    console.log('Delete error:', error);
     if (error) throw error;
     
+    console.log('SUCCESS — closing delete modal');
+    await fetchTeam();
     showDeleteModal.value = false;
     deleteTarget.value = null;
-    fetchTeam();
+    
   } catch (err: any) {
+    console.error('Delete failed:', err);
     alert('Delete failed: ' + (err.message || 'Unknown error'));
   } finally {
+    console.log('FINALLY — resetting terminate loading');
     deleting.value = false;
   }
 }
+
 
 const route = useRoute();
 onMounted(() => {
@@ -846,9 +962,20 @@ watch(() => route.path, () => {
 .modal-card {
   width: 100%;
   max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   padding: 48px;
   border-radius: 32px;
   position: relative;
+}
+
+.modal-card::-webkit-scrollbar {
+  width: 4px;
+}
+
+.modal-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 140, 0, 0.2);
+  border-radius: 10px;
 }
 
 .modal-card h2 { margin-bottom: 8px; font-size: 2rem; }

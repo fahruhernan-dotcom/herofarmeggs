@@ -214,6 +214,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 import { useToast } from '../composables/useToast'
 import { useDashboard } from '../composables/useDashboard'
+import { withTimeout } from '../utils/safeAsync'
 // @ts-ignore
 import { formatCurrency } from '../utils/formatters'
 
@@ -292,10 +293,10 @@ function closeResetModal() {
 async function exportBackupData() {
   backupStatus.value = 'downloading'
   try {
-    const { data: sales } = await supabase.from('sales').select('*, sale_items(*)')
-    const { data: customers } = await supabase.from('customers').select('*')
-    const { data: stockLogs } = await supabase.from('stock_logs').select('*')
-    const { data: finance } = await supabase.from('finance_entries').select('*')
+    const { data: sales } = await withTimeout(supabase.from('sales').select('*, sale_items(*)'), 12000, 'backup-sales')
+    const { data: customers } = await withTimeout(supabase.from('customers').select('*'), 12000, 'backup-customers')
+    const { data: stockLogs } = await withTimeout(supabase.from('stock_logs').select('*'), 12000, 'backup-stock')
+    const { data: finance } = await withTimeout(supabase.from('finance_entries').select('*'), 12000, 'backup-finance')
 
     const backupData = {
       exported_at: new Date().toISOString(),
@@ -322,6 +323,10 @@ async function exportBackupData() {
   } catch {
     showToast('Gagal backup data', 'error')
     backupStatus.value = 'idle'
+  } finally {
+    if (backupStatus.value === 'downloading') {
+      backupStatus.value = 'idle'
+    }
   }
 }
 
@@ -329,15 +334,16 @@ async function handleSystemReset() {
   if (resetConfirmation.value !== 'RESET HERO FARM') return
   reseting.value = true
   try {
-    await supabase.from('sale_items').delete().not('id', 'is', null)
-    await supabase.from('sales').delete().not('id', 'is', null)
-    await supabase.from('stock_logs').delete().not('id', 'is', null)
-    await supabase.from('finance_entries').delete().not('id', 'is', null)
-    await supabase.from('customers').update({ total_orders: 0, total_spent: 0 }).not('id', 'is', null)
-    await supabase.from('inventory').update({
+    await withTimeout(supabase.from('sale_items').delete().not('id', 'is', null), 15000, 'reset-sale-items')
+    await withTimeout(supabase.from('sales').delete().not('id', 'is', null), 15000, 'reset-sales')
+    await withTimeout(supabase.from('stock_logs').delete().not('id', 'is', null), 15000, 'reset-stock-logs')
+    await withTimeout(supabase.from('finance_entries').delete().not('id', 'is', null), 15000, 'reset-finance')
+    await withTimeout(supabase.from('customers').update({ total_orders: 0, total_spent: 0 }).not('id', 'is', null), 15000, 'reset-customers')
+    await withTimeout(supabase.from('inventory').update({
       current_stock: 0, cost_per_egg: 0, cost_per_packaging: 0,
       cost_per_sticker: 0, cost_per_card: 0, cost_price: 0
-    }).not('id', 'is', null)
+    }).not('id', 'is', null), 15000, 'reset-inventory')
+    
     showToast('Sistem berhasil direset')
     closeResetModal()
     fetchData()

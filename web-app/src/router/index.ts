@@ -111,6 +111,11 @@ import { useAuthStore } from '../stores/auth';
 
 // Navigation Guard
 router.beforeEach(async (to, _from, next) => {
+    // Force reset any stuck loading states when navigating
+    document.querySelectorAll('button[disabled]').forEach(btn => {
+        (btn as HTMLButtonElement).disabled = false
+    })
+
     const authStore = useAuthStore();
 
     // Ensure auth is initialized

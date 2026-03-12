@@ -759,6 +759,7 @@
 import { ref, onMounted, onUnmounted, reactive, computed, watch } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
+import { withTimeout } from '../utils/safeAsync';
 import { useRoute } from 'vue-router';
 import CustomDropdown from '../components/ui/CustomDropdown.vue';
 import StockHistoryModal from '../components/modals/StockHistoryModal.vue';
@@ -1083,22 +1084,24 @@ const packForm = reactive({
 async function fetchData() {
   loading.value = true;
   try {
-    const { data: inv } = await supabase.from('inventory').select('*').order('id');
+    const [
+      { data: inv },
+      { data: logData },
+      { data: sup },
+      { data: soData },
+      { data: bAcc }
+    ] = await withTimeout(Promise.all([
+      supabase.from('inventory').select('*').order('id'),
+      supabase.from('stock_logs').select('*').order('created_at', { ascending: false }).limit(20),
+      supabase.from('suppliers').select('*').eq('is_deleted', false).order('name'),
+      supabase.from('stock_opname').select('*').order('opname_date', { ascending: false }),
+      supabase.from('bank_accounts').select('*').eq('is_active', true)
+    ]), 15000, 'stock-fetch');
+
     if (inv) inventory.value = inv;
-
-    const { data: logData } = await supabase
-      .from('stock_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
     if (logData) logs.value = logData;
-
-    const { data: sup } = await supabase.from('suppliers').select('*').eq('is_deleted', false).order('name');
     if (sup) suppliers.value = sup;
-
-    const { data: soData } = await supabase.from('stock_opname').select('*').order('opname_date', { ascending: false });
     if (soData) opnameHistory.value = soData;
-    const { data: bAcc } = await supabase.from('bank_accounts').select('*').eq('is_active', true);
     if (bAcc) bankAccounts.value = bAcc;
 
     await fetchPurchases();
@@ -1193,9 +1196,8 @@ async function finalizeStokOpname() {
     submittingSO.value = true;
     try {
       // 1. Update items in DB
-      const { error: itemError } = await supabase
-        .from('stock_opname_items')
-        .upsert(
+      const { error: itemError } = await withTimeout(
+        supabase.from('stock_opname_items').upsert(
           activeSOItems.value.map(i => ({
             opname_id: activeStokTake.value.id,
             inventory_id: i.inventory_id,
@@ -1204,7 +1206,9 @@ async function finalizeStokOpname() {
             physical_count: i.physical_count,
             difference: i.difference
           }))
-        );
+        ),
+        10000, 'so-upsert'
+      );
       if (itemError) throw itemError;
 
       // 2. Update Inventory & Insert Logs for discrepancies
@@ -1359,9 +1363,10 @@ async function submitPackagingPurchase() {
       updatePayload.cost_per_egg = effectiveCost;
     }
 
-    const { error: invError } = await supabase.from('inventory')
-      .update(updatePayload)
-      .eq('id', packForm.id);
+    const { error: invError } = await withTimeout(
+      supabase.from('inventory').update(updatePayload).eq('id', packForm.id),
+      8000, 'update-packaging-inv'
+    );
 
     if (invError) throw invError;
 
@@ -1521,14 +1526,17 @@ async function submitAdjustment() {
     finalNotes = `${initialNotes} (Waste: ${wasteAmount} butir)`.trim();
   }
 
-  const { data: logData, error: logError } = await supabase.from('stock_logs').insert(sanitizePayload({
-    inventory_id: form.egg_type,
-    log_type: form.log_type,
-    change: finalChange,
-    unit_price: form.log_type === 'arrival' ? effectiveEggCost : 0,
-    notes: finalNotes,
-    created_by: authStore.profile?.id
-  })).select();
+  const { data: logData, error: logError } = await withTimeout(
+    supabase.from('stock_logs').insert(sanitizePayload({
+      inventory_id: form.egg_type,
+      log_type: form.log_type,
+      change: finalChange,
+      unit_price: form.log_type === 'arrival' ? effectiveEggCost : 0,
+      notes: finalNotes,
+      created_by: authStore.profile?.id
+    })).select(),
+    8000, 'insert-stock-log'
+  );
 
     // Create Notification if it was a restock (arrival)
     if (!logError && form.log_type === 'arrival') {

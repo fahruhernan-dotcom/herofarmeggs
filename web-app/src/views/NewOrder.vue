@@ -330,6 +330,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
+import { withTimeout } from '../utils/safeAsync';
 import { 
   PlusIcon, 
   MinusIcon,
@@ -410,13 +411,19 @@ async function fetchData() {
   
   try {
     // 1. Fetch Inventory
-    const { data: inv, error: invErr } = await supabase.from('inventory').select('*');
+    const { data: inv, error: invErr } = await withTimeout(
+      supabase.from('inventory').select('*'),
+      8000, 'pos-inventory'
+    );
     if (invErr) throw invErr;
     if (inv) inventory.value = inv;
 
     loadingMsg.value = 'Fetching CRM database...';
     // 2. Fetch Customers (simplified to avoid missing columns errors)
-    const { data: cust, error: custErr } = await supabase.from('customers').select('*').limit(100);
+    const { data: cust, error: custErr } = await withTimeout(
+      supabase.from('customers').select('*').limit(100),
+      8000, 'pos-customers'
+    );
     if (custErr) {
         console.warn('Customer fetch failed, proceeding anyway:', custErr);
     }
@@ -578,7 +585,10 @@ async function confirmSale() {
       };
 
       console.log('Sending RPC create_sale_v2 with:', rpcPayload);
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('create_sale_v2', rpcPayload);
+      const { data: rpcResult, error: rpcError } = await withTimeout(
+        supabase.rpc('create_sale_v2', rpcPayload),
+        15000, 'create-sale-rpc'
+      );
       
       if (rpcError) {
           console.error('RPC Execution Error:', rpcError);

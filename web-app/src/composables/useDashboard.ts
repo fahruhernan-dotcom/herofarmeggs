@@ -2,6 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { toCanonicalId, normalizeGrade } from '../constants/grades'
 import { useAuthStore } from '../stores/auth'
+import { withTimeout } from '../utils/safeAsync'
 
 /**
  * Hero Farm Dashboard — All data fetching + computed KPIs
@@ -249,13 +250,13 @@ export function useDashboard() {
                 { data: cust },
                 { data: fin },
                 { data: kpis }
-            ] = await Promise.all([
+            ] = await withTimeout(Promise.all([
                 supabase.from('inventory').select('*'),
                 supabase.from('sales').select('*, sale_items(*)').order('created_at', { ascending: false }),
                 supabase.from('customers').select('*').eq('is_deleted', false),
                 supabase.from('finance_entries').select('*').order('entry_date', { ascending: false }),
                 supabase.rpc('get_dashboard_kpis')
-            ])
+            ]), 12000, 'dashboard-main-fetch')
 
             if (stocks) inventory.value = stocks
             if (sales) allSales.value = sales
@@ -269,12 +270,12 @@ export function useDashboard() {
                     { count: cCount },
                     { count: lCount },
                     { count: fCount }
-                ] = await Promise.all([
+                ] = await withTimeout(Promise.all([
                     supabase.from('sales').select('*', { count: 'exact', head: true }),
                     supabase.from('customers').select('*', { count: 'exact', head: true }),
                     supabase.from('stock_logs').select('*', { count: 'exact', head: true }),
                     supabase.from('finance_entries').select('*', { count: 'exact', head: true })
-                ])
+                ]), 10000, 'dashboard-counts')
                 impactCounts.sales = sCount || 0
                 impactCounts.customers = cCount || 0
                 impactCounts.logs = lCount || 0

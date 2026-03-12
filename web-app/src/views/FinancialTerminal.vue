@@ -424,7 +424,9 @@ import {
   TrendingUpIcon,
   ClockIcon,
   BanIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  HourglassIcon,
+  PackageIcon
 } from 'lucide-vue-next';
 
 // Chart.js imports
@@ -443,6 +445,7 @@ import {
 import { Line as LineChart, Radar as RadarChart } from 'vue-chartjs';
 import { useAuthStore } from '../stores/auth';
 import { normalizeGrade, getGradeLabel } from '../constants/grades';
+import { withTimeout } from '../utils/safeAsync';
 
 ChartJS.register(
   CategoryScale,
@@ -546,54 +549,67 @@ async function fetchFinancialData() {
     const endDateTime = endDate + 'T23:59:59';
 
     // 0. Fetch all inventory items for lookup
-    const { data: invData } = await supabase
-      .from('inventory')
-      .select('id, label, grade, hpp_per_pack, current_stock');
+    const { data: invData } = await withTimeout(
+      supabase.from('inventory').select('id, label, grade, hpp_per_pack, current_stock'),
+      8000, 'fin-inventory'
+    );
     
     const invMap: Record<string, any> = {};
     (invData || []).forEach((item: any) => { invMap[item.id] = item; });
     inventoryMap.value = invMap;
 
     // 1. Fetch Sales with nested sale_items (Using string dates for timezone fix)
-    const { data: salesData, error: salesError } = await supabase
-      .from('sales')
-      .select('*, customers(name), sale_items(*)')
-      .gte('created_at', startDate)
-      .lte('created_at', endDateTime);
+    const { data: salesData, error: salesError } = await withTimeout(
+      supabase.from('sales')
+        .select('*, customers(name), sale_items(*)')
+        .gte('created_at', startDate)
+        .lte('created_at', endDateTime),
+      12000, 'fin-sales'
+    );
     
     if (salesError) console.error('Sales query failed:', salesError);
     allSales.value = salesData || [];
 
     // 2. Fetch stock arrival logs
-    const { data: stockLogsData } = await supabase
-      .from('stock_logs')
-      .select('*')
-      .eq('log_type', 'arrival')
-      .gte('created_at', startDate)
-      .lte('created_at', endDateTime);
+    const { data: stockLogsData } = await withTimeout(
+      supabase.from('stock_logs')
+        .select('*')
+        .eq('log_type', 'arrival')
+        .gte('created_at', startDate)
+        .lte('created_at', endDateTime),
+      8000, 'fin-stock-logs'
+    );
     
     restockLogs.value = stockLogsData || [];
 
     // 3. Fetch Pending Receivables (Piutang table)
-    const { data: piutangData } = await supabase
-      .from('piutang')
-      .select('*, customers(name)')
-      .gt('remaining', 0)
-      .order('created_at', { ascending: true });
+    const { data: piutangData } = await withTimeout(
+      supabase.from('piutang')
+        .select('*, customers(name)')
+        .gt('remaining', 0)
+        .order('created_at', { ascending: true }),
+      8000, 'fin-piutang'
+    );
     
     pendingReceivables.value = piutangData || [];
 
     // 5. Fetch P&L Summary from RPC
-    const { data: pnlSummary, error: pnlError } = await supabase.rpc('get_pnl_summary', {
-      start_date: startDate,
-      end_date: endDate
-    });
+    // Note: If you get 400 Error, ensure p_start_date/p_end_date parameter names match.
+    const { data: pnlSummary, error: pnlError } = await withTimeout(
+      supabase.rpc('get_pnl_summary', {
+        start_date: startDate,
+        end_date: endDate
+      }),
+      12000, 'fin-rpc'
+    );
 
-    if (pnlError) console.error('P&L RPC failed:', pnlError);
-    if (pnlSummary && pnlSummary.length > 0) {
+    if (pnlError) {
+      console.warn('P&L RPC failed, using local fallback:', pnlError);
+      // Fallback: reset summary values to let computed properties handle it
+      summaryRev.value = null;
+      summaryCogs.value = null;
+    } else if (pnlSummary && pnlSummary.length > 0) {
       const p = pnlSummary[0];
-      // Sync basic KPIs with the ground truth from RPC
-      // These are local refs that overwrite the computed default if present
       summaryRev.value = Number(p.total_revenue);
       summaryCogs.value = Number(p.total_cogs);
       summaryPiutang.value = Number(p.total_piutang_active);
@@ -867,10 +883,13 @@ async function markAsPaid(saleId: number) {
   
   actionLoading.value = saleId;
   try {
-    const { error } = await supabase
-      .from('sales')
-      .update({ payment_status: 'paid' })
-      .eq('id', saleId);
+    const { error } = await withTimeout(
+      supabase
+        .from('sales')
+        .update({ payment_status: 'paid' })
+        .eq('id', saleId),
+      8000, 'mark-paid'
+    );
       
     if (error) throw error;
     
@@ -945,7 +964,7 @@ async function exportBackup() {
     const tables = ['inventory', 'customers', 'suppliers', 'sales', 'sale_items', 'stock_logs', 'price_overrides'];
     
     for (const table of tables) {
-      const { data } = await supabase.from(table).select('*');
+      const { data } = await withTimeout(supabase.from(table).select('*'), 15000, `backup-${table}`);
       backupData[table] = data || [];
     }
     

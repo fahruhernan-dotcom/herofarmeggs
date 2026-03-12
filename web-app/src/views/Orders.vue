@@ -411,6 +411,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 // @ts-ignore
 import { GRADES, getGradeLabel as getGlobalLabel, normalizeGrade } from '../constants/grades';
+import { withTimeout } from '../utils/safeAsync';
 // @ts-ignore
 import { formatCurrency, formatRelativeDate, formatExactTime } from '../utils/formatters';
 import { generateInvoicePDF } from '../utils/generateInvoice';
@@ -608,24 +609,27 @@ const filteredOrders = computed(() => {
 async function fetchOrders() {
   loading.value = true;
   try {
-    const { data, error } = await supabase
-      .from('sales')
-      .select(`
-        id,
-        total_price,
-        payment_status,
-        fulfillment_status,
-        stock_reserved,
-        created_at,
-        customers!sales_customer_id_fkey (
-          name,
-          whatsapp_number,
-          address
-        ),
-        sale_items (*),
-        price_overrides (*)
-      `)
-      .order('created_at', { ascending: false });
+    const { data, error } = await withTimeout(
+      supabase
+        .from('sales')
+        .select(`
+          id,
+          total_price,
+          payment_status,
+          fulfillment_status,
+          stock_reserved,
+          created_at,
+          customers!sales_customer_id_fkey (
+            name,
+            whatsapp_number,
+            address
+          ),
+          sale_items (*),
+          price_overrides (*)
+        `)
+        .order('created_at', { ascending: false }),
+      12000, 'orders-fetch'
+    );
 
     if (error) {
       console.error('Fetch Orders Error:', error);
@@ -718,31 +722,46 @@ async function handleCancelOrderStock(order: any) {
     const quantityInButir = (item.quantity || 0) * 10;
     
     // Increment Egg Stock
-    const { data: inv } = await supabase.from('inventory').select('current_stock').eq('id', item.egg_type).single();
+    const { data: inv } = await withTimeout(
+      supabase.from('inventory').select('current_stock').eq('id', item.egg_type).single(),
+      8000, 'void-fetch-inv'
+    );
     if (inv) {
-      await supabase.from('inventory').update({ 
-        current_stock: inv.current_stock + quantityInButir 
-      }).eq('id', item.egg_type);
+      await withTimeout(
+        supabase.from('inventory').update({ 
+          current_stock: inv.current_stock + quantityInButir 
+        }).eq('id', item.egg_type),
+        8000, 'void-update-inv'
+      );
     }
 
     // Log restoration
-    await supabase.from('stock_logs').insert({
-      egg_type: item.egg_type,
-      change: quantityInButir,
-      log_type: 'void_return',
-      notes: `Stock Restored from Cancelled/Void Order #${order.id.toString().slice(-6).toUpperCase()}`
-    });
+    await withTimeout(
+      supabase.from('stock_logs').insert({
+        egg_type: item.egg_type,
+        change: quantityInButir,
+        log_type: 'void_return',
+        notes: `Stock Restored from Cancelled/Void Order #${order.id.toString().slice(-6).toUpperCase()}`
+      }),
+      8000, 'void-insert-log'
+    );
   }
 
   // Restore Supply Stock (1 Box, 1 Sticker, 1 Card per pack)
   const totalPacks = items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0);
   const supplies = ['packaging_standard', 'sticker_label', 'mini_card'];
   for (const sId of supplies) {
-    const { data: sInv } = await supabase.from('inventory').select('current_stock').eq('id', sId).single();
+    const { data: sInv } = await withTimeout(
+      supabase.from('inventory').select('current_stock').eq('id', sId).single(),
+      5000, 'void-fetch-supply'
+    );
     if (sInv) {
-      await supabase.from('inventory').update({ 
-        current_stock: sInv.current_stock + totalPacks 
-      }).eq('id', sId);
+      await withTimeout(
+        supabase.from('inventory').update({ 
+          current_stock: sInv.current_stock + totalPacks 
+        }).eq('id', sId),
+        5000, 'void-update-supply'
+      );
     }
   }
 
@@ -756,11 +775,14 @@ async function handleVoid(order: any) {
   confirmData.onConfirm = async () => {
     updatingStatus.value = true;
     try {
-      const { data: result, error: voidError } = await supabase.rpc('void_sale_v2', {
-        p_sale_id: order.id,
-        p_voided_by: authStore.profile?.full_name || 'Admin',
-        p_reason: 'Voided via Order Management UI'
-      });
+      const { data: result, error: voidError } = await withTimeout(
+        supabase.rpc('void_sale_v2', {
+          p_sale_id: order.id,
+          p_voided_by: authStore.profile?.full_name || 'Admin',
+          p_reason: 'Voided via Order Management UI'
+        }),
+        15000, 'void-rpc'
+      );
 
       if (voidError) throw voidError;
       if (result?.error) {
@@ -826,10 +848,13 @@ async function updateStatus(newValue: string) {
       }
     }
 
-    const { error } = await supabase
-      .from('sales')
-      .update(updatePayload)
-      .eq('id', order.id);
+    const { error } = await withTimeout(
+      supabase
+        .from('sales')
+        .update(updatePayload)
+        .eq('id', order.id),
+      8000, 'update-status'
+    );
 
     if (error) throw error;
 
@@ -846,6 +871,7 @@ async function updateStatus(newValue: string) {
 
     showToast(`Status Berhasil di-Update: ${formatStatusLabel(newValue)}`);
   } catch (e: any) {
+    console.error('Status Update Error:', e);
     showToast('Gagal update status', 'error');
   } finally {
     updatingStatus.value = false;
@@ -877,10 +903,13 @@ async function quickUpdateStatus(order: any, field: string, newValue: string) {
       }
     }
 
-    const { error } = await supabase
-      .from('sales')
-      .update(updatePayload)
-      .eq('id', order.id);
+    const { error } = await withTimeout(
+      supabase
+        .from('sales')
+        .update(updatePayload)
+        .eq('id', order.id),
+      8000, 'quick-update-status'
+    );
 
     if (error) throw error;
 
@@ -897,6 +926,7 @@ async function quickUpdateStatus(order: any, field: string, newValue: string) {
 
     showToast(`Status Berhasil di-Update: ${formatStatusLabel(newValue)}`);
   } catch (e: any) {
+    console.error('Quick Update Error:', e);
     showToast('Update Failed', 'error');
   } finally {
     updatingStatus.value = false;
