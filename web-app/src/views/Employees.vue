@@ -494,7 +494,7 @@ async function fetchTeam() {
   
   if (data) {
       // Map status to is_active for template compatibility
-      team.value = data.map(t => ({
+      team.value = data.map((t: any) => ({
         ...t,
         is_active: t.status === 'active'
       }));

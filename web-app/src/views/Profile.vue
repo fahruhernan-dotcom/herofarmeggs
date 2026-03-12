@@ -298,7 +298,7 @@ async function handleUpdateProfile() {
     if (error) throw error;
 
     // Refresh store profile data
-    await authStore.fetchProfile(authStore.user?.id || '');
+    if (authStore.user) await authStore.fetchProfile(authStore.user);
     
     // Sync local form with new data
     if (authStore.profile) {
