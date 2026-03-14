@@ -200,7 +200,7 @@ interface Message {
 }
 
 // ── CONFIG (fetched from Supabase, with hardcoded fallback) ──
-const WAHA_BASE_DEFAULT = 'http://43.133.137.52:3000';
+const WAHA_BASE_DEFAULT = 'https://herofarm.web.id/waha-api';
 const SESSION_DEFAULT   = 'default';
 const WAHA_KEY_DEFAULT  = 'f84052ca69ad4216a7c784274016b3f0';
 
