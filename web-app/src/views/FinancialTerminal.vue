@@ -454,12 +454,16 @@ async function fetchData() {
       quarter: { start: new Date(y, Math.floor(m / 3) * 3, 1), end: new Date(y, Math.floor(m / 3) * 3 + 3, 0) },
       year:    { start: new Date(y, 0, 1), end: new Date(y, 11, 31) }
     }
-    const range = ranges[selectedPeriod.value] || ranges.month
-    const startISO = getISO(range.start)
-    const endISO   = getISO(range.end)
+    const range = selectedPeriod.value in ranges 
+      ? ranges[selectedPeriod.value] 
+      : ranges.month;
     
-    startDate.value = startISO
-    endDate.value   = endISO
+    // Explicitly check for defined range to satisfy TS
+    const startISO = range ? getISO(range.start) : getISO(now);
+    const endISO   = range ? getISO(range.end) : getISO(now);
+    
+    startDate.value = startISO;
+    endDate.value   = endISO;
 
     console.log('Date range:', startISO, '—', endISO)
 
@@ -497,11 +501,17 @@ async function fetchData() {
     sales?.forEach((sale: any) => {
       const day = sale.created_at.substring(0, 10)
       if (!dailyMap[day]) dailyMap[day] = { revenue: 0, hpp: 0 }
-      dailyMap[day].revenue += sale.total_revenue ?? 0
+      
+      const dayData = dailyMap[day]
+      if (dayData) {
+        dayData.revenue += sale.total_revenue ?? 0
+      }
 
       sale.sale_items?.forEach((item: any) => {
         const hpp = (item.hpp_per_pack ?? 0) * (item.packs_sold ?? 0)
-        dailyMap[day].hpp += hpp
+        if (dayData) {
+          dayData.hpp += hpp
+        }
 
         const type = item.egg_type
         if (type) {
