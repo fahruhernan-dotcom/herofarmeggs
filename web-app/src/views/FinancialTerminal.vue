@@ -5,8 +5,8 @@
   <div class="ft-header">
     <div class="ft-header-left">
       <span class="ft-eyebrow">MANAGEMENT · FINANCE</span>
-      <h1 class="ft-title">Financial Terminal</h1>
-      <p class="ft-desc">Real-time P&L, arus kas, dan analisis profitabilitas</p>
+      <h1 class="ft-title">Financial Terminal <span style="font-size: 10px; opacity: 0.5;">v2.2-clean</span></h1>
+      <p class="ft-desc">Real-time P&L dan profit per produk (Direct Sales Query)</p>
     </div>
     <div class="ft-header-right">
       <div class="period-selector">

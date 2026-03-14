@@ -5,8 +5,8 @@
     <div class="waha-header">
       <div>
         <p class="waha-eyebrow">TACTICAL COMM</p>
-        <h1 class="waha-title">WhatsApp Terminal</h1>
-        <p class="waha-sub">Secure communication powered by WAHA Engine</p>
+        <h1 class="waha-title">WhatsApp Terminal <span style="font-size: 10px; opacity: 0.5;">v2.0-secure</span></h1>
+        <p class="waha-sub">Secure communication via Hero Farm Proxy</p>
       </div>
       <div class="header-actions">
         <button 
