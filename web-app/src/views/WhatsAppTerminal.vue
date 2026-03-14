@@ -204,8 +204,8 @@ const WAHA_BASE_DEFAULT = 'https://herofarm.web.id/waha-api';
 const SESSION_DEFAULT   = 'default';
 const WAHA_KEY_DEFAULT  = 'f84052ca69ad4216a7c784274016b3f0';
 
-const WAHA_BASE = ref(WAHA_BASE_DEFAULT);
-const SESSION   = ref(SESSION_DEFAULT);
+const WAHA_BASE = ref('https://herofarm.web.id/waha-api');
+const SESSION   = ref('default');
 let   WAHA_KEY  = WAHA_KEY_DEFAULT;
 
 function wahaHeaders() {
