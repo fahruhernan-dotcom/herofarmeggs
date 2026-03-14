@@ -131,14 +131,18 @@
                 </td>
                 <td class="items-cell">
                   <div class="items-chips">
-                    <span 
-                      v-for="item in order.sale_items" 
-                      :key="item.id" 
-                      class="i-chip"
-                      :class="normalizeGrade(item.inventory_id || item.egg_type)"
-                    >
-                      {{ getGradeLabel(item.inventory_id || item.egg_type) }}
-                    </span>
+                    <template v-if="order.sale_items?.length > 0">
+                      <span 
+                        v-for="item in order.sale_items" 
+                        :key="item.id || item.egg_type" 
+                        class="i-chip"
+                        :class="normalizeGrade(item.egg_type || item.inventory_id || item.grade)"
+                      >
+                        {{ getGradeLabel(item.egg_type || item.inventory_id || item.grade) }}
+                        {{ (item.packs_sold || item.quantity) ? (item.packs_sold || item.quantity) + 'p' : '' }}
+                      </span>
+                    </template>
+                    <span v-else style="color:rgba(255,255,255,0.25);font-size:12px">—</span>
                   </div>
                 </td>
                 <td class="amount">{{ formatCurrency(order.total_price || 0) }}</td>
@@ -196,8 +200,9 @@
             <div class="omc-footer">
               <span class="omc-time font-mono">{{ formatRelativeDate(order.created_at) }}</span>
               <div class="items-mini">
-                <span v-for="item in order.sale_items.slice(0, 3)" :key="item.id" class="i-dot" :class="item.egg_type"></span>
+                <span v-for="item in order.sale_items.slice(0, 3)" :key="item.id" class="i-dot" :class="normalizeGrade(item.inventory_id || item.egg_type || item.grade)"></span>
                 <span v-if="order.sale_items.length > 3" class="i-more">+{{ order.sale_items.length - 3 }}</span>
+                <span v-if="order.sale_items.length === 0" class="i-dot empty"></span>
               </div>
             </div>
           </div>
@@ -309,8 +314,8 @@
                 <tbody>
                   <tr v-for="item in selectedOrder.sale_items" :key="item.id">
                     <td class="item-label">
-                      {{ getGradeLabel(item.egg_type) }}
-                      <span v-if="hasPriceOverride(selectedOrder, item.egg_type)" class="override-badge" title="Price manually overridden">★ EDITED</span>
+                      {{ getGradeLabel(item.inventory_id || item.egg_type || item.grade) }}
+                      <span v-if="hasPriceOverride(selectedOrder, item.egg_type || item.inventory_id)" class="override-badge" title="Price manually overridden">★ EDITED</span>
                     </td>
                     <td>{{ item.quantity }} Pack</td>
                     <td>
@@ -614,7 +619,9 @@ async function fetchOrders() {
         .from('sales')
         .select(`
           id,
+          customer_id,
           total_price,
+          total_revenue,
           payment_status,
           fulfillment_status,
           stock_reserved,
@@ -858,6 +865,34 @@ async function updateStatus(newValue: string) {
 
     if (error) throw error;
 
+    // Synchronize piutang and customer total_piutang when marked as paid
+    if (field === 'payment_status' && newValue === 'paid') {
+      await supabase
+        .from('piutang')
+        .update({
+          status: 'lunas',
+          remaining: 0,
+          paid_amount: order.total_revenue || order.total_price || 0
+        })
+        .eq('sale_id', order.id);
+
+      if (order.customer_id) {
+        const { data: cust } = await supabase
+          .from('customers')
+          .select('total_piutang')
+          .eq('id', order.customer_id)
+          .single();
+        
+        if (cust) {
+          const newDebt = Math.max(0, (cust.total_piutang || 0) - (order.total_revenue || order.total_price || 0));
+          await supabase
+            .from('customers')
+            .update({ total_piutang: newDebt })
+            .eq('id', order.customer_id);
+        }
+      }
+    }
+
     // Update local state
     const idx = orders.value.findIndex(o => o.id === order.id);
     if (idx !== -1) {
@@ -912,6 +947,34 @@ async function quickUpdateStatus(order: any, field: string, newValue: string) {
     );
 
     if (error) throw error;
+
+    // Synchronize piutang and customer total_piutang when marked as paid
+    if (field === 'payment_status' && newValue === 'paid') {
+      await supabase
+        .from('piutang')
+        .update({
+          status: 'lunas',
+          remaining: 0,
+          paid_amount: order.total_revenue || order.total_price || 0
+        })
+        .eq('sale_id', order.id);
+
+      if (order.customer_id) {
+        const { data: cust } = await supabase
+          .from('customers')
+          .select('total_piutang')
+          .eq('id', order.customer_id)
+          .single();
+        
+        if (cust) {
+          const newDebt = Math.max(0, (cust.total_piutang || 0) - (order.total_revenue || order.total_price || 0));
+          await supabase
+            .from('customers')
+            .update({ total_piutang: newDebt })
+            .eq('id', order.customer_id);
+        }
+      }
+    }
 
     // Update local state
     const idx = orders.value.findIndex(o => o.id === order.id);

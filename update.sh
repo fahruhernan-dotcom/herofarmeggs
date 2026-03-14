@@ -3,20 +3,31 @@
 # --- Hero Farm VPS Update Script ---
 echo "🚀 Starting Hero Farm update process..."
 
-# 1. Navigate to project root (assuming script is run from there)
+# 1. Navigate to project root
 cd "$(dirname "$0")"
 
-# 2. Pull latest code from GitHub
-echo "📥 Pulling latest changes from GitHub..."
-git pull origin main
+# 2. Pull latest code from GitHub (Reset hard to ensure no conflicts on VPS)
+echo "📥 Fetching and resetting to latest code..."
+git fetch origin main
+git reset --hard origin/main
 
-# 3. Enter deployment directory
+# 3. Cleanup old Docker images to save disk space
+echo "🧹 Cleaning up old Docker images..."
+docker image prune -f
+
+# 4. Enter deployment directory
 cd vps-deploy
 
-# 4. Rebuild and restart containers
+# 5. Rebuild and restart containers
 echo "🛠️ Rebuilding and restarting Docker containers..."
 sudo docker compose up -d --build
 
+echo ""
 echo "✅ Update Complete! Your app is now running the latest version."
 echo "🔗 App: http://43.133.137.52"
 echo "🔗 WAHA: http://43.133.137.52:3000"
+echo ""
+echo "⚠️  REMINDER: Please ensure you have applied the latest SQL migrations in Supabase Dashboard!"
+echo "📍 Migration: web-app/migrations/20260315_fix_financial_integrity.sql"
+echo ""
+

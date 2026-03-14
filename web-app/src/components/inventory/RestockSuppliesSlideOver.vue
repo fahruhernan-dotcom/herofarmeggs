@@ -188,37 +188,21 @@ async function handleSubmit() {
   if (!canSubmit.value || submitting.value) return;
   submitting.value = true;
   try {
-    const usableQty = Math.max(0, form.qty - (form.damaged || 0));
-    const effCost = effectiveCost.value;
-
-    // Update inventory stock
-    const { data: inv } = await supabase
-      .from('inventory')
-      .select('current_stock')
-      .eq('id', form.supply_type)
-      .single();
-
-    const newStock = (inv?.current_stock || 0) + usableQty;
-
-    const { error: updateErr } = await supabase
-      .from('inventory')
-      .update({ 
-        current_stock: newStock,
-        cost_per_egg: effCost 
-      })
-      .eq('id', form.supply_type);
-
-    if (updateErr) throw updateErr;
-
-    // Log the stock change
-    await supabase.from('stock_logs').insert({
-      inventory_id: form.supply_type,
-      log_type: 'arrival',
-      change: usableQty,
-      notes: `Restock: ${form.qty} ordered, ${form.damaged || 0} damaged. Effective cost: Rp ${Math.round(effCost)}`
+    const { data, error } = await supabase.rpc('create_supply_purchase', {
+      p_supplier_id: form.supplier_id,
+      p_inventory_id: form.supply_type,
+      p_qty: form.qty,
+      p_price_per_unit: form.price,
+      p_shipping_cost: form.shipping || 0,
+      p_amount_paid: form.qty * form.price + (form.shipping || 0), // Assuming full payment for now or add DP field if needed
+      p_damaged_qty: form.damaged || 0
     });
 
-    showToast(`✓ Restock berhasil — +${usableQty} unit | Harga efektif: ${formatCurrency(effCost)}`, 'success');
+    if (error) throw error;
+    if (data?.error) { showToast(data.error, 'error'); return; }
+
+    const usableQty = Math.max(0, form.qty - (form.damaged || 0));
+    showToast(`✓ Restock berhasil — +${usableQty} unit | Record Purchase & Finance Created`, 'success');
     emit('restockDone');
   } catch (err: any) {
     showToast('Gagal: ' + (err.message || ''), 'error');

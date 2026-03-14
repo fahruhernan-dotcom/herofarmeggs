@@ -560,7 +560,7 @@ async function confirmSale() {
       // 1. CRM Resolution
       if (!finalCustomerId && customerSearch.value) {
         // Just use the name for the RPC, it handles creation
-        console.log('Using name-based resolution for:', customerSearch.value);
+
       }
 
       loadingMsg.value = 'Memproses transaksi (Siklus DB)...';
@@ -584,7 +584,7 @@ async function confirmSale() {
         p_due_date: form.paymentStatus === 'piutang' ? (form.dueDate || new Date().toISOString().split('T')[0]) : null
       };
 
-      console.log('Sending RPC create_sale_v2 with:', rpcPayload);
+
       const { data: rpcResult, error: rpcError } = await withTimeout(
         supabase.rpc('create_sale_v2', rpcPayload),
         15000, 'create-sale-rpc'

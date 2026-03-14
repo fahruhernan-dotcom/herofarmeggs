@@ -980,8 +980,21 @@ const filteredLogs = computed(() => {
 
 
 async function fetchPurchases() {
-  const { data: pData } = await supabase.from('purchases').select('*').order('created_at', { ascending: false }).limit(50);
-  if (pData) purchases.value = pData;
+  const { data: pData } = await supabase
+    .from('purchases')
+    .select('*, utang_supplier(remaining)')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (pData) {
+    // Override remaining_debt with live utang_supplier data when available
+    purchases.value = pData.map((p: any) => {
+      const utang = Array.isArray(p.utang_supplier) ? p.utang_supplier[0] : p.utang_supplier;
+      return {
+        ...p,
+        remaining_debt: utang ? Number(utang.remaining) : (p.remaining_debt || 0)
+      };
+    });
+  }
   calculatePurchaseStats();
 }
 

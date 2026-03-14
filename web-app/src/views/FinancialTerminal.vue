@@ -1,1452 +1,731 @@
 <template>
-  <div class="financial-terminal page-container">
-    <header class="page-header">
-      <div>
-        <h1 class="hero-font text-gradient">Financial Terminal</h1>
-        <p class="text-dim">Comprehensive Revenue & Logistics Intelligence</p>
-      </div>
+<div class="ft-root">
 
-      <!-- Global Date Range Filter for Tabs -->
-      <div class="filters">
-        <div class="glass-panel filter-group period-dropdown-wrapper" tabindex="0" @blur="isDropdownOpen = false">
-          <div class="period-trigger" @click="isDropdownOpen = !isDropdownOpen">
-            <CalendarIcon class="icon-sm text-primary" />
-            <span class="text-dim">Period:</span>
-            <span class="period-value font-bold">{{ periodLabel }}</span>
-            <ChevronDownIcon class="icon-xs chevron" :class="{ 'rotate': isDropdownOpen }" />
-          </div>
-          <Transition name="fade-slide">
-             <div class="period-menu glass-panel" v-if="isDropdownOpen">
-                <div class="period-option" :class="{ active: selectedPeriod === 'today' }" @click="selectPeriod('today')">Today</div>
-                <div class="period-option" :class="{ active: selectedPeriod === 'this_week' }" @click="selectPeriod('this_week')">This Week</div>
-                <div class="period-option" :class="{ active: selectedPeriod === 'this_month' }" @click="selectPeriod('this_month')">This Month</div>
-                <div class="period-option" :class="{ active: selectedPeriod === 'this_quarter' }" @click="selectPeriod('this_quarter')">This Quarter</div>
-                <div class="period-option" :class="{ active: selectedPeriod === 'custom' }" @click="selectPeriod('custom')">Custom Range</div>
-             </div>
-          </Transition>
-        </div>
-        
-        <div class="glass-panel filter-group" v-if="selectedPeriod === 'custom'">
-          <input type="date" v-model="customStartDate" class="date-input" />
-          <span class="text-dim">-</span>
-          <input type="date" v-model="customEndDate" class="date-input" />
-        </div>
-
-        <button class="btn-primary" @click="fetchFinancialData" :disabled="loading">
-          <RefreshCcwIcon class="icon-sm" :class="{ 'spin': loading }" />
-          <span>{{ loading ? 'SYNCING...' : 'SYNC DATA' }}</span>
+  <!-- PAGE HEADER -->
+  <div class="ft-header">
+    <div class="ft-header-left">
+      <span class="ft-eyebrow">MANAGEMENT · FINANCE</span>
+      <h1 class="ft-title">Financial Terminal</h1>
+      <p class="ft-desc">Real-time P&L, arus kas, dan analisis profitabilitas</p>
+    </div>
+    <div class="ft-header-right">
+      <div class="period-selector">
+        <button v-for="p in periods" :key="p.value"
+          class="period-btn" :class="{ active: selectedPeriod === p.value }"
+          @click="selectedPeriod = p.value; fetchData()">
+          {{ p.label }}
         </button>
       </div>
-    </header>
-
-    <!-- TAB NAVIGATION -->
-    <div class="tabs-nav glass-panel">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab.id"
-        class="tab-btn"
-        :class="{ active: currentTab === tab.id }"
-        @click="currentTab = tab.id"
-      >
-        <component :is="tab.icon" class="tab-icon" />
-        <span>{{ tab.label }}</span>
+      <button class="sync-btn" @click="fetchData" :class="{ loading: isSyncing }">
+        <span class="sync-icon">↻</span>
+        {{ isSyncing ? 'SYNCING...' : 'SYNC DATA' }}
       </button>
     </div>
+  </div>
 
-    <!-- MAIN CONTENT AREA -->
-    <main class="tab-content" v-if="!loading">
-      
-      <!-- TAB 1: PROFIT & LOSS OVERVIEW -->
-      <Transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'overview'" class="tab-pane">
-          <div class="kpi-grid">
-            <!-- Row 1: 4 Cards -->
-            <div class="kpi-card glass-panel">
-              <span class="kpi-label">TOTAL PENDAPATAN</span>
-              <h3 class="kpi-value text-success">Rp {{ totalRevenue.toLocaleString() }}</h3>
-              <ActivityIcon class="kpi-icon icon-success" />
-            </div>
-            <div class="kpi-card glass-panel">
-              <span class="kpi-label">LABA KOTOR</span>
-              <h3 class="kpi-value text-gradient">Rp {{ grossProfit.toLocaleString() }}</h3>
-              <DollarSignIcon class="kpi-icon icon-primary" />
-            </div>
-            <div class="kpi-card glass-panel">
-              <span class="kpi-label">NET POSITION</span>
-              <h3 class="kpi-value" :class="netCashFlow >= 0 ? 'text-success' : 'text-danger'">
-                Rp {{ netCashFlow.toLocaleString() }}
-              </h3>
-              <ArrowLeftRightIcon class="kpi-icon" :class="netCashFlow >= 0 ? 'text-success' : 'text-danger'" />
-            </div>
-            <div class="kpi-card glass-panel">
-              <span class="kpi-label">UTANG SUPPLIER</span>
-              <h3 class="kpi-value text-danger">Rp {{ totalUtang.toLocaleString() }}</h3>
-              <ClockIcon class="kpi-icon icon-danger" />
-            </div>
+  <!-- TAB BAR -->
+  <div class="ft-tabs">
+    <button v-for="tab in tabs" :key="tab.id"
+      class="ft-tab" :class="{ active: activeTab === tab.id }"
+      @click="activeTab = tab.id">
+      <span>{{ tab.icon }}</span>
+      <span>{{ tab.label }}</span>
+    </button>
+  </div>
 
-            <!-- Row 2: 2 Cards (Full Width or Spaced) -->
-            <div class="kpi-card glass-panel kpi-wide">
-              <span class="kpi-label">PIUTANG AKTIF</span>
-              <h3 class="kpi-value text-warning">Rp {{ totalPiutang.toLocaleString() }}</h3>
-              <HourglassIcon class="kpi-icon icon-warning" />
-            </div>
-            <div class="kpi-card glass-panel kpi-wide">
-              <span class="kpi-label">NILAI STOK (ASSET)</span>
-              <h3 class="kpi-value text-info">Rp {{ nilaiStok.toLocaleString() }}</h3>
-              <PackageIcon class="kpi-icon icon-info" />
-            </div>
-          </div>
+  <!-- ═══════════ TAB: P&L OVERVIEW ═══════════ -->
+  <div v-if="activeTab === 'pnl'" class="tab-content">
 
-          <!-- Chart Area -->
-          <div class="chart-container glass-panel">
-            <h3 class="section-title">Revenue vs COGS vs Gross Profit</h3>
-            <div class="chart-wrapper">
-              <LineChart v-if="chartData.labels.length > 0" :data="chartData" :options="chartOptions" />
-              <div v-else class="empty-state text-dim">No paid transactions in selected period.</div>
-            </div>
-          </div>
-
-          <!-- P&L Table -->
-          <div class="pnl-table-container glass-panel">
-            <h3 class="section-title">Profitability by Product</h3>
-            <table class="financial-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th class="text-right">Units Sold</th>
-                  <th class="text-right">Revenue</th>
-                  <th class="text-right">COGS (HPP)</th>
-                  <th class="text-right">Gross Profit</th>
-                  <th class="text-right">Margin</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="pn in productPnL" :key="pn.label">
-                  <td class="product-name">
-                     <span class="dot" :class="pn.label === 'Telur Hero' ? 'dot-hero' : 'dot-salted'"></span>
-                     {{ pn.label }}
-                  </td>
-                  <td class="text-right">{{ pn.qty }} Pack</td>
-                  <td class="text-right text-success font-mono font-bold">Rp {{ pn.rev.toLocaleString() }}</td>
-                  <td class="text-right text-danger font-mono">Rp {{ pn.cogs.toLocaleString() }}</td>
-                  <td class="text-right text-primary font-mono font-black">Rp {{ pn.gp.toLocaleString() }}</td>
-                  <td class="text-right font-mono font-bold" :class="getMarginClass(pn.margin)">{{ pn.margin.toFixed(1) }}%</td>
-                </tr>
-                <tr v-if="productPnL.length === 0">
-                  <td colspan="6" class="text-center text-dim py-6">No data available for this period.</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div class="laba-row">
-              <div>
-                <p class="laba-label">LABA KOTOR BERSIH</p>
-                <p class="laba-value success">Rp {{ grossProfit.toLocaleString() }}</p>
-              </div>
-              <div>
-                <p class="laba-label">MARGIN KESELURUHAN</p>
-                <p class="laba-value margin">{{ grossMargin.toFixed(1) }}%</p>
-              </div>
-            </div>
-          </div>
+    <!-- KPI ROW 1: 4 cards -->
+    <div class="kpi-grid-4">
+      <div class="kpi-card" style="--accent: #f59e0b">
+        <div class="kpi-top">
+          <span class="kpi-label">TOTAL PENDAPATAN</span>
+          <span class="kpi-icon">💰</span>
         </div>
-      </Transition>
+        <p class="kpi-val" style="color:#f59e0b">{{ fmt(pnlData.totalRevenue) }}</p>
+        <p class="kpi-sub">{{ allSalesData?.length ?? 0 }} transaksi periode ini</p>
+      </div>
 
-      <!-- TAB 2: CASH FLOW TRACKER -->
-      <Transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'cashflow'" class="tab-pane">
-          <!-- Cash Flow Tracker -->
-          <div class="cashflow-grid">
-            <!-- MONEY IN -->
-            <div class="cf-glass glass-panel border-success">
-              <h3 class="cf-title text-success"><TrendingUpIcon class="icon-sm" /> MONEY IN (PEMASUKAN)</h3>
-              <div class="table-scroll">
-                <table class="financial-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Invoice ID</th>
-                      <th>Customer</th>
-                      <th class="text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="sale in paidSalesList" :key="sale.id">
-                      <td>{{ formatDate(sale.created_at) }}</td>
-                      <td class="text-dim">#{{ sale.id.toString().substring(0,6).toUpperCase() }}</td>
-                      <td>{{ sale.customers?.name || 'Guest' }}</td>
-                      <td class="text-right">Rp {{ Number(sale.total_price).toLocaleString() }}</td>
-                    </tr>
-                    <tr v-if="paidSalesList.length === 0">
-                      <td colspan="4" class="text-center text-dim py-6">No income recorded.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="cf-footer text-success">
-                <span>Subtotal Money In</span>
-                <span>Rp {{ totalMoneyIn.toLocaleString() }}</span>
-              </div>
-            </div>
-
-            <!-- MONEY OUT -->
-            <div class="cf-glass glass-panel border-danger">
-              <h3 class="cf-title text-danger"><ActivityIcon class="icon-sm" /> MONEY OUT (PENGELUARAN)</h3>
-              <div class="table-scroll">
-                <table class="financial-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Item Restocked</th>
-                      <th>Supplier</th>
-                      <th class="text-right">Total Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="log in restockLogsList" :key="log.id">
-                      <td>{{ formatDate(log.created_at) }}</td>
-                      <td>{{ log.inventory?.name || 'Unknown Item' }}</td>
-                      <td class="text-dim">{{ extractSupplierFromNotes(log.notes) || '-' }}</td>
-                      <td class="text-right">Rp {{ (Number(log.unit_price) * Math.abs(Number(log.change))).toLocaleString() }}</td>
-                    </tr>
-                    <tr v-if="restockLogsList.length === 0">
-                      <td colspan="4" class="text-center text-dim py-6">No expenses recorded.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="cf-footer text-danger">
-                <span>Subtotal Money Out</span>
-                <span>Rp {{ totalMoneyOut.toLocaleString() }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- NET SUMMARY -->
-          <div class="net-cashflow-card glass-panel text-center">
-            <p class="text-dim mb-2 font-bold">NET CASH FLOW</p>
-            <h1 class="hero-font" :class="netCashFlow >= 0 ? 'text-success' : 'text-danger'">
-              {{ netCashFlow >= 0 ? '+' : '' }} Rp {{ netCashFlow.toLocaleString() }}
-            </h1>
-            <div class="cf-bar-container">
-              <div class="cf-bar cf-in" :style="{ width: inRatio + '%' }"></div>
-              <div class="cf-bar cf-out" :style="{ width: outRatio + '%' }"></div>
-            </div>
-          </div>
+      <div class="kpi-card" :style="'--accent:' + (pnlData.grossProfit >= 0 ? '#10b981' : '#ef4444')">
+        <div class="kpi-top">
+          <span class="kpi-label">LABA KOTOR</span>
+          <span class="kpi-icon">📈</span>
         </div>
-      </Transition>
+        <p class="kpi-val" :style="'color:' + (pnlData.grossProfit >= 0 ? '#10b981' : '#ef4444')">
+          {{ fmt(pnlData.grossProfit) }}
+        </p>
+        <p class="kpi-sub">Margin {{ pnlData.grossMargin }}% · HPP {{ fmt(pnlData.totalHPP) }}</p>
+      </div>
 
-      <!-- TAB 3: RECEIVABLES TRACKER -->
-      <Transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'receivables'" class="tab-pane">
-          <div class="glass-panel pnl-table-container">
-            <h3 class="section-title text-warning"><FileWarningIcon class="icon-sm" /> PENDING RECEIVABLES (PIUTANG)</h3>
-            <div class="table-scroll" style="height: 500px;">
-              <table class="financial-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Invoice ID</th>
-                    <th>Customer</th>
-                    <th class="text-right">Amount</th>
-                    <th class="text-center">Days Outstanding</th>
-                    <th class="text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="rec in pendingReceivables" :key="rec.id">
-                    <td>{{ formatDate(rec.created_at) }}</td>
-                    <td class="text-dim">#{{ rec.id.toString().substring(0,6).toUpperCase() }}</td>
-                    <td class="font-bold">{{ rec.customers?.name || 'Unknown' }}</td>
-                    <td class="text-right text-warning font-bold">Rp {{ Number(rec.total_price).toLocaleString() }}</td>
-                    <td class="text-center font-bold" :class="getDaysOutstanding(rec.created_at) > 7 ? 'text-danger' : 'text-dim'">
-                      {{ getDaysOutstanding(rec.created_at) }} Days
-                    </td>
-                    <td class="text-center">
-                      <button class="btn-tactical btn-small" @click="markAsPaid(rec.id)" :disabled="actionLoading === rec.id">
-                        <span v-if="actionLoading === rec.id">Processing...</span>
-                        <span v-else>Mark Paid</span>
-                      </button>
-                    </td>
-                  </tr>
-                  <tr v-if="pendingReceivables.length === 0">
-                    <td colspan="6" class="text-center text-dim py-6">No pending receivables. Excellent!</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <div class="kpi-card" :style="'--accent:' + (totalUtang > 0 ? '#ef4444' : '#10b981')">
+        <div class="kpi-top">
+          <span class="kpi-label">UTANG SUPPLIER</span>
+          <span class="kpi-icon">⚡</span>
         </div>
-      </Transition>
+        <p class="kpi-val" :style="'color:' + (totalUtang > 0 ? '#ef4444' : 'rgba(255,255,255,0.3)')">
+          {{ fmt(totalUtang) }}
+        </p>
+        <p class="kpi-sub">{{ totalUtang > 0 ? 'Ada kewajiban belum lunas' : 'Semua lunas ✓' }}</p>
+      </div>
 
-      <!-- TAB 4: PROFITABILITY MATRIX -->
-      <Transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'profitability'" class="tab-pane">
-          <div class="profitability-grid">
-            <!-- Product Cards -->
-            <div class="product-cards-container">
-              <div v-for="pn in productPnL" :key="pn.label" class="prof-card glass-panel" :class="{'hero-border': pn.label==='Telur Hero', 'asin-border': pn.label==='Salted Egg'}">
-                 <div class="prof-header">
-                   <h3 class="product-title">
-                     <span class="dot" :class="pn.label === 'Telur Hero' ? 'dot-hero' : 'dot-salted'"></span>
-                     {{ pn.label }}
-                   </h3>
-                   <span class="qty-badge">{{ pn.qty }} Units Sold</span>
-                 </div>
-                 <div class="prof-metrics">
-                   <div class="metric">
-                     <span class="text-dim">Revenue</span>
-                     <span class="text-success font-bold">Rp {{ pn.rev.toLocaleString() }}</span>
-                   </div>
-                   <div class="metric">
-                     <span class="text-dim">COGS</span>
-                     <span class="text-danger font-bold">Rp {{ pn.cogs.toLocaleString() }}</span>
-                   </div>
-                   <div class="metric">
-                     <span class="text-dim">Gross Profit</span>
-                     <span class="text-primary font-bold">Rp {{ pn.gp.toLocaleString() }}</span>
-                   </div>
-                 </div>
-                 <div class="prof-margin-box">
-                   <div class="margin-header">
-                     <span class="text-dim font-bold">MARGIN HEALTH</span>
-                     <span class="font-bold" :class="getMarginClass(pn.margin)">{{ pn.margin.toFixed(1) }}%</span>
-                   </div>
-                   <div class="cf-bar-container" style="margin-top: 8px;">
-                     <div class="cf-bar" :class="getMarginBgClass(pn.margin)" :style="{ width: Math.min(pn.margin, 100) + '%' }"></div>
-                   </div>
-                 </div>
-              </div>
-              <div v-if="productPnL.length === 0" class="empty-state text-dim glass-panel">
-                No product data available in this period.
-              </div>
-            </div>
-
-            <!-- Radar Chart -->
-            <div class="radar-container glass-panel">
-               <h3 class="section-title text-center mb-2">Performance Comparison (Normalized)</h3>
-               <p class="text-dim text-center" style="font-size: 0.75rem; margin-bottom: 24px;">Comparing Revenue, Margin, and Volume vs Top Performer</p>
-               <div class="radar-wrapper">
-                 <RadarChart v-if="radarChartData.labels.length > 0" :data="radarChartData" :options="radarChartOptions" />
-               </div>
-            </div>
-          </div>
+      <div class="kpi-card" :style="'--accent:' + (totalPiutang > 0 ? '#8b5cf6' : '#10b981')">
+        <div class="kpi-top">
+          <span class="kpi-label">PIUTANG AKTIF</span>
+          <span class="kpi-icon">📋</span>
         </div>
-      </Transition>
-
-      <!-- TAB 5: REPORTS EXPORT -->
-      <Transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'export'" class="tab-pane">
-          <div class="glass-panel text-center" style="padding: 40px; border-radius: 20px;">
-            <div v-if="!authStore.isAdmin" class="text-danger font-bold">
-              <BanIcon class="icon" /> <br/>
-              ACCESS DENIED. Administrators only.
-            </div>
-            <div v-else>
-              <h2 class="hero-font text-gradient mb-2">Data Export Center</h2>
-              <p class="text-dim" style="margin-bottom: 32px">Download your financial intelligence for external auditing and backup purposes.</p>
-              
-              <div class="export-grid">
-                <button class="export-btn glass-panel" @click="exportPnL">
-                  <BarChart3Icon class="ex-icon icon-primary" />
-                  <div class="ex-text">
-                    <h4>P&L Summary</h4>
-                    <span class="text-dim">Profit & Loss Metrics (CSV)</span>
-                  </div>
-                  <DownloadCloudIcon class="ex-dl" />
-                </button>
-
-                <button class="export-btn glass-panel" @click="exportSales">
-                  <ActivityIcon class="ex-icon icon-success" />
-                  <div class="ex-text">
-                    <h4>Sales Recap</h4>
-                    <span class="text-dim">Paid Transactions (CSV)</span>
-                  </div>
-                  <DownloadCloudIcon class="ex-dl" />
-                </button>
-
-                <button class="export-btn glass-panel" @click="exportStock">
-                  <TrendingUpIcon class="ex-icon icon-warning" />
-                  <div class="ex-text">
-                    <h4>Stock Movement</h4>
-                    <span class="text-dim">Restock & Adjustments (CSV)</span>
-                  </div>
-                  <DownloadCloudIcon class="ex-dl" />
-                </button>
-
-                <button class="export-btn glass-panel" @click="exportReceivables">
-                  <FileWarningIcon class="ex-icon icon-danger" />
-                  <div class="ex-text">
-                    <h4>Receivables</h4>
-                    <span class="text-dim">Pending Piutang Data (CSV)</span>
-                  </div>
-                  <DownloadCloudIcon class="ex-dl" />
-                </button>
-
-                <button class="export-btn glass-panel" @click="exportBackup">
-                  <TargetIcon class="ex-icon icon-dim" />
-                  <div class="ex-text">
-                    <h4>Full System Backup</h4>
-                    <span class="text-dim">Raw Database Dump (JSON)</span>
-                  </div>
-                  <DownloadCloudIcon class="ex-dl" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-
-    </main>
-
-    <!-- LOADING STATE -->
-    <div v-else class="loading-state glass-panel">
-      <div class="pulse-ring"></div>
-      <p class="hero-font text-gradient">SYNTHESIZING FINANCIAL DATA...</p>
+        <p class="kpi-val" :style="'color:' + (totalPiutang > 0 ? '#8b5cf6' : 'rgba(255,255,255,0.3)')">
+          {{ fmt(totalPiutang) }}
+        </p>
+        <p class="kpi-sub">{{ totalPiutang > 0 ? piutangList.length + ' invoice belum terbayar' : 'Semua lunas ✓' }}</p>
+      </div>
     </div>
 
+    <!-- KPI ROW 2: 2 cards -->
+    <div class="kpi-grid-2">
+      <div class="kpi-card" style="--accent:#38bdf8">
+        <div class="kpi-top">
+          <span class="kpi-label">NILAI STOK (ASET)</span>
+          <span class="kpi-icon">📦</span>
+        </div>
+        <p class="kpi-val" style="color:#38bdf8">{{ fmt(nilaiStok) }}</p>
+        <p class="kpi-sub">HPP × stok tersisa di gudang</p>
+      </div>
+
+      <div class="kpi-card" :style="'--accent:' + (netPosition >= 0 ? '#10b981' : '#ef4444')">
+        <div class="kpi-top">
+          <span class="kpi-label">NET POSITION</span>
+          <span class="kpi-icon">⚖️</span>
+        </div>
+        <p class="kpi-val" :style="'color:' + (netPosition >= 0 ? '#10b981' : '#ef4444')">
+          {{ netPosition >= 0 ? '+' : '' }}{{ fmt(netPosition) }}
+        </p>
+        <p class="kpi-sub">Revenue − HPP − Utang + Piutang + Stok</p>
+      </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <div>
+          <h3 class="chart-title">Trend Kinerja Harian</h3>
+          <p class="chart-sub">Revenue · HPP · Profit per hari dalam periode</p>
+        </div>
+        <div class="chart-legend">
+          <span><span class="dot" style="background:#f59e0b"></span> Revenue</span>
+          <span><span class="dot" style="background:#ef4444"></span> HPP</span>
+          <span><span class="dot" style="background:#10b981"></span> Profit</span>
+        </div>
+      </div>
+      <div v-if="!chartData.length || chartData.every(d => d.revenue === 0)" class="chart-empty">
+        <div style="font-size:40px">📊</div>
+        <p>Belum ada data penjualan di periode ini</p>
+      </div>
+      <div v-else class="chart-bars">
+        <div v-for="d in chartData" :key="d.date" class="chart-bar-group">
+          <div class="bar-wrap">
+            <div class="bar revenue" :style="'height:' + barHeight(d.revenue) + 'px'" :title="fmt(d.revenue)"></div>
+            <div class="bar hpp"     :style="'height:' + barHeight(d.hpp) + 'px'"     :title="fmt(d.hpp)"></div>
+            <div class="bar profit"  :style="'height:' + barHeight(Math.max(d.profit,0)) + 'px'" :title="fmt(d.profit)"></div>
+          </div>
+          <span class="bar-label">{{ d.date }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- P&L TABLE -->
+    <div class="pnl-card">
+      <div class="pnl-head">
+        <h3 class="chart-title">Laporan Laba Rugi per Produk</h3>
+        <span class="period-badge">{{ startDate }} — {{ endDate }}</span>
+      </div>
+
+      <div v-if="!productData.length" class="chart-empty">
+        <div style="font-size:32px">📦</div>
+        <p>Belum ada data produk di periode ini</p>
+        <p style="font-size:11px;margin-top:4px">Pastikan sale_items.egg_type terisi dengan benar</p>
+      </div>
+
+      <table v-else class="data-table">
+        <thead>
+          <tr>
+            <th>PRODUK</th>
+            <th>PACK TERJUAL</th>
+            <th>REVENUE</th>
+            <th>HPP</th>
+            <th>LABA KOTOR</th>
+            <th>MARGIN</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="p in productData" :key="p.type">
+            <td>
+              <span class="product-chip" :class="p.type">{{ p.label }}</span>
+            </td>
+            <td class="mono">{{ p.packs }} pack</td>
+            <td class="mono gold">{{ fmt(p.revenue) }}</td>
+            <td class="mono red">{{ fmt(p.hpp) }}</td>
+            <td class="mono" :class="p.profit >= 0 ? 'green' : 'red'">{{ fmt(p.profit) }}</td>
+            <td>
+              <div class="margin-bar">
+                <div class="margin-fill" :style="'width:' + Math.min(p.margin, 100) + '%'"></div>
+                <span class="margin-label">{{ p.margin }}%</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Footer -->
+      <div class="pnl-footer">
+        <div>
+          <p class="kpi-label">LABA KOTOR BERSIH</p>
+          <p class="laba-big" :class="pnlData.grossProfit >= 0 ? 'green' : 'red'">
+            {{ fmt(pnlData.grossProfit) }}
+          </p>
+        </div>
+        <div style="text-align:right">
+          <p class="kpi-label">MARGIN KESELURUHAN</p>
+          <p class="laba-big gold">{{ pnlData.grossMargin }}%</p>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- ═══════════ TAB: CASH FLOW ═══════════ -->
+  <div v-if="activeTab === 'cashflow'" class="tab-content">
+    <div class="cf-grid">
+      <!-- Money In -->
+      <div class="cf-card">
+        <div class="cf-head green-head">
+          <span>↑ MONEY IN (PEMASUKAN)</span>
+          <span class="mono">{{ fmt(totalMoneyIn) }}</span>
+        </div>
+        <div v-if="!moneyIn.length" class="chart-empty">
+          <p>Belum ada pemasukan tunai tercatat</p>
+        </div>
+        <table v-else class="data-table">
+          <thead><tr><th>TANGGAL</th><th>INVOICE</th><th>CUSTOMER</th><th>JUMLAH</th></tr></thead>
+          <tbody>
+            <tr v-for="s in moneyIn" :key="s.id">
+              <td class="muted">{{ fmtDate(s.created_at) }}</td>
+              <td class="mono" style="font-size:11px">{{ s.id?.substring(0,8) }}...</td>
+              <td>{{ s.customers?.name ?? '—' }}</td>
+              <td class="mono green">{{ fmt(s.total_revenue) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="cf-total">
+          <span>Subtotal Masuk</span>
+          <span class="mono green">{{ fmt(totalMoneyIn) }}</span>
+        </div>
+      </div>
+
+      <!-- Money Out -->
+      <div class="cf-card">
+        <div class="cf-head red-head">
+          <span>↓ MONEY OUT (PENGELUARAN)</span>
+          <span class="mono">{{ fmt(totalMoneyOut) }}</span>
+        </div>
+        <div v-if="!moneyOut.length" class="chart-empty">
+          <p>Belum ada pembelian tercatat</p>
+        </div>
+        <table v-else class="data-table">
+          <thead><tr><th>TANGGAL</th><th>SUPPLIER</th><th>TOTAL</th></tr></thead>
+          <tbody>
+            <tr v-for="p in moneyOut" :key="p.id">
+              <td class="muted">{{ fmtDate(p.created_at) }}</td>
+              <td>{{ p.suppliers?.name ?? '—' }}</td>
+              <td class="mono red">{{ fmt(p.total_cost) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="cf-total">
+          <span>Subtotal Keluar</span>
+          <span class="mono red">{{ fmt(totalMoneyOut) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Net Cash Flow -->
+    <div class="net-cf-card">
+      <p class="kpi-label" style="text-align:center;margin-bottom:8px">NET CASH FLOW</p>
+      <p class="laba-big" style="text-align:center;font-size:40px"
+         :class="(totalMoneyIn - totalMoneyOut) >= 0 ? 'green' : 'red'">
+        {{ (totalMoneyIn - totalMoneyOut) >= 0 ? '+' : '' }}{{ fmt(totalMoneyIn - totalMoneyOut) }}
+      </p>
+      <div class="cf-bar-wrap">
+        <div class="cf-bar-in"  :style="'flex:' + totalMoneyIn"></div>
+        <div class="cf-bar-out" :style="'flex:' + totalMoneyOut"></div>
+      </div>
+      <div class="cf-bar-labels">
+        <span class="green">● Masuk {{ fmt(totalMoneyIn) }}</span>
+        <span class="red">● Keluar {{ fmt(totalMoneyOut) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: RECEIVABLES ═══════════ -->
+  <div v-if="activeTab === 'receivables'" class="tab-content">
+    <div class="section-card">
+      <div class="section-head">
+        <h3 class="chart-title">Piutang Belum Terbayar</h3>
+        <span class="kpi-val" style="color:#8b5cf6;font-size:20px">{{ fmt(totalPiutang) }}</span>
+      </div>
+      <div v-if="!piutangList.length" class="chart-empty">
+        <div style="font-size:40px">🎉</div>
+        <p>Tidak ada piutang aktif. Semua lunas!</p>
+      </div>
+      <table v-else class="data-table">
+        <thead>
+          <tr><th>CUSTOMER</th><th>JUMLAH</th><th>JATUH TEMPO</th><th>STATUS</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="p in piutangList" :key="p.id">
+            <td>{{ p.customer_name ?? '—' }}</td>
+            <td class="mono violet">{{ fmt(p.remaining) }}</td>
+            <td class="mono muted">{{ p.due_date ? fmtDate(p.due_date) : '—' }}</td>
+            <td>
+              <span class="status-chip" :class="getDueStatus(p.due_date)">
+                {{ getDueLabel(p.due_date) }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: PROFITABILITY MATRIX ═══════════ -->
+  <div v-if="activeTab === 'profitability'" class="tab-content">
+    <div class="section-card">
+      <h3 class="chart-title" style="margin-bottom:20px">Matriks Profitabilitas Produk</h3>
+      <div v-if="!productData.length" class="chart-empty">
+        <div style="font-size:40px">📊</div>
+        <p>Belum ada data produk untuk periode ini</p>
+      </div>
+      <div v-else class="product-matrix">
+        <div v-for="p in productData" :key="p.type"
+          class="matrix-card" :class="p.type">
+          <div class="matrix-header">
+            <span class="product-chip" :class="p.type">{{ p.label }}</span>
+            <span class="mono" style="color:rgba(255,255,255,0.4);font-size:12px">{{ p.packs }} pack terjual</span>
+          </div>
+          <div class="matrix-stats">
+            <div class="matrix-stat">
+              <span class="kpi-label">REVENUE</span>
+              <span class="mono gold">{{ fmt(p.revenue) }}</span>
+            </div>
+            <div class="matrix-stat">
+              <span class="kpi-label">HPP</span>
+              <span class="mono red">{{ fmt(p.hpp) }}</span>
+            </div>
+            <div class="matrix-stat">
+              <span class="kpi-label">LABA KOTOR</span>
+              <span class="mono" :class="p.profit >= 0 ? 'green' : 'red'">{{ fmt(p.profit) }}</span>
+            </div>
+            <div class="matrix-stat">
+              <span class="kpi-label">MARGIN</span>
+              <span class="mono" :class="p.margin >= 20 ? 'green' : p.margin >= 10 ? 'gold' : 'red'">
+                {{ p.margin }}%
+              </span>
+            </div>
+          </div>
+          <div class="margin-bar" style="margin-top:16px;height:8px;border-radius:4px">
+            <div class="margin-fill" :style="'width:' + Math.min(p.margin,100) + '%;height:100%;border-radius:4px;background:' + (p.margin >= 20 ? '#10b981' : p.margin >= 10 ? '#f59e0b' : '#ef4444')"></div>
+          </div>
+          <p style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px">
+            {{ p.margin >= 20 ? '✓ Margin sehat' : p.margin >= 10 ? '⚠ Margin tipis' : '✗ Margin kritis' }}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import { supabase } from '../lib/supabase';
-import { 
-  BarChart3Icon, 
-  ArrowLeftRightIcon, 
-  FileWarningIcon, 
-  TargetIcon, 
-  DownloadCloudIcon,
-  CalendarIcon,
-  RefreshCcwIcon,
-  DollarSignIcon,
-  ActivityIcon,
-  TrendingUpIcon,
-  ClockIcon,
-  BanIcon,
-  ChevronDownIcon,
-  HourglassIcon,
-  PackageIcon
-} from 'lucide-vue-next';
+import { ref, computed, onMounted, watch } from 'vue'
+import { supabase } from '../lib/supabase'
 
-// Chart.js imports
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  RadarController,
-  RadialLinearScale,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js';
-import { Line as LineChart, Radar as RadarChart } from 'vue-chartjs';
-import { useAuthStore } from '../stores/auth';
-import { normalizeGrade, getGradeLabel } from '../constants/grades';
-import { withTimeout } from '../utils/safeAsync';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  RadarController,
-  RadialLinearScale,
-  Title,
-  Tooltip,
-  Legend
-);
-
-const authStore = useAuthStore();
-
-const currentTab = ref('overview');
-const loading = ref(false);
-
-const selectedPeriod = ref('this_month');
-const customStartDate = ref('');
-const customEndDate = ref('');
-const isDropdownOpen = ref(false);
-
-const periodLabel = computed(() => {
-  const map: Record<string, string> = {
-    'today': 'Today',
-    'this_week': 'This Week',
-    'this_month': 'This Month',
-    'this_quarter': 'This Quarter',
-    'custom': 'Custom Range'
-  };
-  return map[selectedPeriod.value] || 'Select Period';
-});
-
-function selectPeriod(period: string) {
-  selectedPeriod.value = period;
-  isDropdownOpen.value = false;
-}
+// ─── CONFIG ─────────────────────────
+const periods = [
+  { value: 'week',    label: 'Minggu' },
+  { value: 'month',   label: 'Bulan' },
+  { value: 'quarter', label: 'Kuartal' },
+  { value: 'year',    label: 'Tahun' },
+]
 
 const tabs = [
-  { id: 'overview', label: 'P&L Overview', icon: BarChart3Icon },
-  { id: 'cashflow', label: 'Cash Flow', icon: ArrowLeftRightIcon },
-  { id: 'receivables', label: 'Receivables', icon: FileWarningIcon },
-  { id: 'profitability', label: 'Profitability Matrix', icon: TargetIcon },
-  { id: 'export', label: 'Data Export', icon: DownloadCloudIcon }
-];
+  { id: 'pnl',           icon: '📊', label: 'P&L Overview' },
+  { id: 'cashflow',      icon: '💳', label: 'Arus Kas' },
+  { id: 'receivables',   icon: '📋', label: 'Piutang' },
+  { id: 'profitability', icon: '🎯', label: 'Profitabilitas' },
+]
 
-// Data state
-const allSales = ref<any[]>([]);
-const restockLogs = ref<any[]>([]);
-const pendingReceivables = ref<any[]>([]);
-const utangSupplierList = ref<any[]>([]);
-const inventoryMap = ref<Record<string, any>>({});
-const summaryRev = ref<number | null>(null);
-const summaryCogs = ref<number | null>(null);
-const summaryPiutang = ref<number | null>(null);
-const summaryUtang = ref<number | null>(null);
-const summaryStockVal = ref<number | null>(null);
+// ─── STATE ──────────────────────────
+const activeTab       = ref('pnl')
+const selectedPeriod  = ref('month')
+const isSyncing       = ref(false)
+const pnlData         = ref({ totalRevenue: 0, totalHPP: 0, grossProfit: 0, grossMargin: 0, totalDiscount: 0 })
+const chartData       = ref<any[]>([])
+const productData     = ref<any[]>([])
+const totalUtang      = ref(0)
+const totalPiutang    = ref(0)
+const piutangList     = ref<any[]>([])
+const nilaiStok       = ref(0)
+const moneyIn         = ref<any[]>([])
+const moneyOut        = ref<any[]>([])
+const totalMoneyOut   = ref(0)
+const allSalesData    = ref<any[]>([])
+const startDate       = ref('')
+const endDate         = ref('')
 
-const formatToDateString = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+// ─── COMPUTED ───────────────────────
+const netPosition = computed(() =>
+  pnlData.value.totalRevenue
+  - pnlData.value.totalHPP
+  - totalUtang.value
+  + totalPiutang.value
+  + nilaiStok.value
+)
 
-function getDateRange() {
-  const now = new Date();
-  let start = new Date();
-  let end = new Date();
+const totalMoneyIn = computed(() =>
+  moneyIn.value.reduce((s: number, x: any) => s + (x.total_revenue ?? 0), 0)
+)
 
-  if (selectedPeriod.value === 'today') {
-    start.setHours(0,0,0,0);
-  } else if (selectedPeriod.value === 'this_week') {
-    const day = now.getDay();
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    start.setDate(diff);
-    start.setHours(0,0,0,0);
-  } else if (selectedPeriod.value === 'this_month') {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else if (selectedPeriod.value === 'this_quarter') {
-    const quarter = Math.floor(now.getMonth() / 3);
-    start = new Date(now.getFullYear(), quarter * 3, 1);
-  } else if (selectedPeriod.value === 'custom') {
-    if (customStartDate.value) start = new Date(customStartDate.value);
-    if (customEndDate.value) {
-      end = new Date(customEndDate.value);
-    }
-  }
+const maxRev = computed(() => Math.max(...chartData.value.map((d: any) => d.revenue), 1))
 
-  return { 
-    startDate: formatToDateString(start), 
-    endDate: formatToDateString(end) 
-  };
+// ─── HELPERS ────────────────────────
+function barHeight(val: number) { return Math.max((val / maxRev.value) * 120, 2) }
+
+function fmt(val: number | null | undefined) {
+  if (!val) return 'Rp 0'
+  return 'Rp ' + Math.round(val).toLocaleString('id-ID')
 }
 
-async function fetchFinancialData() {
-  loading.value = true;
+function fmtDate(d: string | null | undefined) {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' })
+}
+
+function getDueStatus(due: string | null | undefined) {
+  if (!due) return 'unknown'
+  const days = Math.floor((new Date().getTime() - new Date(due).getTime()) / 86400000)
+  if (days < 0)  return 'safe'
+  if (days < 8)  return 'warn'
+  return 'danger'
+}
+
+function getDueLabel(due: string | null | undefined) {
+  if (!due) return 'No Due Date'
+  const days = Math.floor((new Date().getTime() - new Date(due).getTime()) / 86400000)
+  if (days < 0)  return `${Math.abs(days)}h lagi`
+  if (days === 0) return 'Jatuh tempo hari ini'
+  return `${days} hari lewat`
+}
+
+// ─── DATA FETCH ─────────────────────
+async function fetchData() {
+  isSyncing.value = true
+
   try {
-    const { startDate, endDate } = getDateRange();
-    const endDateTime = endDate + 'T23:59:59';
+    // ── Date range ──────────────────────────
+    const now = new Date()
+    const y = now.getFullYear(), m = now.getMonth()
 
-    // 0. Fetch all inventory items for lookup
-    const { data: invData } = await withTimeout(
-      supabase.from('inventory').select('id, label, grade, hpp_per_pack, current_stock'),
-      8000, 'fin-inventory'
-    );
-    
-    const invMap: Record<string, any> = {};
-    (invData || []).forEach((item: any) => { invMap[item.id] = item; });
-    inventoryMap.value = invMap;
-
-    // 1. Fetch Sales with nested sale_items (Using string dates for timezone fix)
-    const { data: salesData, error: salesError } = await withTimeout(
-      supabase.from('sales')
-        .select('*, customers(name), sale_items(*)')
-        .gte('created_at', startDate)
-        .lte('created_at', endDateTime),
-      12000, 'fin-sales'
-    );
-    
-    if (salesError) console.error('Sales query failed:', salesError);
-    allSales.value = salesData || [];
-
-    // 2. Fetch stock arrival logs
-    const { data: stockLogsData } = await withTimeout(
-      supabase.from('stock_logs')
-        .select('*')
-        .eq('log_type', 'arrival')
-        .gte('created_at', startDate)
-        .lte('created_at', endDateTime),
-      8000, 'fin-stock-logs'
-    );
-    
-    restockLogs.value = stockLogsData || [];
-
-    // 3. Fetch Pending Receivables (Piutang table)
-    const { data: piutangData } = await withTimeout(
-      supabase.from('piutang')
-        .select('*, customers(name)')
-        .gt('remaining', 0)
-        .order('created_at', { ascending: true }),
-      8000, 'fin-piutang'
-    );
-    
-    pendingReceivables.value = piutangData || [];
-
-    // 5. Fetch P&L Summary from RPC
-    // Note: If you get 400 Error, ensure p_start_date/p_end_date parameter names match.
-    const { data: pnlSummary, error: pnlError } = await withTimeout(
-      supabase.rpc('get_pnl_summary', {
-        start_date: startDate,
-        end_date: endDate
-      }),
-      12000, 'fin-rpc'
-    );
-
-    if (pnlError) {
-      console.warn('P&L RPC failed, using local fallback:', pnlError);
-      // Fallback: reset summary values to let computed properties handle it
-      summaryRev.value = null;
-      summaryCogs.value = null;
-    } else if (pnlSummary && pnlSummary.length > 0) {
-      const p = pnlSummary[0];
-      summaryRev.value = Number(p.total_revenue);
-      summaryCogs.value = Number(p.total_cogs);
-      summaryPiutang.value = Number(p.total_piutang_active);
-      summaryUtang.value = Number(p.total_utang_active);
-      summaryStockVal.value = Number(p.inventory_asset_value);
+    const ranges: Record<string, { start: Date, end: Date }> = {
+      week:    { start: new Date(now.getTime() - 7 * 86400000), end: now },
+      month:   { start: new Date(y, m, 1), end: new Date(y, m + 1, 0) },
+      quarter: { start: new Date(y, Math.floor(m / 3) * 3, 1), end: new Date(y, Math.floor(m / 3) * 3 + 3, 0) },
+      year:    { start: new Date(y, 0, 1), end: new Date(y, 11, 31) }
     }
-    // We'll keep our local allSales fetch for the chart and tables, but the summary RPC provides the "Ground Truth" for KPIs.
-    
-  } catch (error) {
-    console.error('Data sync failed:', error);
+    const range = ranges[selectedPeriod.value] ? ranges[selectedPeriod.value] : ranges.month;
+    if (!range) { // Should never happen but for TS sanity
+      startDate.value = '';
+      endDate.value = '';
+      return;
+    }
+    const startISO = range.start.toISOString().split('T')[0] || '';
+    const endISO   = range.end.toISOString().split('T')[0] || '';
+    startDate.value = startISO;
+    endDate.value   = endISO;
+
+    // ── 1. Sales + sale_items (egg_type NOT product_type) ──
+    const { data: sales, error: salesErr } = await supabase
+      .from('sales')
+      .select(`
+        id, total_revenue, discount_amount, payment_type, created_at,
+        customers ( name ),
+        sale_items ( egg_type, packs_sold, hpp_per_pack, revenue )
+      `)
+      .gte('created_at', startISO + 'T00:00:00')
+      .lte('created_at', endISO   + 'T23:59:59')
+      .order('created_at', { ascending: true })
+
+    if (salesErr) console.error('Sales error:', salesErr)
+
+
+    // ── 2. Aggregate P&L ──────────────────────
+    let totalRevenue  = 0
+    let totalHPP      = 0
+    let totalDiscount = 0
+    const productMap: Record<string, { packs: number, revenue: number, hpp: number }> = {}
+    const dailyMap: Record<string, { revenue: number, hpp: number }> = {}
+
+    sales?.forEach((sale: any) => {
+      totalRevenue  += sale.total_revenue  ?? 0
+      totalDiscount += sale.discount_amount ?? 0
+
+      const day = sale.created_at.substring(0, 10)
+      if (!dailyMap[day]) dailyMap[day] = { revenue: 0, hpp: 0 }
+      dailyMap[day].revenue += sale.total_revenue ?? 0
+
+      sale.sale_items?.forEach((item: any) => {
+        const hpp = (item.hpp_per_pack ?? 0) * (item.packs_sold ?? 0)
+        totalHPP += hpp
+        if (dailyMap[day]) dailyMap[day].hpp += hpp
+
+        const type = item.egg_type  // 'hero' or 'salted_egg'
+        if (type) {
+          if (!productMap[type]) productMap[type] = { packs: 0, revenue: 0, hpp: 0 }
+          productMap[type].packs   += item.packs_sold ?? 0
+          productMap[type].revenue += item.revenue    ?? 0
+          productMap[type].hpp     += hpp
+        }
+      })
+    })
+
+    const grossProfit = totalRevenue - totalHPP
+    const grossMargin = totalRevenue > 0
+      ? parseFloat(((grossProfit / totalRevenue) * 100).toFixed(1)) : 0
+
+    pnlData.value = { totalRevenue, totalHPP, grossProfit, grossMargin, totalDiscount }
+    allSalesData.value = sales ?? []
+
+    // ── 3. Chart data ─────────────────────────
+    const { eachDayOfInterval, format, parseISO } = await import('date-fns')
+    const allDays = eachDayOfInterval({
+      start: parseISO(startISO || ''), end: parseISO(endISO || '')
+    })
+    chartData.value = allDays.map(day => {
+      const key = format(day, 'yyyy-MM-dd')
+      const d   = dailyMap[key] ?? { revenue: 0, hpp: 0 }
+      return { date: format(day, 'd MMM'), revenue: d.revenue, hpp: d.hpp, profit: d.revenue - d.hpp }
+    })
+
+    // ── 4. Product profitability ──────────────
+    const LABELS: Record<string, string> = { hero: 'Telur Bebek Hero', salted_egg: 'Telur Asin' }
+    productData.value = ['hero', 'salted_egg']
+      .filter(t => productMap[t])
+      .map(t => {
+        const d = productMap[t]
+        if (!d) return null // Type safety
+        const gp = d.revenue - d.hpp
+        return {
+          type: t, label: LABELS[t] || t,
+          packs: d.packs, revenue: d.revenue, hpp: d.hpp,
+          profit: gp,
+          margin: d.revenue > 0 ? parseFloat(((gp / d.revenue) * 100).toFixed(1)) : 0
+        }
+      })
+      .filter(x => x !== null)
+
+    // ── 5. Utang supplier ─────────────────────
+    const { data: utangData } = await supabase
+      .from('utang_supplier')
+      .select('remaining_amount, suppliers(name)')
+      .gt('remaining_amount', 0)
+    totalUtang.value = utangData?.reduce((s: number, u: any) => s + (u.remaining_amount ?? 0), 0) ?? 0
+
+    // ── 6. Piutang (use 'remaining' column) ───
+    const { data: piutangData } = await supabase
+      .from('piutang')
+      .select('id, remaining, total_amount, customer_name, due_date, status, created_at')
+      .eq('status', 'belum_bayar')
+    totalPiutang.value = piutangData?.reduce((s: number, p: any) => s + (p.remaining ?? 0), 0) ?? 0
+    piutangList.value  = piutangData ?? []
+
+    // ── 7. Nilai Stok (confirmed columns) ─────
+    const { data: invData } = await supabase
+      .from('inventory')
+      .select('id, label, current_stock, hpp_per_pack, pack_size, item_type')
+      .eq('item_type', 'egg')
+    nilaiStok.value = invData?.reduce((s: number, i: any) => {
+      const packs = Math.floor((i.current_stock ?? 0) / (i.pack_size ?? 10))
+      return s + (packs * (i.hpp_per_pack ?? 0))
+    }, 0) ?? 0
+
+    // ── 8. Cash flow purchases ─────────────────
+    const { data: purchaseData } = await supabase
+      .from('purchases')
+      .select('id, total_cost, total_eggs, created_at, suppliers(name)')
+      .gte('created_at', startISO + 'T00:00:00')
+      .lte('created_at', endISO   + 'T23:59:59')
+      .order('created_at', { ascending: false })
+    moneyOut.value = purchaseData ?? []
+    totalMoneyOut.value = purchaseData?.reduce((s: number, p: any) => s + (p.total_cost ?? 0), 0) ?? 0
+
+    // Money In = tunai sales only (exclude piutang)
+    moneyIn.value = (sales ?? []).filter((s: any) => s.payment_type !== 'piutang')
+
+
+
+  } catch (err) {
+    console.error('fetchData error:', err)
   } finally {
-    loading.value = false;
+    isSyncing.value = false
   }
 }
 
-// ========================
-// KPIs for TAB 1
-// ========================
-
-// 1. Total Revenue (Paid)
-const totalRevenue = computed(() => {
-  if (summaryRev.value !== null) return summaryRev.value;
-  const sum = allSales.value
-    .filter(s => s.payment_status === 'paid' && !s.voided_at)
-    .reduce((sum, s) => sum + Number(s.total_price || s.total_revenue || 0), 0);
-  return sum;
-});
-
-const totalCOGS = computed(() => {
-  if (summaryCogs.value !== null) return summaryCogs.value;
-  return allSales.value
-    .filter(s => s.payment_status === 'paid' && !s.voided_at)
-    .reduce((sum, s) => {
-      const items = s.sale_items || [];
-      return sum + items.reduce((iSum: number, i: any) => {
-        // PRIORITIZE: 1. hpp_per_pack (captured at sale) 2. item.unit_cost 3. current inventory map
-        const cost = i.hpp_per_pack || i.unit_cost || (inventoryMap.value[normalizeGrade(i.egg_type || i.inventory_id)]?.hpp_per_pack) || 0;
-        return iSum + (Number(cost) * (i.packs_sold || i.quantity || 0));
-      }, 0);
-    }, 0);
-});
-
-const totalUtang = computed(() => utangSupplierList.value.reduce((s, u) => s + Number(u.remaining || 0), 0));
-const totalPiutang = computed(() => pendingReceivables.value.reduce((s, p) => s + Number(p.remaining || p.total_price || 0), 0));
-
-const nilaiStok = computed(() => {
-  return ['hero', 'salted_egg'].reduce((sum, id) => {
-    const item = inventoryMap.value[id];
-    if (!item) return sum;
-    return sum + (Number(item.current_stock || 0) * Number(item.hpp_per_egg || (item.hpp_per_pack / 10) || 0));
-  }, 0);
-});
-
-// 3. Gross Profit
-const grossProfit = computed(() => totalRevenue.value - totalCOGS.value);
-
-// 4. Gross Margin %
-const grossMargin = computed(() => {
-  if (totalRevenue.value === 0) return 0;
-  return (grossProfit.value / totalRevenue.value) * 100;
-});
-
-// Chart Data
-const chartData = computed(() => {
-  const dailyData: Record<string, { rev: number, cogs: number, gp: number }> = {};
-  
-  allSales.value.filter(s => s.payment_status === 'paid').forEach(s => {
-    const dateStr = s.created_at.substring(0, 10);
-    if (!dailyData[dateStr]) dailyData[dateStr] = { rev: 0, cogs: 0, gp: 0 };
-    
-    const rev = Number(s.total_price || s.total_revenue || 0);
-    dailyData[dateStr].rev += rev;
-    
-    const items = s.sale_items || [];
-    const itemsCost = items.reduce((curSum: number, i: any) => {
-      const cost = i.hpp_per_pack || i.unit_cost || (inventoryMap.value[i.egg_type]?.hpp_per_pack) || 0;
-      return curSum + (Number(cost) * (i.packs_sold || i.quantity || 0));
-    }, 0);
-    
-    dailyData[dateStr].cogs += itemsCost;
-    dailyData[dateStr].gp += (Number(s.total_price) - itemsCost);
-  });
-
-  const sortedDates = Object.keys(dailyData).sort();
-  
-  return {
-    labels: sortedDates,
-    datasets: [
-      {
-        label: 'Gross Profit',
-        backgroundColor: '#f59e0b',
-        borderColor: '#f59e0b',
-        data: sortedDates.map(d => dailyData[d]!.gp),
-        tension: 0.4
-      },
-      {
-        label: 'Revenue',
-        backgroundColor: '#10b981',
-        borderColor: '#10b981',
-        data: sortedDates.map(d => dailyData[d]!.rev),
-        tension: 0.4
-      },
-      {
-        label: 'COGS',
-        backgroundColor: '#ef4444',
-        borderColor: '#ef4444',
-        data: sortedDates.map(d => dailyData[d]!.cogs),
-        tension: 0.4
-      }
-    ]
-  };
-});
-
-const chartOptions: any = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: { color: '#94a3b8', font: { family: 'Inter', weight: 600 } } },
-    tooltip: { mode: 'index', intersect: false }
-  },
-  scales: {
-    x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
-  }
-};
-
-// P&L Products
-const productPnL = computed(() => {
-  const products: Record<string, { label: string, rev: number, cogs: number, qty: number }> = {
-    hero: { label: getGradeLabel('hero'), rev: 0, cogs: 0, qty: 0 },
-    salted_egg: { label: getGradeLabel('salted_egg'), rev: 0, cogs: 0, qty: 0 }
-  };
-  
-  allSales.value.filter(s => s.payment_status === 'paid').forEach(s => {
-    const items = s.sale_items || [];
-    items.forEach((i: any) => {
-      const type = normalizeGrade(i.egg_type || i.inventory_id);
-      if (products[type]) {
-        const prod = products[type]!;
-        prod.qty += (i.packs_sold || i.quantity || 0);
-        prod.rev += Number(i.revenue || i.subtotal || (i.unit_price * i.quantity));
-        const itemCost = i.hpp_per_pack || i.unit_cost || (inventoryMap.value[type]?.hpp_per_pack) || 0;
-        prod.cogs += (Number(itemCost) * (i.packs_sold || i.quantity || 0));
-      }
-    });
-  });
-  
-  return Object.values(products).filter(p => p.qty > 0).map(p => {
-    const gp = p.rev - p.cogs;
-    const margin = p.rev > 0 ? (gp / p.rev) * 100 : 0;
-    return { ...p, gp, margin };
-  });
-});
-
-function getMarginClass(margin: number) {
-  if (margin < 15) return 'text-danger';
-  if (margin < 30) return 'text-warning';
-  return 'text-success';
-}
-
-function getMarginBgClass(margin: number) {
-  if (margin < 15) return 'cf-out'; // red bg
-  if (margin < 30) return 'bg-warning'; // yellow bg
-  return 'cf-in'; // green bg
-}
-
-// Radar Chart Data & Options
-const radarChartData = computed(() => {
-  if (productPnL.value.length === 0) return { labels: [], datasets: [] };
-
-  const maxRev = Math.max(...productPnL.value.map(p => p.rev)) || 1;
-  const maxQty = Math.max(...productPnL.value.map(p => p.qty)) || 1;
-  const maxMargin = Math.max(...productPnL.value.map(p => p.margin)) || 1;
-
-  const getDataset = (p: any, colorStr: string, bgColorStr: string) => {
-    return {
-      label: p.label,
-      data: [
-         (p.rev / maxRev) * 100,
-         (p.margin / maxMargin) * 100,
-         (p.qty / maxQty) * 100
-      ],
-      backgroundColor: bgColorStr,
-      borderColor: colorStr,
-      pointBackgroundColor: colorStr,
-      pointBorderColor: '#fff',
-      pointHoverBackgroundColor: '#fff',
-      pointHoverBorderColor: colorStr
-    };
-  };
-
-  const datasets = productPnL.value.map(p => {
-    if (p.label === 'Telur Hero') return getDataset(p, '#f59e0b', 'rgba(245, 158, 11, 0.2)');
-    if (p.label === 'Salted Egg') return getDataset(p, '#38bdf8', 'rgba(56, 189, 248, 0.2)');
-    return getDataset(p, '#6366f1', 'rgba(99, 102, 241, 0.2)');
-  });
-
-  return {
-    labels: ['Revenue', 'Profitability (Margin)', 'Sales Volume'],
-    datasets
-  };
-});
-
-const radarChartOptions: any = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: { color: '#94a3b8', font: { family: 'Inter', weight: 600 } } }
-  },
-  scales: {
-    r: {
-      angleLines: { color: 'rgba(255,255,255,0.1)' },
-      grid: { color: 'rgba(255,255,255,0.1)' },
-      pointLabels: { color: '#f8fafc', font: { family: 'Inter', weight: 800, size: 12 } },
-      ticks: { display: false, max: 100, min: 0 }
-    }
-  }
-};
-
-// ========================
-// KPIs for TAB 2 (Cash Flow)
-// ========================
-const paidSalesList = computed(() => [...allSales.value].filter(s => s.payment_status === 'paid').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-const restockLogsList = computed(() => [...restockLogs.value].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-
-const totalMoneyIn = computed(() => totalRevenue.value);
-const totalMoneyOut = computed(() => {
-  return restockLogsList.value.reduce((sum, log) => {
-    // unit_price = cost per unit, change = quantity added
-    // For items without unit_price, try to extract cost from notes
-    const unitCost = Number(log.unit_price) || 0;
-    const qty = Math.abs(Number(log.change));
-    return sum + (unitCost * qty);
-  }, 0);
-});
-const netCashFlow = computed(() => totalMoneyIn.value - totalMoneyOut.value);
-
-const totalFlow = computed(() => totalMoneyIn.value + totalMoneyOut.value);
-const inRatio = computed(() => totalFlow.value === 0 ? 50 : (totalMoneyIn.value / totalFlow.value) * 100);
-const outRatio = computed(() => totalFlow.value === 0 ? 50 : (totalMoneyOut.value / totalFlow.value) * 100);
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('id-ID', {
-    day: '2-digit', month: 'short', year: 'numeric'
-  });
-}
-
-function extractSupplierFromNotes(notes: string | null | undefined) {
-  if (!notes) return '';
-  // Stock.vue uses format: "[SupplierName] notes..." or "Purchase: ... | Supplier: Name"
-  const bracketMatch = notes.match(/^\[([^\]]+)\]/);
-  if (bracketMatch) return bracketMatch[1] || '';
-  // Match until end of string OR until the next pipe separator
-  const pipeMatch = notes.match(/Supplier:\s*([^|]+)/i);
-  if (pipeMatch) return pipeMatch[1]?.trim() || '';
-  return '';
-}
-
-// ========================
-// KPIs for TAB 3 (Receivables)
-// ========================
-const actionLoading = ref<number | null>(null);
-
-function getDaysOutstanding(createdAt: string) {
-  const diffTime = Math.abs(new Date().getTime() - new Date(createdAt).getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-}
-
-async function markAsPaid(saleId: number) {
-  if (!confirm('Mark this invoice as PAID? This will update revenue metrics.')) return;
-  
-  actionLoading.value = saleId;
-  try {
-    const { error } = await withTimeout(
-      supabase
-        .from('sales')
-        .update({ payment_status: 'paid' })
-        .eq('id', saleId),
-      8000, 'mark-paid'
-    );
-      
-    if (error) throw error;
-    
-    // Refresh entirely to recalculate everything
-    await fetchFinancialData();
-  } catch (err: any) {
-    alert('Failed to mark as paid: ' + err.message);
-  } finally {
-    actionLoading.value = null;
-  }
-}
-
-// ========================
-// KPIs for TAB 5 (Exports)
-// ========================
-
-function downloadBlob(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportPnL() {
-  let csv = 'Product,Units Sold,Revenue,COGS (HPP),Gross Profit,Margin %\n';
-  productPnL.value.forEach(p => {
-    csv += `${p.label},${p.qty},${p.rev},${p.cogs},${p.gp},${p.margin.toFixed(2)}\n`;
-  });
-  csv += `\nTOTAL REVENUE,${totalRevenue.value}\n`;
-  csv += `TOTAL COGS,${totalCOGS.value}\n`;
-  csv += `GROSS PROFIT,${grossProfit.value}\n`;
-  csv += `GROSS MARGIN,${grossMargin.value.toFixed(2)}%\n`;
-  downloadBlob(csv, `PnL_Summary_${selectedPeriod.value}.csv`, 'text/csv');
-}
-
-function exportSales() {
-  let csv = 'Date,Invoice ID,Customer,Total Price,Items Sold\n';
-  allSales.value.filter(s => s.payment_status === 'paid').forEach(s => {
-    const d = s.created_at;
-    const itemsStr = (s.sale_items || []).map((i: any) => `${i.quantity}x ${i.egg_type}`).join('; ');
-    csv += `"${d}","${s.id}","${s.customers?.name || 'Guest'}",${s.total_price},"${itemsStr}"\n`;
-  });
-  downloadBlob(csv, `Sales_Recap_${selectedPeriod.value}.csv`, 'text/csv');
-}
-
-function exportStock() {
-  let csv = 'Date,Item,Log Type,Change,Unit Price,Total Cost,Supplier,Notes\n';
-  restockLogsList.value.forEach(l => {
-    const unitCost = Number(l.unit_price) || 0;
-    const total = unitCost * Math.abs(Number(l.change));
-    const supplier = extractSupplierFromNotes(l.notes) || '-';
-    const cleanNotes = (l.notes || '').replace(/"/g, '""');
-    csv += `"${l.created_at}","${l.inventory?.name || ''}","${l.log_type}",${l.change},${unitCost},${total},"${supplier}","${cleanNotes}"\n`;
-  });
-  downloadBlob(csv, `Stock_Movement_${selectedPeriod.value}.csv`, 'text/csv');
-}
-
-function exportReceivables() {
-  let csv = 'Date,Invoice ID,Customer,Amount,Days Outstanding\n';
-  pendingReceivables.value.forEach(r => {
-    csv += `"${r.created_at}","${r.id}","${r.customers?.name || 'Unknown'}",${r.total_price},${getDaysOutstanding(r.created_at)}\n`;
-  });
-  downloadBlob(csv, `Receivables_Pending_${selectedPeriod.value}.csv`, 'text/csv');
-}
-
-async function exportBackup() {
-  try {
-    const backupData: any = {};
-    const tables = ['inventory', 'customers', 'suppliers', 'sales', 'sale_items', 'stock_logs', 'price_overrides'];
-    
-    for (const table of tables) {
-      const { data } = await withTimeout(supabase.from(table).select('*'), 15000, `backup-${table}`);
-      backupData[table] = data || [];
-    }
-    
-    const jsonStr = JSON.stringify(backupData, null, 2);
-    downloadBlob(jsonStr, `HeroFarm_Backup_${new Date().toISOString().substring(0,10)}.json`, 'application/json');
-  } catch (e: any) {
-    alert('Backup Failed: ' + e.message);
-  }
-}
-
-watch(selectedPeriod, (newVal) => {
-  if (newVal !== 'custom') {
-    fetchFinancialData();
-  }
-});
-
-onMounted(() => {
-  fetchFinancialData();
-});
+// ─── LIFECYCLE ──────────────────────
+onMounted(fetchData)
+watch(selectedPeriod, fetchData)
 </script>
 
 <style scoped>
-.financial-terminal {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
+* { box-sizing: border-box; }
+.ft-root { width:100%; font-family:'Outfit',sans-serif; color:white; }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
+/* HEADER */
+.ft-header { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:28px; flex-wrap:wrap; }
+.ft-eyebrow { font-size:10px; font-weight:700; letter-spacing:2px; color:#f59e0b; text-transform:uppercase; display:block; margin-bottom:8px; }
+.ft-title   { font-size:32px; font-weight:900; margin:0 0 4px; line-height:1.1; }
+.ft-desc    { font-size:13px; color:rgba(255,255,255,0.4); margin:0; }
+.ft-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
 
-.filters {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  position: relative;
-  z-index: 50;
-}
+/* PERIOD SELECTOR */
+.period-selector { display:flex; gap:4px; background:#141418; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:4px; }
+.period-btn { padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; background:none; border:none; cursor:pointer; color:rgba(255,255,255,0.4); transition:all 150ms; font-family:'Outfit',sans-serif; }
+.period-btn.active { background:#f59e0b; color:#000; font-weight:700; }
+.period-btn:not(.active):hover { color:white; background:rgba(255,255,255,0.06); }
 
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+/* SYNC BTN */
+.sync-btn { display:flex; align-items:center; gap:8px; padding:10px 20px; background:#f59e0b; color:#000; border:none; border-radius:10px; font-weight:700; font-size:13px; cursor:pointer; transition:filter 150ms; font-family:'Outfit',sans-serif; }
+.sync-btn:hover { filter:brightness(1.1); }
+.sync-btn.loading { opacity:0.7; }
+.sync-icon { font-size:16px; }
 
-.period-dropdown-wrapper {
-  position: relative;
-  cursor: pointer;
-  outline: none;
-  min-width: 200px;
-}
+/* TABS */
+.ft-tabs { display:flex; gap:2px; background:#141418; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:4px; margin-bottom:28px; overflow-x:auto; }
+.ft-tab  { display:flex; align-items:center; gap:8px; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:600; background:none; border:none; cursor:pointer; color:rgba(255,255,255,0.4); white-space:nowrap; transition:all 150ms; font-family:'Outfit',sans-serif; }
+.ft-tab.active { background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid rgba(245,158,11,0.20); }
+.ft-tab:not(.active):hover { color:white; background:rgba(255,255,255,0.05); }
 
-.period-trigger {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
+/* TAB CONTENT */
+.tab-content { display:flex; flex-direction:column; gap:16px; }
 
-.period-value {
-  flex: 1;
-}
-
-.chevron {
-  transition: transform 0.3s ease;
-  opacity: 0.6;
-}
-
-.chevron.rotate {
-  transform: rotate(180deg);
-}
-
-.period-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  width: 100%;
-  padding: 8px !important;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  z-index: 100;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-}
-
-.period-option {
-  padding: 10px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-weight: 600;
-}
-
-.period-option:hover {
-  background: rgba(255,255,255,0.05);
-}
-
-.period-option.active {
-  background: rgba(245, 158, 11, 0.15);
-  color: var(--color-primary);
-}
-
-.date-input {
-  background: transparent;
-  border: none;
-  color: white;
-  font-family: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  outline: none;
-  cursor: pointer;
-}
-
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.3s ease;
-}
-.fade-slide-enter-from,
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-.tabs-nav {
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 16px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.tabs-nav::-webkit-scrollbar { display: none; }
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--color-text-dim);
-  font-weight: 700;
-  font-size: 0.85rem;
-  letter-spacing: 0.05em;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-}
-
-.tab-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
-}
-
-.tab-btn.active {
-  background: rgba(245, 158, 11, 0.15); /* Amber Accent */
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
-}
-
-.tab-pane {
-  min-height: 500px;
-}
-
-.temp-placeholder {
-  min-height: 400px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--color-text-dim);
-  text-align: center;
-  border-radius: 20px;
-}
-
-.loading-state {
-  min-height: 500px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  border-radius: 20px;
-}
-
-.pulse-ring {
-  width: 60px;
-  height: 60px;
-  border: 3px solid rgba(245, 158, 11, 0.2);
-  border-top-color: #f59e0b;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin { 100% { transform: rotate(360deg); } }
-
-/* FIN TERMINAL CARDS */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.kpi-wide {
-  grid-column: span 2;
-}
-
-@media (max-width: 1024px) {
-  .kpi-grid { grid-template-columns: 1fr 1fr; }
-  .kpi-wide { grid-column: auto; }
-}
-
+/* KPI CARDS */
+.kpi-grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+.kpi-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
 .kpi-card {
-  padding: 20px;
-  border-radius: 16px;
-  position: relative;
-  overflow: hidden;
-  animation: fadeIn 0.4s ease-out forwards;
+  background:#141418;
+  border:1px solid rgba(255,255,255,0.08);
+  border-left:3px solid var(--accent, rgba(255,255,255,0.15));
+  border-radius:14px; padding:20px;
+  transition:box-shadow 200ms;
 }
+.kpi-card:hover { box-shadow:0 4px 20px rgba(0,0,0,0.3); }
+.kpi-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.kpi-label { font-size:10px; font-weight:700; letter-spacing:1.5px; color:rgba(255,255,255,0.35); text-transform:uppercase; }
+.kpi-icon  { font-size:18px; opacity:0.4; }
+.kpi-val   { font-size:24px; font-weight:800; font-family:'DM Mono',monospace; margin:0 0 6px; line-height:1; }
+.kpi-sub   { font-size:11px; color:rgba(255,255,255,0.30); margin:0; }
 
-.kpi-label {
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-  text-transform: uppercase;
-  display: block;
-  margin-bottom: 8px;
+/* CHART */
+.chart-card { background:#141418; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:24px; }
+.chart-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
+.chart-title { font-size:15px; font-weight:700; color:white; margin:0 0 4px; }
+.chart-sub   { font-size:12px; color:rgba(255,255,255,0.35); margin:0; }
+.chart-legend { display:flex; gap:16px; font-size:12px; color:rgba(255,255,255,0.5); }
+.chart-legend span { display:flex; align-items:center; gap:6px; }
+.dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.chart-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:160px; gap:8px; color:rgba(255,255,255,0.3); font-size:13px; }
+
+/* BAR CHART */
+.chart-bars { display:flex; align-items:flex-end; gap:8px; height:160px; overflow-x:auto; padding-bottom:24px; }
+.chart-bar-group { display:flex; flex-direction:column; align-items:center; gap:4px; min-width:40px; }
+.bar-wrap { display:flex; gap:2px; align-items:flex-end; height:130px; }
+.bar { width:10px; border-radius:3px 3px 0 0; transition:height 300ms; }
+.bar.revenue { background:#f59e0b; opacity:0.8; }
+.bar.hpp     { background:#ef4444; opacity:0.7; }
+.bar.profit  { background:#10b981; opacity:0.9; }
+.bar-label   { font-size:9px; color:rgba(255,255,255,0.3); white-space:nowrap; }
+
+/* P&L TABLE */
+.pnl-card { background:#141418; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:24px; }
+.pnl-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.06); }
+.period-badge { font-size:12px; color:rgba(255,255,255,0.30); }
+.pnl-footer { display:flex; justify-content:space-between; align-items:flex-end; padding-top:20px; border-top:2px solid rgba(255,255,255,0.08); margin-top:8px; }
+.laba-big { font-size:36px; font-weight:900; font-family:'DM Mono',monospace; margin:4px 0 0; }
+
+/* DATA TABLE */
+.data-table { width:100%; border-collapse:collapse; }
+.data-table th { font-size:10px; font-weight:700; letter-spacing:1.5px; color:rgba(255,255,255,0.30); text-transform:uppercase; padding:8px 14px; border-bottom:1px solid rgba(255,255,255,0.06); text-align:left; }
+.data-table td { padding:14px 14px; font-size:13px; color:rgba(255,255,255,0.75); border-bottom:1px solid rgba(255,255,255,0.04); }
+.data-table tr:last-child td { border-bottom:none; }
+.data-table tr:hover td { background:rgba(255,255,255,0.02); }
+
+/* PRODUCT CHIPS */
+.product-chip { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+.product-chip.hero       { background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid rgba(245,158,11,0.25); }
+.product-chip.salted_egg { background:rgba(56,189,248,0.12);  color:#38bdf8; border:1px solid rgba(56,189,248,0.25); }
+
+/* MARGIN BAR */
+.margin-bar { background:rgba(255,255,255,0.06); border-radius:4px; height:6px; position:relative; width:120px; }
+.margin-fill { height:100%; border-radius:4px; background:#10b981; }
+.margin-label { position:absolute; right:-36px; top:-3px; font-size:11px; font-family:'DM Mono',monospace; color:rgba(255,255,255,0.6); }
+
+/* STATUS CHIPS */
+.status-chip { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700; }
+.status-chip.safe    { background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25); }
+.status-chip.warn    { background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid rgba(245,158,11,0.25); }
+.status-chip.danger  { background:rgba(239,68,68,0.12);  color:#ef4444; border:1px solid rgba(239,68,68,0.25); }
+.status-chip.unknown { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.4); }
+
+/* CASH FLOW */
+.cf-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.cf-card { background:#141418; border:1px solid rgba(255,255,255,0.08); border-radius:16px; overflow:hidden; }
+.cf-head { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; font-size:11px; font-weight:700; letter-spacing:1px; }
+.green-head { background:rgba(16,185,129,0.08); color:#10b981; border-bottom:1px solid rgba(16,185,129,0.15); }
+.red-head   { background:rgba(239,68,68,0.08);  color:#ef4444; border-bottom:1px solid rgba(239,68,68,0.15); }
+.cf-total   { display:flex; justify-content:space-between; padding:14px 20px; background:rgba(255,255,255,0.03); border-top:1px solid rgba(255,255,255,0.06); font-size:13px; font-weight:700; }
+.net-cf-card { background:#141418; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:28px; }
+.cf-bar-wrap { display:flex; height:8px; border-radius:4px; overflow:hidden; margin:16px 0 8px; gap:2px; }
+.cf-bar-in  { background:#10b981; border-radius:4px; min-width:4px; }
+.cf-bar-out { background:#ef4444; border-radius:4px; min-width:4px; }
+.cf-bar-labels { display:flex; justify-content:space-between; font-size:12px; }
+
+/* PROFITABILITY MATRIX */
+.section-card { background:#141418; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:24px; }
+.section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.product-matrix { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+.matrix-card { padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.06); }
+.matrix-card.hero       { background:rgba(245,158,11,0.04); border-color:rgba(245,158,11,0.15); }
+.matrix-card.salted_egg { background:rgba(56,189,248,0.04);  border-color:rgba(56,189,248,0.15); }
+.matrix-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.matrix-stats  { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.matrix-stat   { display:flex; flex-direction:column; gap:4px; }
+
+/* UTILITY */
+.mono   { font-family:'DM Mono',monospace; }
+.gold   { color:#f59e0b; }
+.green  { color:#10b981; }
+.red    { color:#ef4444; }
+.violet { color:#8b5cf6; }
+.muted  { color:rgba(255,255,255,0.35); }
+
+/* RESPONSIVE */
+@media (max-width:1024px) {
+  .kpi-grid-4 { grid-template-columns:repeat(2,1fr); }
+  .cf-grid    { grid-template-columns:1fr; }
 }
-
-.kpi-value {
-  font-size: 1.6rem;
-  font-weight: 900;
-  margin: 0;
+@media (max-width:768px) {
+  .ft-header  { flex-direction:column; }
+  .ft-title   { font-size:24px; }
+  .kpi-grid-4, .kpi-grid-2, .product-matrix { grid-template-columns:1fr; }
+  .ft-tab span:last-child { display:none; }
+  .kpi-val    { font-size:20px; }
 }
-
-.kpi-icon {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  opacity: 0.15;
-  width: 48px;
-  height: 48px;
-  transform: rotate(-10deg);
-}
-
-/* CHART CONTAINER */
-.chart-container {
-  padding: 24px;
-  border-radius: 20px;
-  margin-bottom: 24px;
-}
-
-.chart-wrapper {
-  height: 350px;
-  margin-top: 16px;
-}
-
-.empty-state {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-/* PNL TABLE */
-.pnl-table-container {
-  padding: 24px;
-  border-radius: 20px;
-}
-
-.financial-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 16px;
-}
-
-.financial-table th {
-  text-align: left;
-  padding: 12px;
-  font-size: 0.7rem;
-  font-weight: 800;
-  color: var(--color-text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.financial-table td {
-  padding: 16px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.02);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-/* Utils */
-.text-right { text-align: right; }
-.text-center { text-align: center; }
-.text-success { color: #10b981; }
-.text-danger { color: #ef4444; }
-.text-warning { color: #f59e0b; }
-.text-primary { color: var(--color-primary); }
-.font-bold { font-weight: 800; }
-.py-6 { padding-top: 24px; padding-bottom: 24px; }
-
-.product-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-}
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.dot-hero { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
-.dot-standard { background: #10b981; box-shadow: 0 0 8px #10b981; }
-.dot-salted { background: #6366f1; box-shadow: 0 0 8px #6366f1; }
-
-.btn-small {
-  padding: 6px 12px;
-  font-size: 0.75rem;
-}
-
-/* EXPORTS (TAB 5) */
-.export-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.export-btn {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 20px 24px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: left;
-}
-
-.export-btn:hover {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.2);
-  transform: translateY(-2px);
-}
-
-.ex-icon {
-  width: 40px;
-  height: 40px;
-}
-
-.ex-text {
-  flex: 1;
-}
-
-.ex-text h4 { margin: 0 0 4px 0; font-size: 1.1rem; font-weight: 800; }
-.ex-dl { opacity: 0.5; transition: opacity 0.3s ease; }
-.export-btn:hover .ex-dl { opacity: 1; color: var(--color-primary); }
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* CASH FLOW STYLES */
-.cashflow-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-
-.cf-glass {
-  padding: 0;
-  border-radius: 20px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.cf-glass.border-success { border: 1px solid rgba(16, 185, 129, 0.2); }
-.cf-glass.border-danger { border: 1px solid rgba(239, 68, 68, 0.2); }
-
-.cf-title {
-  padding: 16px 20px;
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.table-scroll {
-  height: 350px;
-  overflow-y: auto;
-  padding: 0 8px;
-}
-
-.cf-footer {
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 900;
-  font-size: 1.1rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-top: 1px solid rgba(255,255,255,0.05);
-}
-
-.net-cashflow-card {
-  padding: 30px;
-  border-radius: 20px;
-  margin-bottom: 24px;
-}
-
-.mb-2 { margin-bottom: 8px; }
-
-.text-info { color: #38bdf8; }
-.icon-info { color: #38bdf8; }
-
-/* LABA SUMMARY */
-.laba-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 0 0 0;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  margin-top: 24px;
-}
-
-.laba-label {
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-
-.laba-value {
-  font-size: 2.2rem;
-  font-weight: 900;
-  font-family: 'Outfit', sans-serif;
-  margin: 0;
-}
-
-.laba-value.success {
-  color: #10b981;
-}
-
-.laba-value.margin {
-  color: #f59e0b;
-}
-
-.cf-bar-container {
-  display: flex;
-  height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: 24px;
-  background: rgba(255,255,255,0.05);
-}
-
-.cf-in { background: #10b981; }
-.cf-out { background: #ef4444; }
 </style>

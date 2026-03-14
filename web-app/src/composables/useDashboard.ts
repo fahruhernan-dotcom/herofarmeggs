@@ -14,6 +14,7 @@ export function useDashboard() {
     const allSales = ref<any[]>([])
     const customers = ref<any[]>([])
     const financeEntries = ref<any[]>([])
+    const piutangList = ref<any[]>([])
     const kpiData = ref<any>({
         total_revenue: 0,
         gross_profit: 0,
@@ -70,24 +71,31 @@ export function useDashboard() {
         return kpiData.value.total_revenue || getPeriodStats(allSales.value, 0).total
     })
 
-    // Total Modal = Biaya pembelian bahan baku
+    // Total Modal (HPP) = Sum of HPP from sale_items
     const totalCost = computed(() => {
-        return kpiData.value.total_hpp || 0
+        return allSales.value
+            .filter((s: any) => s.payment_status === 'paid' && !s.voided_at)
+            .reduce((sum: number, s: any) => {
+                const items = s.sale_items || []
+                return sum + items.reduce((iSum: number, i: any) => {
+                    return iSum + ((i.hpp_per_pack || i.unit_cost || 0) * (i.packs_sold || i.quantity || 0))
+                }, 0)
+            }, 0)
     })
 
-    // Pendapatan (Net Profit) = Harga Jual - HPP
+    // Laba Kotor = Revenue - HPP
     const grossProfit = computed(() => {
-        return kpiData.value.net_profit || 0
+        return totalRevenue.value - totalCost.value
     })
 
-    // Net Position = Revenue - Total Pembelian Modal (purchases)
+    // Net Position = Revenue - HPP
     const netPosition = computed(() => {
-        return kpiData.value.net_position || 0
+        return totalRevenue.value - totalCost.value
     })
 
     // Persentase modal kembali
     const modalKembaliPct = computed(() => {
-        const cost = kpiData.value.total_purchase_cost || 0
+        const cost = totalCost.value
         if (cost === 0) return totalRevenue.value > 0 ? 100 : 0
         return Math.min((totalRevenue.value / cost) * 100, 100)
     })
@@ -115,20 +123,21 @@ export function useDashboard() {
         return items.reduce((a: number, i: any) => a + (i.quantity || 0), 0)
     })
 
-    // Sales chart data (7 or 30 days)
+    // Sales chart data — full current month
     const salesChartData = computed(() => {
-        const days = 7
+        const today = new Date()
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+        const days = Math.ceil((endOfMonth.getTime() - startOfMonth.getTime()) / (1000 * 3600 * 24)) + 1
         const labels: string[] = []
         const heroData: number[] = []
         const saltedData: number[] = []
-        const today = new Date()
 
-        for (let i = days - 1; i >= 0; i--) {
-            const d = new Date(today)
-            d.setDate(d.getDate() - i)
+        for (let i = 0; i < days; i++) {
+            const d = new Date(startOfMonth)
+            d.setDate(d.getDate() + i)
             const dateStr = d.toISOString().split('T')[0]
-            const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
-            labels.push(`${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`)
+            labels.push(`${d.getDate()}/${d.getMonth() + 1}`)
 
             const daySales = allSales.value.filter((s: any) => {
                 if (!s.created_at || s.payment_status === 'voided') return false
@@ -136,8 +145,8 @@ export function useDashboard() {
             })
 
             const dayItems = daySales.flatMap((s: any) => s.sale_items || [])
-            heroData.push(dayItems.filter((i: any) => normalizeGrade(i.egg_type || i.inventory_id) === 'hero').reduce((a: number, i: any) => a + (i.subtotal || 0), 0))
-            saltedData.push(dayItems.filter((i: any) => normalizeGrade(i.egg_type || i.inventory_id) === 'salted_egg').reduce((a: number, i: any) => a + (i.subtotal || 0), 0))
+            heroData.push(dayItems.filter((i: any) => normalizeGrade(i.egg_type || i.inventory_id) === 'hero').reduce((a: number, i: any) => a + (i.revenue || i.subtotal || ((i.packs_sold || i.quantity || 0) * (i.price_per_pack || i.unit_price || 0))), 0))
+            saltedData.push(dayItems.filter((i: any) => normalizeGrade(i.egg_type || i.inventory_id) === 'salted_egg').reduce((a: number, i: any) => a + (i.revenue || i.subtotal || ((i.packs_sold || i.quantity || 0) * (i.price_per_pack || i.unit_price || 0))), 0))
         }
 
         return { labels, heroData, saltedData }
@@ -193,40 +202,39 @@ export function useDashboard() {
         return { dates, income, expense, totalIncome, totalExpense, net }
     })
 
-    // Piutang Aging
+    // Piutang Aging — uses piutang table directly
     const piutangBuckets = computed(() => {
-        const pendingSales = allSales.value.filter((s: any) => s.payment_status === 'pending')
         const now = new Date()
 
         const buckets = {
-            paid: {
-                count: allSales.value.filter((s: any) => s.payment_status === 'paid').length,
-                total: allSales.value.filter((s: any) => s.payment_status === 'paid').reduce((a: number, s: any) => a + (s.total_price || 0), 0)
-            },
+            paid: { count: 0, total: 0 },
             week1: { count: 0, total: 0 },
             week2: { count: 0, total: 0 },
             overdue: { count: 0, total: 0 }
         }
 
-        pendingSales.forEach((s: any) => {
-            const created = new Date(s.created_at)
-            const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 3600 * 24))
-            if (diffDays <= 7) {
-                buckets.week1.count++
-                buckets.week1.total += s.total_price || 0
-            } else if (diffDays <= 14) {
-                buckets.week2.count++
-                buckets.week2.total += s.total_price || 0
+        piutangList.value.forEach((p: any) => {
+            const remaining = Number(p.remaining ?? p.remaining_amount ?? 0)
+            if (remaining <= 0) {
+                // Lunas
+                buckets.paid.count++
+                buckets.paid.total += Number(p.total_amount || 0)
             } else {
-                buckets.overdue.count++
-                buckets.overdue.total += s.total_price || 0
+                // Active piutang — age by due_date or created_at
+                const refDate = new Date(p.due_date || p.created_at)
+                const diffDays = Math.floor((now.getTime() - refDate.getTime()) / (1000 * 3600 * 24))
+                if (diffDays <= 7) {
+                    buckets.week1.count++
+                    buckets.week1.total += remaining
+                } else if (diffDays <= 14) {
+                    buckets.week2.count++
+                    buckets.week2.total += remaining
+                } else {
+                    buckets.overdue.count++
+                    buckets.overdue.total += remaining
+                }
             }
         })
-
-        // Override from KPI if available
-        if (kpiData.value.total_piutang_7d !== undefined) buckets.week1.total = kpiData.value.total_piutang_7d
-        if (kpiData.value.total_piutang_14d !== undefined) buckets.week2.total = kpiData.value.total_piutang_14d
-        if (kpiData.value.total_piutang_overdue !== undefined) buckets.overdue.total = kpiData.value.total_piutang_overdue
 
         return buckets
     })
@@ -249,13 +257,15 @@ export function useDashboard() {
                 { data: sales },
                 { data: cust },
                 { data: fin },
-                { data: kpis }
+                { data: kpis },
+                { data: piutangData }
             ] = await withTimeout(Promise.all([
                 supabase.from('inventory').select('*'),
                 supabase.from('sales').select('*, sale_items(*)').order('created_at', { ascending: false }),
                 supabase.from('customers').select('*').eq('is_deleted', false),
                 supabase.from('finance_entries').select('*').order('entry_date', { ascending: false }),
-                supabase.rpc('get_dashboard_kpis')
+                supabase.rpc('get_dashboard_kpis'),
+                supabase.from('piutang').select('id, remaining, total_amount, customer_name, due_date, status, created_at').eq('status', 'belum_bayar')
             ]), 12000, 'dashboard-main-fetch')
 
             if (stocks) inventory.value = stocks
@@ -263,6 +273,7 @@ export function useDashboard() {
             if (cust) customers.value = cust
             if (fin) financeEntries.value = fin
             if (kpis) kpiData.value = kpis
+            if (piutangData) piutangList.value = piutangData
 
             if (authStore.isAdmin) {
                 const [

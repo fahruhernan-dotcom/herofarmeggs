@@ -4,7 +4,7 @@
     <div class="kpi-row scroll-x">
       <div class="kpi-stat">
         <span class="kpi-value sky">{{ formatCurrency(revenue) }}</span>
-        <span class="kpi-label">Laba Kotor</span>
+        <span class="kpi-label">Total Omzet</span>
         <div v-if="growth.status !== 'none'" class="kpi-pill" :class="growth.status">
           {{ growth.status === 'up' ? '↑' : '↓' }} {{ growth.val }}%
         </div>
@@ -12,7 +12,7 @@
       <div class="kpi-divider"></div>
       <div class="kpi-stat">
         <span class="kpi-value green">{{ formatCurrency(profit) }}</span>
-        <span class="kpi-label">Pendapatan (Net Profit)</span>
+        <span class="kpi-label">Laba Kotor</span>
         <div class="kpi-pill margin">{{ formatPct(marginPct) }}</div>
       </div>
       <div class="kpi-divider desktop-only"></div>

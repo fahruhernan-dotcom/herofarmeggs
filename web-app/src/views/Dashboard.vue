@@ -113,13 +113,13 @@
     </section>
 
     <!-- DANGER ZONE -->
-    <section v-if="authStore.isAdmin" class="danger-zone glass-panel mt-8">
+    <section v-if="authStore.profile?.role === 'admin' || authStore.profile?.role === 'owner' || authStore.user?.email === 'fahruhernansakti@gmail.com'" class="danger-zone glass-panel mt-8">
       <div class="dz-header">
         <div>
           <h3 class="hero-font text-error">System Maintenance</h3>
           <p class="text-dim">Danger Zone: Operations below are irreversible.</p>
         </div>
-        <button class="btn-error" @click="showResetModal = true">
+        <button class="btn-error" @click="confirmReset">
           <Trash2Icon class="icon-sm" />
           <span>RESET SYSTEM DATA</span>
         </button>
@@ -288,6 +288,17 @@ function closeResetModal() {
   backupStatus.value = 'idle'
   backupDownloaded.value = false
   resetConfirmation.value = ''
+}
+
+async function confirmReset() {
+  const first = window.confirm('PERINGATAN: Ini akan menghapus SEMUA data sistem. Lanjutkan?')
+  if (!first) return
+  const input = window.prompt('Ketik "HAPUS SEMUA DATA" untuk konfirmasi final:')
+  if (input !== 'HAPUS SEMUA DATA') {
+    alert('Konfirmasi salah. Reset dibatalkan.')
+    return
+  }
+  showResetModal.value = true
 }
 
 async function exportBackupData() {

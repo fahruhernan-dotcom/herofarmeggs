@@ -647,13 +647,20 @@ async function viewDeliveries(vendor: any) {
   try {
     const { data, error } = await supabase
       .from('purchases')
-      .select('*')
+      .select('*, utang_supplier(remaining)')
       .eq('supplier_id', vendor.id)
       .order('purchase_date', { ascending: false })
       .limit(10);
 
     if (error) throw error;
-    deliveryHistory.value = data || [];
+    // Override remaining_debt with live utang_supplier data
+    deliveryHistory.value = (data || []).map((p: any) => {
+      const utang = Array.isArray(p.utang_supplier) ? p.utang_supplier[0] : p.utang_supplier;
+      return {
+        ...p,
+        remaining_debt: utang ? Number(utang.remaining) : (p.remaining_debt || 0)
+      };
+    });
   } catch (err: any) {
     console.error('Failed to fetch history:', err);
     showToast('Gagal mengambil riwayat pengiriman.', 'error');
