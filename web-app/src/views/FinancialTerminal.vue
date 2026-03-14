@@ -432,62 +432,78 @@ async function fetchData() {
 
   try {
     // ── Date range ──────────────────────────
+    // ── Date range (Bug 1 Fix) ────────────────
     const now = new Date()
-    const y = now.getFullYear(), m = now.getMonth()
+    const y = now.getFullYear()
+    const m = now.getMonth()
+
+    const startOfMonth = new Date(y, m, 1)
+    const endOfMonth   = new Date(y, m + 1, 0)
+    
+    // Safely get YYYY-MM-DD from local date
+    const getISO = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
 
     const ranges: Record<string, { start: Date, end: Date }> = {
       week:    { start: new Date(now.getTime() - 7 * 86400000), end: now },
-      month:   { start: new Date(y, m, 1), end: new Date(y, m + 1, 0) },
+      month:   { start: startOfMonth, end: endOfMonth },
       quarter: { start: new Date(y, Math.floor(m / 3) * 3, 1), end: new Date(y, Math.floor(m / 3) * 3 + 3, 0) },
       year:    { start: new Date(y, 0, 1), end: new Date(y, 11, 31) }
     }
-    const range = ranges[selectedPeriod.value] ? ranges[selectedPeriod.value] : ranges.month;
-    if (!range) { // Should never happen but for TS sanity
-      startDate.value = '';
-      endDate.value = '';
-      return;
-    }
-    const startISO = range.start.toISOString().split('T')[0] || '';
-    const endISO   = range.end.toISOString().split('T')[0] || '';
-    startDate.value = startISO;
-    endDate.value   = endISO;
+    const range = ranges[selectedPeriod.value] || ranges.month
+    const startISO = getISO(range.start)
+    const endISO   = getISO(range.end)
+    
+    startDate.value = startISO
+    endDate.value   = endISO
 
-    // ── 1. Sales + sale_items (egg_type NOT product_type) ──
+    console.log('Date range:', startISO, '—', endISO)
+
+    // ── 1. Sales query (Bug 2 Fix: Direct query) 
     const { data: sales, error: salesErr } = await supabase
       .from('sales')
       .select(`
-        id, total_revenue, discount_amount, payment_type, created_at,
-        customers ( name ),
+        id, total_revenue, total_hpp, gross_profit, margin_pct,
+        payment_type, created_at, customer_name, customer_id,
         sale_items ( egg_type, packs_sold, hpp_per_pack, revenue )
       `)
       .gte('created_at', startISO + 'T00:00:00')
       .lte('created_at', endISO   + 'T23:59:59')
       .order('created_at', { ascending: true })
 
-    if (salesErr) console.error('Sales error:', salesErr)
-
+    if (salesErr) throw salesErr
 
     // ── 2. Aggregate P&L ──────────────────────
-    let totalRevenue  = 0
-    let totalHPP      = 0
-    let totalDiscount = 0
+    const totalRevenue  = sales?.reduce((s, x) => s + (x.total_revenue ?? 0), 0) ?? 0
+    const totalHPP      = sales?.reduce((s, x) => s + (x.total_hpp     ?? 0), 0) ?? 0
+    const totalDiscount = 0
+    const grossProfit   = totalRevenue - totalHPP
+    const grossMargin   = totalRevenue > 0
+      ? parseFloat(((grossProfit / totalRevenue) * 100).toFixed(1)) : 0
+
+    console.log('Sales found:', sales?.length)
+    console.log('Revenue:', totalRevenue, 'HPP:', totalHPP)
+
+    pnlData.value = { totalRevenue, totalHPP, grossProfit, grossMargin, totalDiscount }
+    allSalesData.value = sales ?? []
+
     const productMap: Record<string, { packs: number, revenue: number, hpp: number }> = {}
     const dailyMap: Record<string, { revenue: number, hpp: number }> = {}
 
     sales?.forEach((sale: any) => {
-      totalRevenue  += sale.total_revenue  ?? 0
-      totalDiscount += sale.discount_amount ?? 0
-
       const day = sale.created_at.substring(0, 10)
       if (!dailyMap[day]) dailyMap[day] = { revenue: 0, hpp: 0 }
       dailyMap[day].revenue += sale.total_revenue ?? 0
 
       sale.sale_items?.forEach((item: any) => {
         const hpp = (item.hpp_per_pack ?? 0) * (item.packs_sold ?? 0)
-        totalHPP += hpp
-        if (dailyMap[day]) dailyMap[day].hpp += hpp
+        dailyMap[day].hpp += hpp
 
-        const type = item.egg_type  // 'hero' or 'salted_egg'
+        const type = item.egg_type
         if (type) {
           if (!productMap[type]) productMap[type] = { packs: 0, revenue: 0, hpp: 0 }
           productMap[type].packs   += item.packs_sold ?? 0
@@ -496,13 +512,6 @@ async function fetchData() {
         }
       })
     })
-
-    const grossProfit = totalRevenue - totalHPP
-    const grossMargin = totalRevenue > 0
-      ? parseFloat(((grossProfit / totalRevenue) * 100).toFixed(1)) : 0
-
-    pnlData.value = { totalRevenue, totalHPP, grossProfit, grossMargin, totalDiscount }
-    allSalesData.value = sales ?? []
 
     // ── 3. Chart data ─────────────────────────
     const { eachDayOfInterval, format, parseISO } = await import('date-fns')
