@@ -148,7 +148,16 @@
                   @click="form.paymentStatus = 'tunai'"
                 >
                   <span class="t-dot" :class="{ filled: form.paymentStatus === 'tunai' }"></span>
-                  Tunai / Transfer
+                  <span>Tunai (Cash)</span>
+                </button>
+                <button
+                  type="button"
+                  class="toggle-v2"
+                  :class="{ active: form.paymentStatus === 'transfer' }"
+                  @click="form.paymentStatus = 'transfer'"
+                >
+                  <span class="t-dot" :class="{ filled: form.paymentStatus === 'transfer' }"></span>
+                  <span>Transfer Bank</span>
                 </button>
                 <button
                   type="button"
@@ -157,7 +166,7 @@
                   @click="form.paymentStatus = 'piutang'"
                 >
                   <span class="t-dot" :class="{ filled: form.paymentStatus === 'piutang' }"></span>
-                  Piutang (Tempo)
+                  <span>Piutang (Tempo)</span>
                 </button>
               </div>
             </div>
@@ -255,7 +264,10 @@
 
               <div class="inv-v2-tags mt-16">
                  <span class="p-badge" :class="form.paymentStatus">
-                   {{ form.paymentStatus === 'piutang' ? 'PIUTANG TEMPO' : 'TUNAI' }}
+                   {{ 
+                     form.paymentStatus === 'piutang' ? 'PIUTANG TEMPO' : 
+                     form.paymentStatus === 'transfer' ? 'TRANSFER BANK' : 'TUNAI' 
+                   }}
                  </span>
                  <span v-if="form.paymentStatus === 'piutang'" class="due-badge">
                    Jatuh Tempo: {{ form.dueDate }}
@@ -388,7 +400,7 @@ const selectedCustomerId = ref<string | null>(null);
 
 const form = reactive({
   quantity: 1,
-  paymentStatus: 'tunai' as 'tunai' | 'piutang',
+  paymentStatus: 'tunai' as 'tunai' | 'transfer' | 'piutang',
   dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 });
 

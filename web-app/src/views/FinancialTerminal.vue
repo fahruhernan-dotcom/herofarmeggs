@@ -579,7 +579,7 @@ async function fetchData() {
     // ── 8. Cash flow purchases ─────────────────
     const { data: purchaseData } = await supabase
       .from('purchases')
-      .select('id, total_cost, total_eggs, created_at, suppliers(name)')
+      .select('id, total_cost, created_at, suppliers(name)')
       .gte('created_at', startISO + 'T00:00:00')
       .lte('created_at', endISO   + 'T23:59:59')
       .order('created_at', { ascending: false })

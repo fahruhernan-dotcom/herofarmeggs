@@ -290,12 +290,22 @@ async function handleUpdateProfile() {
   profileMsg.success = '';
 
   try {
-    const { error } = await supabase
+    // 1. Sync with Profiles table (legacy/general)
+    const { error: pError } = await supabase
       .from('profiles')
       .update({ full_name: profileForm.fullName })
       .eq('id', authStore.user?.id);
 
-    if (error) throw error;
+    if (pError) console.warn('Profile fallback sync failed:', pError);
+
+    // 2. Sync with Team Members table (Primary for this app)
+    // We try to update by email or auth_user_id to be safe
+    const { error: tmError } = await supabase
+      .from('team_members')
+      .update({ full_name: profileForm.fullName })
+      .eq('email', authStore.user?.email);
+
+    if (tmError) throw tmError;
 
     // Refresh store profile data
     if (authStore.user) await authStore.fetchProfile(authStore.user);

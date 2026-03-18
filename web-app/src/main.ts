@@ -17,23 +17,18 @@ app.directive('titlecase', vTitleCase)
 
 // Global Error Boundaries
 app.config.errorHandler = (err, _instance, info) => {
-    console.error('Global error:', err, info)
-    // Don't crash — just log
+    console.error('Global error caught:', err, info)
+    // Don't let errors propagate and break navigation
 }
 
-app.config.warnHandler = (msg, _instance, _trace) => {
-    console.warn('Global warn:', msg)
-    // Suppress non-critical warnings
+app.config.warnHandler = (msg, _instance, trace) => {
+    console.warn('Global warn:', msg, trace)
 }
 
-// Handle unhandled promise rejections:
+// Handle unhandled promise rejections silently:
 window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason?.name === 'AbortError') {
-        event.preventDefault() // Silence audio play/pause conflicts
-        return
-    }
-    console.error('Unhandled promise rejection:', event.reason)
-    event.preventDefault() // Prevent console error spam
+    event.preventDefault()
+    console.warn('Unhandled rejection:', event.reason)
 })
 
 // Initialize Auth before mounting

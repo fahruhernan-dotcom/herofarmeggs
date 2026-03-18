@@ -111,6 +111,7 @@ import { useAuthStore } from '../stores/auth';
 
 // Navigation Guard
 router.beforeEach(async (to, _from, next) => {
+    window.scrollTo(0, 0);
     // Force reset any stuck loading states when navigating
     document.querySelectorAll('button[disabled]').forEach(btn => {
         (btn as HTMLButtonElement).disabled = false

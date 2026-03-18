@@ -66,21 +66,25 @@ export function useDashboard() {
     })
     const packagingInventory = computed(() => inventory.value.filter((i: any) => i.item_type === 'packaging'))
 
-    // Laba Kotor = Total Penjualan Produk (gross sales revenue)
-    const totalRevenue = computed(() => {
-        return kpiData.value.total_revenue || getPeriodStats(allSales.value, 0).total
+    // Laba Kotor / Revenue - derived from sales this month
+    const currentMonthSales = computed(() => {
+        const now = new Date()
+        const start = new Date(now.getFullYear(), now.getMonth(), 1)
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+        return allSales.value.filter((s: any) => {
+            if (!s.created_at || s.payment_status === 'voided') return false
+            const d = new Date(s.created_at)
+            return d >= start && d <= end
+        })
     })
 
-    // Total Modal (HPP) = Sum of HPP from sale_items
+    const totalRevenue = computed(() => {
+        return currentMonthSales.value.reduce((sum: number, s: any) => sum + (s.total_price || 0), 0)
+    })
+
+    // Total Modal (HPP) = Sum of total_hpp from sales table
     const totalCost = computed(() => {
-        return allSales.value
-            .filter((s: any) => s.payment_status === 'paid' && !s.voided_at)
-            .reduce((sum: number, s: any) => {
-                const items = s.sale_items || []
-                return sum + items.reduce((iSum: number, i: any) => {
-                    return iSum + ((i.hpp_per_pack || i.unit_cost || 0) * (i.packs_sold || i.quantity || 0))
-                }, 0)
-            }, 0)
+        return currentMonthSales.value.reduce((sum: number, s: any) => sum + (s.total_hpp || 0), 0)
     })
 
     // Laba Kotor = Revenue - HPP
