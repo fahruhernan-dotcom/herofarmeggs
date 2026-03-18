@@ -58,12 +58,22 @@ WHATSAPP_CORS_METHODS=GET,POST,PUT,DELETE,OPTIONS
 WHATSAPP_CORS_CREDENTIALS=true
 ```
 
-### 3. Update Otomatis
-Jalankan perintah berikut di folder root VPS Anda:
+### 3. Update Otomatis (Production)
+Jika Anda sudah melakukan push kode terbaru ke GitHub, jalankan perintah berikut di terminal VPS Anda:
+
 ```bash
+# 1. Masuk ke folder proyek
+cd ~/herofarm-web
+
+# 2. Berikan izin eksekusi (hanya perlu sekali)
+chmod +x update.sh
+
+# 3. Jalankan script update
 ./update.sh
 ```
 
+Setelah script selesai, aplikasi akan otomatis rebuild dan restart dengan versi terbaru.
+ 
 ---
 
 ## 📂 Struktur Repositori
