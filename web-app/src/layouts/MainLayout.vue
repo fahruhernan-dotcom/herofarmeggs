@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-layout" style="overflow: hidden; max-width: 100vw; width: 100%;">
+  <div class="dashboard-layout" style="overflow-x: clip; max-width: 100vw; width: 100%;">
     <!-- 🌌 AURORA BACKGROUND -->
     <div class="aurora-static"></div>
 
@@ -40,7 +40,7 @@
         </div>
       </header>
 
-      <div style="overflow-x: hidden; width: 100%;">
+      <div style="overflow-x: clip; width: 100%;">
         <router-view v-slot="{ Component }">
           <transition name="fade-slide" mode="out-in">
             <component :is="Component" :key="$route.fullPath" />
@@ -200,7 +200,7 @@ onUnmounted(() => {
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
-  overflow: hidden;
+  overflow-x: clip;
   position: relative;
   background-color: var(--bg-base);
   color: var(--color-text);
@@ -303,7 +303,8 @@ onUnmounted(() => {
   flex-direction: column;
   z-index: 10;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: clip;
+  -webkit-overflow-scrolling: touch;
   width: 100%;
   padding: 0 40px 40px; /* Reduced top padding for header */
   scroll-behavior: smooth;

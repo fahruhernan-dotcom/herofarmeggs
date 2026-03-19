@@ -24,26 +24,29 @@
       </div>
     </header>
 
-    <!-- MOBILE HEADER -->
-    <header class="mobile-header mobile-only mb-6">
-      <div class="mh-top">
-        <h2 class="hero-font text-xl">Order History</h2>
-        <div class="date-pills scroll-x">
+    <!-- MOBILE HEADER V2 -->
+    <header class="mobile-header mobile-only mb-4">
+      <div class="mh-top-premium">
+        <div class="mh-label-row">
+          <span class="mh-tag">HERO FARM TERMINAL</span>
+          <h2 class="hero-font text-2xl">Order History</h2>
+        </div>
+        <div class="date-pills-premium scroll-x-hidden">
           <button 
             v-for="d in ['today', 'week', 'month', 'all']" 
             :key="'m-'+d"
-            class="dp-btn"
+            class="dp-btn-premium"
             :class="{ active: dateFilter === d }"
             @click="dateFilter = d"
           >
-            {{ d.charAt(0).toUpperCase() + d.slice(1) }}
+            {{ d === 'all' ? 'ALL TIME' : d.toUpperCase() }}
           </button>
         </div>
       </div>
     </header>
 
-    <!-- STATS SUMMARY V2 (Asymmetric Grid) -->
-    <div class="stats-summary-v2 mt-24">
+    <!-- STATS SUMMARY V2 (Desktop) -->
+    <div v-if="!isMobile" class="stats-summary-v2 desktop-only mt-24">
       <div class="main-stat glass-panel">
         <span class="s-label">Total Revenue</span>
         <span class="s-value">{{ formatCurrency(totalRevenue) }}</span>
@@ -67,8 +70,28 @@
       </div>
     </div>
 
+    <!-- 📱 MOBILE STATS GRID (2x2) -->
+    <div v-if="isMobile" class="m-stats-grid mobile-only">
+      <div class="m-stat-card gold-accent">
+        <span class="m-stat-label">TOTAL REVENUE</span>
+        <span class="m-stat-value">{{ formatCurrency(totalRevenue) }}</span>
+      </div>
+      <div class="m-stat-card blue-accent">
+        <span class="m-stat-label">SHOWN ORDERS</span>
+        <span class="m-stat-value">{{ baseDateFilteredOrders.length }}</span>
+      </div>
+      <div class="m-stat-card purple-accent">
+        <span class="m-stat-label">AVG ORDER</span>
+        <span class="m-stat-value">{{ formatCurrency(avgOrderValue) }}</span>
+      </div>
+      <div class="m-stat-card red-accent" :class="{ 'has-pending': pendingCount > 0 }">
+        <span class="m-stat-label">NEEDS ATTENTION</span>
+        <span class="m-stat-value">{{ pendingCount }}</span>
+      </div>
+    </div>
+
     <!-- STATUS FILTER TABS V2 (Pills) -->
-    <div class="status-filter-pills scroll-x mt-32">
+    <div class="status-filter-pills scroll-x-hidden mt-32" :class="{ 'm-status-pills': isMobile }">
       <button
         v-for="tab in statusTabs"
         :key="tab.value"
@@ -83,10 +106,10 @@
 
     <!-- ORDERS TABLE -->
     <section class="orders-list glass-panel">
-      <div class="list-header">
-        <h3 class="panel-title">Order History</h3>
-        <div class="filters">
-          <div class="search-box">
+      <div class="list-header" :class="{ 'm-list-header': isMobile }">
+        <h3 v-if="!isMobile" class="panel-title desktop-only">Order History</h3>
+        <div class="filters" :class="{ 'm-filters-full': isMobile }">
+          <div class="search-box" :class="{ 'm-search-full': isMobile }">
             <SearchIcon class="search-icon" />
             <input type="text" v-model="searchQuery" placeholder="Search invoices..." />
           </div>
@@ -183,26 +206,37 @@
           </tbody>
         </table>
 
-        <!-- 📱 MOBILE CARDS -->
-        <div v-if="!loading && filteredOrders.length > 0" class="cards-mobile">
-          <div v-for="order in filteredOrders" :key="'om-'+order.id" class="order-mobile-card glass-panel" @click="viewOrderDetails(order)">
-            <div class="omc-header">
-              <span class="omc-id">#{{ order.id.toString().slice(-6).toUpperCase() }}</span>
-              <div class="omc-badges">
-                <span class="status-badge-mini" :class="order.payment_status">{{ formatStatusLabel(order.payment_status) }}</span>
-                <span class="status-badge-mini" :class="order.fulfillment_status || 'processing'">{{ formatStatusLabel(order.fulfillment_status || 'processing') }}</span>
-              </div>
+        <!-- 📱 MOBILE CARDS (Premium 3-Row Layout) -->
+        <div v-if="isMobile && !loading && filteredOrders.length > 0" class="cards-mobile-v2">
+          <div 
+            v-for="order in filteredOrders" 
+            :key="'om-v2-'+order.id" 
+            class="m-order-card"
+            :style="{ borderLeft: `3px solid ${getPaymentColor(order.payment_status)}` }"
+            @click="viewOrderDetails(order)"
+          >
+            <!-- ROW 1: ID & TIME -->
+            <div class="m-card-row row-1">
+              <span class="m-inv-id">#INV-{{ order.id.toString().slice(-6).toUpperCase() }}</span>
+              <span class="m-date">{{ formatRelativeDate(order.created_at) }}</span>
             </div>
-            <div class="omc-body">
-              <div class="omc-cust">{{ order.customers?.name || 'Guest' }}</div>
-              <div class="omc-amount">{{ formatCurrency(order.total_price || 0) }}</div>
+
+            <!-- ROW 2: CUSTOMER & ITEMS -->
+            <div class="m-card-row row-2">
+              <span class="m-cust-name">{{ order.customers?.name || 'Guest Customer' }}</span>
+              <span class="m-items-summary">{{ getItemSummary(order) }}</span>
             </div>
-            <div class="omc-footer">
-              <span class="omc-time font-mono">{{ formatRelativeDate(order.created_at) }}</span>
-              <div class="items-mini">
-                <span v-for="item in order.sale_items.slice(0, 3)" :key="item.id" class="i-dot" :class="normalizeGrade(item.inventory_id || item.egg_type || item.grade)"></span>
-                <span v-if="order.sale_items.length > 3" class="i-more">+{{ order.sale_items.length - 3 }}</span>
-                <span v-if="order.sale_items.length === 0" class="i-dot empty"></span>
+
+            <!-- ROW 3: PRICE & BADGES -->
+            <div class="m-card-row row-3">
+              <span class="m-price">{{ formatCurrency(order.total_price || 0) }}</span>
+              <div class="m-badge-group">
+                <span class="m-badge payment" :class="order.payment_status">
+                  {{ formatStatusLabel(order.payment_status).toUpperCase() }}
+                </span>
+                <span class="m-badge fulfillment" :class="order.fulfillment_status || 'processing'">
+                  {{ formatStatusLabel(order.fulfillment_status || 'processing').toUpperCase() }}
+                </span>
               </div>
             </div>
           </div>
@@ -1005,7 +1039,7 @@ async function printFromOrder(order: any) {
       customerPhone: order.customers?.whatsapp_number || '',
       customerAddress: order.customers?.address || '',
       items: (order.sale_items || []).map((item: any) => ({
-        product_name: getGradeLabel(item.egg_type),
+        product_name: getGlobalLabel(item.egg_type),
         quantity: item.quantity,
         unit: 'Pack',
         unit_price: item.unit_price,
@@ -1022,15 +1056,25 @@ async function printFromOrder(order: any) {
   }
 }
 
-// internal showToast removed
+const getPaymentColor = (status: string) => {
+  const map: Record<string, string> = {
+    pending: '#94a3b8',
+    paid: '#10b981',
+    piutang: '#facc15',
+    voided: '#ef4444',
+    cancelled: '#ef4444'
+  };
+  return map[status] || '#94a3b8';
+}
 
-
-onMounted(() => {
-  fetchOrders();
-});
-
-onUnmounted(() => {
-});
+const getItemSummary = (order: any) => {
+  if (!order.sale_items || order.sale_items.length === 0) return 'No items';
+  return order.sale_items.map((item: any) => {
+    const label = getGlobalLabel(item.egg_type || item.inventory_id || item.grade);
+    const qty = item.packs_sold || item.quantity || 0;
+    return `${label} ${qty}p`;
+  }).join(', ');
+}
 </script>
 
 <style scoped>
@@ -1063,7 +1107,6 @@ onUnmounted(() => {
 
 .text-dim { color: var(--color-text-dim); }
 
-/* ─── STATS ────────────────────*/
 /* STATS SUMMARY V2 */
 .stats-summary-v2 {
   display: grid;
@@ -1100,7 +1143,6 @@ onUnmounted(() => {
 
 .s-label { font-size: 0.85rem; font-weight: 700; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .s-value { font-size: 1.8rem; font-weight: 800; color: white; }
-.s-trend.pos { color: #22c55e; font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
 .s-subtext { font-size: 0.8rem; color: #666; margin-top: 4px; }
 
 .highlight-pending {
@@ -1110,7 +1152,6 @@ onUnmounted(() => {
 .warn-value { color: #ef4444; }
 .warn-sub { color: #ef4444; opacity: 0.8; }
 
-/* ─── STATUS FILTER TABS ──────── */
 /* STATUS FILTER PILLS */
 .status-filter-pills {
   display: flex;
@@ -1144,26 +1185,8 @@ onUnmounted(() => {
   border-radius: 12px;
   font-size: 0.75rem;
 }
-.filter-pill.active .pill-count { background: rgba(0,0,0,0.1); }
 
-.tab-icon { width: 16px; height: 16px; }
-
-.tab-count {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 0.7rem;
-  font-weight: 800;
-  min-width: 24px;
-  text-align: center;
-}
-
-.filter-tab.active .tab-count {
-  background: rgba(255, 140, 0, 0.2);
-  color: var(--color-primary);
-}
-
-/* ─── ORDERS TABLE ────────────── */
+/* ORDERS TABLE */
 .orders-list {
   padding: 28px;
 }
@@ -1197,12 +1220,9 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   color: white;
-  font-family: var(--font-body);
   outline: none;
   font-size: 0.9rem;
 }
-
-.table-container { overflow-x: auto; }
 
 .premium-table {
   width: 100%;
@@ -1215,7 +1235,6 @@ onUnmounted(() => {
   font-size: 0.7rem;
   color: var(--color-text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -1223,17 +1242,8 @@ onUnmounted(() => {
   padding: 14px 16px;
   font-size: 0.85rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  vertical-align: middle;
 }
 
-.order-row {
-  transition: background 0.2s ease;
-}
-
-.order-row:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-/* TABLE REVISIONS */
 .id-link {
   background: none;
   border: none;
@@ -1242,37 +1252,8 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   cursor: pointer;
   padding: 0;
-  font-size: inherit;
-}
-.id-link:hover { text-decoration: underline; }
-
-.rel-date { font-weight: 700; color: white; }
-.exact-date { font-size: 0.75rem; margin-top: 2px; }
-
-.items-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 
-.i-chip {
-  font-size: 0.7rem;
-  font-weight: 800;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-.i-chip.hero { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
-.i-chip.salted_egg { color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.2); }
-
-.order-id { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: white; position: relative; font-size: 0.8rem; }
-.cust-name { font-weight: 700; font-size: 0.85rem; }
-.cust-phone { font-size: 0.75rem; }
-.amount { font-weight: 800; }
-
-/* ─── STATUS BADGE BUTTON ──────── */
 .status-badge-btn {
   display: inline-flex;
   align-items: center;
@@ -1282,68 +1263,18 @@ onUnmounted(() => {
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.3s ease;
-  font-family: var(--font-body);
-  white-space: nowrap;
 }
 
-.badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+.badge-chevron { width: 12px; height: 12px; opacity: 0.5; }
 
-.badge-chevron {
-  width: 12px;
-  height: 12px;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-}
-
-.status-badge-btn:hover .badge-chevron { opacity: 1; }
-
-/* Payment: Pending */
-.status-badge-btn.pending {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-  border-color: rgba(245, 158, 11, 0.2);
-}
-.status-badge-btn.pending .badge-dot { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
-.status-badge-btn.pending:hover { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); }
-
-/* Payment: Piutang */
-.status-badge-btn.piutang {
-  background: rgba(139, 92, 246, 0.1);
-  color: #8b5cf6;
-  border-color: rgba(139, 92, 246, 0.2);
-}
-.status-badge-btn.piutang .badge-dot { background: #8b5cf6; box-shadow: 0 0 6px rgba(139, 92, 246, 0.6); }
-.status-badge-btn.piutang:hover { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); }
-
-/* Payment: Paid */
-.status-badge-btn.paid {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
-  border-color: rgba(34, 197, 94, 0.2);
-}
-.status-badge-btn.paid .badge-dot { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
-.status-badge-btn.paid:hover { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); }
-
-/* Payment: Cancelled / Voided */
-.status-badge-btn.cancelled,
-.status-badge-btn.voided {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.2);
-}
-.status-badge-btn.cancelled .badge-dot,
-.status-badge-btn.voided .badge-dot { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); }
-.status-badge-btn.cancelled:hover,
-.status-badge-btn.voided:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); }
+.status-badge-btn.pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-color: rgba(245, 158, 11, 0.2); }
+.status-badge-btn.pending .badge-dot { background: #f59e0b; }
+.status-badge-btn.paid { background: rgba(34, 197, 94, 0.1); color: #22c55e; border-color: rgba(34, 197, 94, 0.2); }
+.status-badge-btn.paid .badge-dot { background: #22c55e; }
 
 /* DATE FILTERS */
 .date-filters {
@@ -1357,149 +1288,31 @@ onUnmounted(() => {
   font-size: 0.75rem;
   font-weight: 700;
   border-radius: 8px;
-  border: none;
   background: transparent;
   color: var(--color-text-dim);
   cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-}
-
-.date-filters .filter-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
+  border: none;
 }
 
 .date-filters .filter-btn.active {
   background: var(--color-primary);
   color: white;
-  box-shadow: 0 0 10px rgba(255, 140, 0, 0.3);
 }
 
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Fulfillment: Processing */
-.status-badge-btn.processing {
-  background: rgba(56, 189, 248, 0.1);
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.2);
-}
-.status-badge-btn.processing .badge-dot { background: #38bdf8; box-shadow: 0 0 6px rgba(56, 189, 248, 0.6); }
-.status-badge-btn.processing:hover { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.4); }
-
-/* Fulfillment: On Delivery */
-.status-badge-btn.on_delivery {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-  border-color: rgba(245, 158, 11, 0.2);
-}
-.status-badge-btn.on_delivery .badge-dot { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); animation: pulse-dot 2s infinite; }
-.status-badge-btn.on_delivery:hover { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); }
-
-/* Fulfillment: Delivered */
-.status-badge-btn.delivered {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
-  border-color: rgba(34, 197, 94, 0.2);
-}
-.status-badge-btn.delivered .badge-dot { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
-.status-badge-btn.delivered:hover { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); }
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* ─── ACTIONS ──────────────────── */
-.actions { display: flex; gap: 8px; }
-
-.btn-icon {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  color: var(--color-text-dim);
-  cursor: pointer;
-  transition: var(--transition-smooth);
-}
-
-.btn-icon:hover {
-  background: var(--color-primary-glow);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.empty-state {
-  text-align: center;
-  padding: 48px;
-  color: var(--color-text-dim);
-}
-
-.empty-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  opacity: 0.3;
-}
-
-/* ─── STATUS DROPDOWN ──────────── */
+/* MODAL & DROPDOWNS */
 .status-dropdown-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   z-index: 2000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: flex; justify-content: center; align-items: center;
 }
 
 .status-dropdown {
-  position: fixed;
   width: 300px;
   padding: 8px;
-  z-index: 2001;
-  animation: dropIn 0.25s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-@keyframes dropIn {
-  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.dropdown-header {
-  padding: 12px 16px 8px;
-}
-
-.dropdown-title {
-  font-size: 0.65rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-}
-
-.dropdown-options {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  animation: dropIn 0.25s ease;
 }
 
 .dropdown-option {
@@ -1508,504 +1321,56 @@ onUnmounted(() => {
   gap: 12px;
   padding: 12px 16px;
   border: none;
-  border-radius: 10px;
   background: transparent;
-  color: var(--color-text);
+  color: white;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: var(--font-body);
+  width: 100%;
   text-align: left;
-  width: 100%;
 }
 
-.dropdown-option:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
+.dropdown-option:hover { background: rgba(255, 255, 255, 0.06); }
 
-.dropdown-option.active {
-  background: rgba(255, 140, 0, 0.08);
-  border: 1px solid rgba(255, 140, 0, 0.15);
-}
-
-.option-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.option-dot.pending { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
-.option-dot.piutang { background: #8b5cf6; box-shadow: 0 0 8px rgba(139, 92, 246, 0.5); }
-.option-dot.paid { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
-.option-dot.cancelled { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
-.option-dot.processing { background: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.5); }
-.option-dot.on_delivery { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
-.option-dot.delivered { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
-
-.option-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.option-label { font-weight: 700; font-size: 0.85rem; }
-.option-desc { font-size: 0.7rem; color: var(--color-text-dim); }
-
-.option-check {
-  width: 16px;
-  height: 16px;
-  color: var(--color-primary);
-}
-
-@media (max-width: 1024px) {
-  .status-dropdown {
-    position: relative;
-    top: auto !important;
-    left: auto !important;
-    width: 90%;
-    max-width: 320px;
+/* MOBILE STYLES V2 */
+@media (max-width: 768px) {
+  .mobile-header { padding: 16px; }
+  .mh-top-premium { background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 20px; border-radius: 20px; }
+  .mh-tag { font-size: 10px; color: var(--color-primary); letter-spacing: 2px; }
+  
+  .date-pills-premium { display: flex; gap: 8px; margin-top: 16px; padding-bottom: 4px; }
+  .dp-btn-premium {
+    padding: 8px 16px; border-radius: 12px; background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 11px; font-weight: 700;
   }
-}
+  .dp-btn-premium.active { background: white; color: black; border-color: white; }
 
-/* ─── MODAL ────────────────────── */
-.details-modal {
-  max-width: 650px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 32px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 28px;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--color-text-dim);
-  font-size: 2rem;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.close-btn:hover { color: white; }
-
-.invoice-header-mini {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.invoice-header-mini .label { font-size: 0.65rem; text-transform: uppercase; color: var(--color-text-dim); }
-.invoice-header-mini .value { font-weight: 800; font-size: 1.1rem; }
-
-/* Modal Status Row */
-.modal-status-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.modal-status-card {
-  padding: 14px 18px;
-  border-radius: 12px;
-  border: 1px solid var(--glass-border);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.modal-status-card.paid { background: rgba(0, 255, 157, 0.04); border-color: rgba(0, 255, 157, 0.15); }
-.modal-status-card.pending { background: rgba(255, 170, 0, 0.04); border-color: rgba(255, 170, 0, 0.15); }
-.modal-status-card.piutang { background: rgba(255, 140, 0, 0.04); border-color: rgba(255, 140, 0, 0.15); }
-.modal-status-card.cancelled { background: rgba(255, 62, 62, 0.04); border-color: rgba(255, 62, 62, 0.15); }
-.modal-status-card.processing { background: rgba(100, 149, 237, 0.04); border-color: rgba(100, 149, 237, 0.15); }
-.modal-status-card.on_delivery { background: rgba(255, 140, 0, 0.04); border-color: rgba(255, 140, 0, 0.15); }
-.modal-status-card.delivered { background: rgba(0, 255, 157, 0.04); border-color: rgba(0, 255, 157, 0.15); }
-
-.msc-label {
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-  font-weight: 700;
-}
-
-.msc-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 800;
-  font-size: 0.85rem;
-}
-
-.modal-status-card.paid .msc-badge { color: var(--color-success); }
-.modal-status-card.paid .msc-badge .badge-dot { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
-.modal-status-card.pending .msc-badge { color: #FFAA00; }
-.modal-status-card.pending .msc-badge .badge-dot { background: #FFAA00; box-shadow: 0 0 6px #FFAA00; }
-.modal-status-card.piutang .msc-badge { color: #FF8C00; }
-.modal-status-card.piutang .msc-badge .badge-dot { background: #FF8C00; box-shadow: 0 0 6px #FF8C00; }
-.modal-status-card.cancelled .msc-badge { color: var(--color-error); }
-.modal-status-card.cancelled .msc-badge .badge-dot { background: var(--color-error); box-shadow: 0 0 6px var(--color-error); }
-.modal-status-card.processing .msc-badge { color: #6495ED; }
-.modal-status-card.processing .msc-badge .badge-dot { background: #6495ED; box-shadow: 0 0 6px #6495ED; }
-.modal-status-card.on_delivery .msc-badge { color: var(--color-primary); }
-.modal-status-card.on_delivery .msc-badge .badge-dot { background: var(--color-primary); box-shadow: 0 0 6px var(--color-primary); }
-.modal-status-card.delivered .msc-badge { color: var(--color-success); }
-.modal-status-card.delivered .msc-badge .badge-dot { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
-
-.customer-details-box {
-  padding: 24px;
-  margin-bottom: 24px;
-}
-
-.customer-details-box label { font-size: 0.65rem; color: var(--color-primary); font-weight: 800; }
-.customer-details-box h3 { margin: 8px 0 4px 0; font-size: 1.3rem; }
-
-.items-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 24px;
-}
-
-.items-table th {
-  text-align: left;
-  padding: 12px;
-  font-size: 0.7rem;
-  color: var(--color-text-dim);
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.items-table td { padding: 14px 12px; border-bottom: 1px solid rgba(255,255,255,0.03); }
-.item-label { font-weight: 700; }
-.item-subtotal { font-weight: 800; text-align: right; }
-
-.override-badge {
-  font-size: 0.55rem;
-  background: rgba(255, 170, 0, 0.15);
-  color: #FFAA00;
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-left: 8px;
-  vertical-align: middle;
-  font-weight: 800;
-  border: 1px solid rgba(255, 170, 0, 0.3);
-}
-
-.price-stack {
-  display: flex;
-  flex-direction: column;
-}
-
-.original-price.strike {
-  font-size: 0.65rem;
-  color: var(--color-text-dim);
-  text-decoration: line-through;
-  opacity: 0.7;
-}
-
-.total-row td { padding: 20px 12px; font-weight: 700; color: var(--color-text-dim); }
-.grand-total { font-size: 1.6rem; font-weight: 900; color: var(--color-primary); text-align: right; }
-
-/* ─── QUICK STATUS UPDATE (Modal) ─── */
-.modal-quick-actions {
-  margin-top: 8px;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
-}
-
-.quick-title {
-  font-size: 0.7rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-  margin-bottom: 14px;
-}
-
-.quick-btns-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.mt-12 { margin-top: 12px; }
-
-.quick-status-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text-dim);
-  font-family: var(--font-body);
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.25s ease;
-}
-
-.quick-status-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.quick-status-btn.active.pending { background: rgba(255, 170, 0, 0.12); border-color: rgba(255, 170, 0, 0.4); color: #FFAA00; }
-.quick-status-btn.active.paid { background: rgba(0, 255, 157, 0.1); border-color: rgba(0, 255, 157, 0.35); color: var(--color-success); }
-.quick-status-btn.active.cancelled { background: rgba(255, 62, 62, 0.1); border-color: rgba(255, 62, 62, 0.35); color: var(--color-error); }
-.quick-status-btn.active.processing { background: rgba(100, 149, 237, 0.12); border-color: rgba(100, 149, 237, 0.4); color: #6495ED; }
-.quick-status-btn.active.on_delivery { background: rgba(255, 140, 0, 0.12); border-color: rgba(255, 140, 0, 0.4); color: var(--color-primary); }
-.quick-status-btn.active.delivered { background: rgba(0, 255, 157, 0.1); border-color: rgba(0, 255, 157, 0.35); color: var(--color-success); }
-
-.qs-icon { width: 14px; height: 14px; }
-
-/* ─── MODAL OVERLAY ────────────── */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(10px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.animate-pop {
-  animation: popIn 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-@keyframes popIn {
-  from { opacity: 0; transform: scale(0.95) translateY(20px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-/* ─── TOAST NOTIFICATION ──────── */
-.toast-notification {
-  position: fixed;
-  bottom: 32px;
-  right: 32px;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 24px;
-  border-radius: 14px;
-  backdrop-filter: blur(20px);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
-  min-width: 280px;
-}
-
-.toast-notification.success {
-  background: rgba(0, 255, 157, 0.1);
-  border: 1px solid rgba(0, 255, 157, 0.25);
-}
-
-.toast-notification.error {
-  background: rgba(255, 62, 62, 0.1);
-  border: 1px solid rgba(255, 62, 62, 0.25);
-}
-
-.toast-icon { width: 22px; height: 22px; flex-shrink: 0; }
-.toast-notification.success .toast-icon { color: var(--color-success); }
-.toast-notification.error .toast-icon { color: var(--color-error); }
-
-.toast-content { display: flex; flex-direction: column; }
-.toast-title { font-weight: 800; font-size: 0.85rem; }
-.toast-msg { font-size: 0.75rem; color: var(--color-text-dim); }
-
-/* ─── TRANSITIONS ──────────────── */
-.fade-enter-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.fade-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
-.fade-enter-from { opacity: 0; transform: translateY(-4px); }
-.fade-leave-to { opacity: 0; transform: translateY(-4px); }
-
-.toast-slide-enter-active { transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
-.toast-slide-leave-active { transition: all 0.3s ease; }
-.toast-slide-enter-from { opacity: 0; transform: translateX(40px); }
-.toast-slide-leave-to { opacity: 0; transform: translateX(40px); }
-
-/* VOIDED STYLES */
-.order-row.is-voided td {
-  text-decoration: line-through;
-  opacity: 0.5;
-  color: var(--color-error);
-}
-
-.order-row.is-voided .actions {
-  text-decoration: none !important;
-  opacity: 1 !important;
-}
-
-.void-watermark {
-  position: absolute;
-  font-size: 0.6rem;
-  font-weight: 900;
-  background: var(--color-error);
-  color: white;
-  padding: 1px 4px;
-  border-radius: 4px;
-  transform: rotate(-15deg);
-  left: -20px;
-  top: -10px;
-  pointer-events: none;
-}
-
-.void-banner-modal {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  background: rgba(255, 62, 62, 0.1);
-  border: 1px dashed var(--color-error);
-  color: var(--color-error);
-  padding: 24px;
-  border-radius: 12px;
-  margin-bottom: 24px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-}
-
-.void-action-section {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--glass-border);
-  text-align: center;
-}
-
-.btn-void {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: rgba(255, 66, 66, 0.1);
-  border: 1px solid rgba(255, 66, 66, 0.3);
-  color: var(--color-error);
-  padding: 14px;
-  border-radius: 12px;
-  font-family: var(--font-body);
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-void:hover {
-  background: var(--color-error);
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(255, 62, 62, 0.3);
-}
-
-.btn-void:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.void-hint {
-  font-size: 0.7rem;
-  color: var(--color-text-dim);
-  margin-top: 10px;
-  font-style: italic;
-}
-@media (max-width: 1024px) {
-  .orders-list { padding: 16px; }
-  .list-header { flex-direction: column; gap: 16px; align-items: stretch; }
-  .stats-summary-v2 { grid-template-columns: 1fr; gap: 16px; }
-  .secondary-stats { grid-template-columns: 1fr; }
+  .m-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 16px; margin-bottom: 24px; }
+  .m-stat-card { padding: 16px; border-radius: 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
+  .m-stat-label { font-size: 9px; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px; }
+  .m-stat-value { font-size: 16px; font-weight: 800; color: white; }
   
-  .details-modal { padding: 16px; width: 95%; max-height: 95vh; }
-  .modal-status-row { grid-template-columns: 1fr; }
-  .items-table { font-size: 0.75rem; }
-  .items-table th:nth-child(2), .items-table td:nth-child(2) { display: none; } /* Hide Qty column on small mobile if tight */
-  
-  .grand-total { font-size: 1.2rem; }
-  
-  /* 📱 MOBILE HEADER */
-  .mobile-header { padding: 16px 0; }
-  .date-pills { display: flex; gap: 8px; margin-top: 12px; }
-  .dp-btn {
-    padding: 6px 14px;
-    font-size: 11px;
-    border-radius: 20px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--muted);
-    font-weight: 700;
+  .gold-accent { border-top: 2px solid #f59e0b; }
+  .blue-accent { border-top: 2px solid #3b82f6; }
+  .purple-accent { border-top: 2px solid #8b5cf6; }
+  .red-accent { border-top: 2px solid #ef4444; }
+
+  .m-status-pills { padding: 0 16px; margin-bottom: 20px; }
+  .m-order-card { 
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 16px; margin-bottom: 12px;
   }
-  .dp-btn.active { background: var(--gold); color: black; border-color: var(--gold); }
+  .m-card-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .m-inv-id { font-family: 'JetBrains Mono'; font-weight: 700; color: #f59e0b; font-size: 12px; }
+  .m-date { font-size: 11px; color: #64748b; }
+  .m-cust-name { font-weight: 700; font-size: 14px; }
+  .m-items-summary { font-size: 11px; color: #94a3b8; }
+  .m-price { font-weight: 800; font-size: 15px; color: white; }
   
-  /* 📱 ORDER CARDS */
-  .order-mobile-card {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
+  .m-badge-group { display: flex; gap: 6px; }
+  .m-badge { font-size: 9px; font-weight: 800; padding: 4px 8px; border-radius: 6px; }
+  .m-badge.paid { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+  .m-badge.pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
   
-  .omc-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .omc-id { font-family: var(--font-mono); font-weight: 800; color: var(--gold); }
-  .omc-badges { display: flex; gap: 4px; }
-  .status-badge-mini {
-    font-size: 9px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    font-weight: 800;
-  }
-  .status-badge-mini.paid { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
-  .status-badge-mini.pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
-  .status-badge-mini.on_delivery { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px dashed #f59e0b; }
-  .status-badge-mini.processing { background: rgba(56, 189, 248, 0.1); color: #38bdf8; }
-  
-  .omc-body {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .omc-cust { font-weight: 700; color: white; }
-  .omc-amount { font-weight: 900; color: white; }
-  
-  .omc-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    padding-top: 10px;
-  }
-  
-  .omc-time { font-size: 10px; color: var(--muted); }
-  .items-mini { display: flex; gap: 4px; align-items: center; }
-  .i-dot { width: 6px; height: 6px; border-radius: 50%; }
-  .i-dot.hero { background: var(--gold); }
-  .i-dot.salted_egg { background: var(--sky); }
-  .i-more { font-size: 9px; color: var(--muted); font-weight: 800; }
+  .scroll-x-hidden { overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
+  .scroll-x-hidden::-webkit-scrollbar { display: none; }
 }
 </style>

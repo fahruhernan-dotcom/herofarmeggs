@@ -137,14 +137,21 @@
         class="row-4 animate-row dash-section"
         style="--row-delay: 5"
       />
-      <PiutangAgingCard
-        :paid="piutangBuckets.paid"
-        :week1="piutangBuckets.week1"
-        :week2="piutangBuckets.week2"
-        :overdue="piutangBuckets.overdue"
-        class="row-4 animate-row dash-section"
-        style="--row-delay: 6"
-      />
+      <template v-if="piutangBuckets.paid.total + piutangBuckets.week1.total + piutangBuckets.week2.total + piutangBuckets.overdue.total > 0">
+        <PiutangAgingCard
+          :paid="piutangBuckets.paid"
+          :week1="piutangBuckets.week1"
+          :week2="piutangBuckets.week2"
+          :overdue="piutangBuckets.overdue"
+          class="row-4 animate-row dash-section"
+          style="--row-delay: 6"
+        />
+      </template>
+      <div v-else class="piutang-compact-row glass-panel row-4 animate-row dash-section" style="--row-delay: 6">
+        <span class="pc-label">PIUTANG</span>
+        <span class="pc-status">Tidak ada piutang aktif</span>
+        <router-link to="/financial" class="pc-link">Semua Piutang →</router-link>
+      </div>
       <TopPelangganCard
         :customers="topCustomers"
         class="row-4 animate-row dash-section"
@@ -300,7 +307,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 import { useToast } from '../composables/useToast'
 import { useDashboard } from '../composables/useDashboard'
-import { withTimeout } from '../utils/safeAsync'
+import { withTimeout, safeAsync } from '../utils/safeAsync'
 // @ts-ignore
 import { formatCurrency, formatRelativeDate } from '../utils/formatters'
 
@@ -371,15 +378,18 @@ const {
   fetchPurchases
 } = usePurchaseHistory()
 
+// Abort Controller for navigation safety
+const abortController = ref<AbortController | null>(null)
+
 async function safeFetchData() {
   fetchError.value = false
   retryCount.value = 0
   isRetrying.value = false
   try {
-    await Promise.all([
-      _rawFetch(),
-      fetchPurchases(5) // Only need top 5 for dashboard
-    ])
+    await safeAsync(() => Promise.all([
+      _rawFetch(abortController.value?.signal),
+      fetchPurchases(5, abortController.value?.signal)
+    ]))
   } catch (err: any) {
     // Auto-retry with exponential backoff
     let succeeded = false
@@ -515,6 +525,7 @@ async function handleSystemReset() {
 
 // Lifecycle
 onMounted(() => {
+  abortController.value = new AbortController()
   safeFetchData()
   setupRealtime()
   updateClock()
@@ -524,6 +535,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  abortController.value?.abort()
   cleanup()
   clearInterval(clockInterval)
   window.removeEventListener('resize', checkMobile)
@@ -1202,6 +1214,23 @@ onUnmounted(() => {
   .dash-section:nth-child(6) { animation-delay: 0.3s; }
   .dash-section:nth-child(7) { animation-delay: 0.35s; }
   .dash-section:nth-child(8) { animation-delay: 0.4s; }
+
+  /* NEW PIUTANG COMPACT ROW (PHASE 16) */
+  .piutang-compact-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px !important;
+    background: rgba(15,23,42,0.8) !important;
+    min-height: 44px;
+    box-sizing: border-box;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    margin-bottom: 8px;
+  }
+  .pc-label { font-size: 9px; font-weight: 800; color: #64748b; letter-spacing: 1px; }
+  .pc-status { font-size: 11px; color: #94a3b8; }
+  .pc-link { font-size: 10px; color: var(--gold-egg); text-decoration: none; font-weight: 600; }
 
   .combined-debt-card {
     background: rgba(15,23,42,0.8) !important;

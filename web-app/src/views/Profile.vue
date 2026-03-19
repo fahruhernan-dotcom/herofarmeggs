@@ -1,69 +1,89 @@
 <template>
   <div class="profile-page">
-    <header class="header">
-      <div class="header-left">
-        <h4 class="brand-tag">SECURE TERMINAL</h4>
-        <h1 class="hero-font">Security Clearance</h1>
-        <p class="text-dim">Validate identity and update system access credentials.</p>
+    <header class="header-premium desktop-only">
+      <div class="hp-left">
+        <h4 class="m-profile-tag">AKUN</h4>
+        <h1 class="hero-font-premium">Pengaturan Akun</h1>
       </div>
-      <div class="header-actions">
-        <div class="status-badge" :class="{ 'warning': authStore.loading }">
-          <span class="dot" :class="{ 'online pulse': !authStore.loading }"></span>
-          {{ authStore.loading ? 'SYNCING...' : 'ENCRYPTED CONNECTION' }}
+      <div class="hp-right">
+        <div class="status-badge-compact">
+          <span class="dot online pulse"></span>
+          <span class="status-text">Online</span>
         </div>
       </div>
     </header>
 
-    <div class="profile-grid">
-      <!-- LEFT: IDENTITY CARD -->
-      <section class="identity-panel glass-panel">
-        <div class="identity-card-inner">
-          <div class="pfp-container">
-            <div class="pfp-glow"></div>
-            <UserIcon class="icon-lg pfp-icon" />
-            <div class="status-dot online"></div>
+    <!-- NEW MOBILE HEADER -->
+    <div class="mobile-profile-header mobile-only">
+      <h4 class="m-profile-tag">AKUN SAYA</h4>
+    </div>
+
+    <div class="profile-grid-premium">
+      <!-- ROW 1: SUMMARY (Desktop Only) -->
+      <section class="profile-summary-card glass-panel-premium desktop-only">
+        <div class="summary-left">
+          <div class="avatar-wrapper-premium">
+            <UserIcon class="avatar-icon-premium" />
+            <div class="status-dot-premium"></div>
           </div>
-          <div class="user-meta">
-            <h2 class="name">{{ authStore.profile?.full_name || 'Anonymous User' }}</h2>
-            <p class="email text-dim">{{ authStore.user?.email }}</p>
-            <div class="role-pills">
-              <span class="role-pill">{{ authStore.profile?.role?.toUpperCase() || 'STAFF' }}</span>
-              <span class="role-pill secured"><ShieldCheckIcon class="icon-xs" /> VERIFIED</span>
-            </div>
+          <div class="user-main-info">
+            <h2 class="user-name-premium">{{ authStore.profile?.full_name || 'Anonymous User' }}</h2>
+            <p class="user-email-premium">{{ authStore.user?.email }}</p>
           </div>
         </div>
-        
-        <div class="account-stats">
-          <div class="stat-item">
-            <span class="s-label">Member Since</span>
-            <span class="s-val">{{ new Date(authStore.user?.created_at || '').toLocaleDateString() }}</span>
+        <div class="summary-right">
+          <div class="role-badges-premium">
+            <span class="badge-premium admin">{{ authStore.profile?.role?.toUpperCase() || 'STAFF' }}</span>
+            <span class="badge-premium verified">VERIFIED</span>
           </div>
-          <div class="stat-item">
-            <span class="s-label">Last Login</span>
-            <span class="s-val">{{ new Date(authStore.user?.last_sign_in_at || '').toLocaleTimeString() }}</span>
+          <div class="login-meta-premium">
+            <span>Member sejak {{ new Date(authStore.user?.created_at || '').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) }}</span>
+            <span class="meta-sep">•</span>
+            <span>Login terakhir: {{ new Date(authStore.user?.last_sign_in_at || '').toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) }}</span>
           </div>
         </div>
       </section>
 
-      <!-- RIGHT: CONFIGURATION AREA -->
-      <div class="terminal-stack">
-        <!-- IDENTITY TERMINAL -->
-        <section class="security-terminal glass-panel identity-terminal">
-          <div class="terminal-header">
-            <div class="t-line blue"></div>
-            <h3 class="panel-title"><UserIcon class="icon-sm" /> Personal Identity</h3>
+      <!-- MOBILE PANEL WRAPPER (EXISTING) -->
+      <section class="identity-panel glass-panel mobile-only">
+        <!-- MOBILE COMPACT IDENTITY -->
+        <div class="m-identity-card mobile-only">
+          <div class="m-pfp-wrapper">
+            <div class="m-pfp-avatar">
+              <UserIcon class="m-pfp-icon" />
+              <div class="m-status-dot"></div>
+            </div>
+          </div>
+          <div class="m-user-info">
+            <h2 class="m-user-name">{{ authStore.profile?.full_name || 'Anonymous User' }}</h2>
+            <div class="m-role-badges">
+              <span class="m-badge admin">{{ authStore.profile?.role?.toUpperCase() || 'STAFF' }}</span>
+              <span class="m-badge verified">VERIFIED</span>
+            </div>
+            <p class="m-user-email">{{ authStore.user?.email }}</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ROW 2: FORMS GRID -->
+      <div class="forms-grid-desktop-container">
+        <!-- IDENTITY FORM -->
+        <section class="form-card-premium glass-panel-premium identity-panel glass-panel">
+          <div class="card-header-premium">
+            <UserIcon class="icon-sm" style="color: #3ab0ff;" />
+            <h3>Identitas</h3>
           </div>
           
-          <form @submit.prevent="handleUpdateProfile" class="security-form">
-            <div class="form-group">
-              <label class="tactical-label">Public Identifier (Full Name)</label>
-              <div class="password-field">
-                <Edit3Icon class="field-icon" />
+          <form @submit.prevent="handleUpdateProfile" class="form-premium">
+            <div class="form-group-premium">
+              <label class="label-premium tactical-label">Nama Lengkap</label>
+              <div class="input-wrapper-premium">
+                <Edit3Icon class="i-icon" />
                 <input 
                   type="text" 
                   v-model="profileForm.fullName" 
                   placeholder="Enter your name" 
-                  class="premium-input"
+                  class="input-premium profile-input"
                   required
                 />
               </div>
@@ -83,109 +103,83 @@
               </div>
             </Transition>
 
-            <div class="form-actions">
-              <button type="submit" class="btn-tactical-glow secondary" :disabled="profileLoading">
-                <SaveIcon v-if="!profileLoading" class="icon-sm" />
-                <div v-else class="spinner-sm"></div>
-                <span>{{ profileLoading ? 'SYNCING IDENTITY...' : 'SAVE IDENTITY CHANGES' }}</span>
+            <div class="actions-premium">
+              <button type="submit" class="btn-premium secondary profile-btn" :disabled="profileLoading">
+                <span>{{ profileLoading ? 'SIMPAN...' : 'Simpan' }}</span>
               </button>
             </div>
           </form>
         </section>
 
-        <!-- SECURITY TERMINAL -->
-        <section class="security-terminal glass-panel">
-          <div class="terminal-header">
-            <div class="t-line"></div>
-            <h3 class="panel-title"><LockIcon class="icon-sm" /> Securing Credentials</h3>
+        <!-- SECURITY FORM -->
+        <section class="form-card-premium glass-panel-premium identity-panel glass-panel">
+          <div class="card-header-premium">
+            <LockIcon class="icon-sm" style="color: var(--color-primary);" />
+            <h3>Keamanan</h3>
           </div>
           
-          <form @submit.prevent="handleUpdatePassword" class="security-form">
-            <!-- OLD PASSWORD -->
-            <div class="form-group">
-              <label class="tactical-label">Current Authentication (Old Password)</label>
-              <div class="password-field">
-                <KeyIcon class="field-icon" />
+          <form @submit.prevent="handleUpdatePassword" class="form-premium">
+            <div class="form-group-premium">
+              <label class="label-premium tactical-label old-pwd-label">Password Lama</label>
+              <div class="input-wrapper-premium">
+                <KeyIcon class="i-icon" />
                 <input 
                   :type="pwdState.showOld ? 'text' : 'password'" 
                   v-model="pwdForm.oldPassword" 
-                  placeholder="Required for verification" 
-                  class="premium-input"
+                  class="input-premium profile-input"
                   required
                 />
-                <button type="button" class="eye-btn" @click="pwdState.showOld = !pwdState.showOld">
-                  <EyeIcon v-if="!pwdState.showOld" class="icon-xs" />
-                  <EyeOffIcon v-else class="icon-xs" />
+                <button type="button" class="i-eye-btn" @click="pwdState.showOld = !pwdState.showOld">
+                  <EyeIcon v-if="!pwdState.showOld" class="i-icon-xs" />
+                  <EyeOffIcon v-else class="i-icon-xs" />
                 </button>
               </div>
             </div>
 
-            <div class="divider-line"></div>
-
-            <!-- NEW PASSWORD -->
-            <div class="form-row">
-              <div class="form-group">
-                <label class="tactical-label">New Access Key</label>
-                <div class="password-field">
-                  <ShieldIcon class="field-icon" />
+            <div class="form-grid-2">
+              <div class="form-group-premium">
+                <label class="label-premium tactical-label new-pwd-label">Password Baru</label>
+                <div class="input-wrapper-premium">
+                  <ShieldIcon class="i-icon" />
                   <input 
                     :type="pwdState.showNew ? 'text' : 'password'" 
                     v-model="pwdForm.newPassword" 
-                    placeholder="Min. 6 characters" 
-                    class="premium-input"
+                    placeholder="Min. 6..." 
+                    class="input-premium profile-input"
                     required
                   />
-                  <button type="button" class="eye-btn" @click="pwdState.showNew = !pwdState.showNew">
-                    <EyeIcon v-if="!pwdState.showNew" class="icon-xs" />
-                    <EyeOffIcon v-else class="icon-xs" />
+                  <button type="button" class="i-eye-btn" @click="pwdState.showNew = !pwdState.showNew">
+                    <EyeIcon v-if="!pwdState.showNew" class="i-icon-xs" />
+                    <EyeOffIcon v-else class="i-icon-xs" />
                   </button>
                 </div>
               </div>
 
-              <div class="form-group">
-                <label class="tactical-label">Confirm New Key</label>
-                <div class="password-field">
-                  <CheckIcon class="field-icon" />
+              <div class="form-group-premium">
+                <label class="label-premium tactical-label confirm-pwd-label">Konfirmasi</label>
+                <div class="input-wrapper-premium">
+                  <CheckIcon class="i-icon" />
                   <input 
                     :type="pwdState.showConfirm ? 'text' : 'password'" 
                     v-model="pwdForm.confirmPassword" 
-                    placeholder="Repeat new key" 
-                    class="premium-input"
+                    class="input-premium profile-input"
                     required
                   />
-                  <button type="button" class="eye-btn" @click="pwdState.showConfirm = !pwdState.showConfirm">
-                    <EyeIcon v-if="!pwdState.showConfirm" class="icon-xs" />
-                    <EyeOffIcon v-else class="icon-xs" />
+                  <button type="button" class="i-eye-btn" @click="pwdState.showConfirm = !pwdState.showConfirm">
+                    <EyeIcon v-if="!pwdState.showConfirm" class="i-icon-xs" />
+                    <EyeOffIcon v-else class="i-icon-xs" />
                   </button>
                 </div>
               </div>
             </div>
 
-            <!-- STRENGTH INDICATOR -->
-            <div class="strength-meter" v-if="pwdForm.newPassword">
+            <div class="strength-meter-compact" v-if="pwdForm.newPassword">
               <div class="meter-bar" :style="{ width: strengthWidth, backgroundColor: strengthColor }"></div>
-              <span class="meter-label" :style="{ color: strengthColor }">{{ strengthText }}</span>
             </div>
 
-            <Transition name="fade">
-              <div v-if="msg.error" class="tactical-msg error">
-                <div class="msg-accent"></div>
-                <AlertCircleIcon class="msg-icon" /> <span>{{ msg.error }}</span>
-              </div>
-            </Transition>
-
-            <Transition name="fade">
-              <div v-if="msg.success" class="tactical-msg success">
-                <div class="msg-accent"></div>
-                <CheckCircleIcon class="msg-icon" /> <span>{{ msg.success }}</span>
-              </div>
-            </Transition>
-
-            <div class="form-actions">
-              <button type="submit" class="btn-tactical-glow" :disabled="loading || !isFormValid">
-                <ZapIcon v-if="!loading" class="icon-sm" />
-                <div v-else class="spinner-sm"></div>
-                <span>{{ loading ? 'ENCRYPTING & SAVING...' : 'UPDATE SYSTEM ACCESS' }}</span>
+            <div class="actions-premium">
+              <button type="submit" class="btn-premium profile-btn" :disabled="loading || !isFormValid">
+                <span>{{ loading ? 'ENCRYPTING...' : 'Update Password' }}</span>
               </button>
             </div>
           </form>
@@ -201,7 +195,6 @@ import { useAuthStore } from '../stores/auth';
 import { supabase } from '../lib/supabase';
 import { 
   UserIcon, 
-  ShieldCheckIcon, 
   EyeIcon, 
   EyeOffIcon, 
   AlertCircleIcon,
@@ -210,8 +203,6 @@ import {
   KeyIcon,
   ShieldIcon,
   CheckIcon,
-  ZapIcon,
-  SaveIcon,
   Edit3Icon
 } from 'lucide-vue-next';
 
@@ -275,11 +266,6 @@ const strengthColor = computed(() => {
   if (strengthValue.value < 40) return '#ff4242';
   if (strengthValue.value < 80) return '#ffd700';
   return '#00ff9d';
-});
-const strengthText = computed(() => {
-  if (strengthValue.value < 40) return 'WEAK';
-  if (strengthValue.value < 80) return 'MEDIUM';
-  return 'STRONG';
 });
 
 async function handleUpdateProfile() {
@@ -364,37 +350,298 @@ async function handleUpdatePassword() {
 .profile-page {
   display: flex;
   flex-direction: column;
-  gap: 32px;
-}
-
-.profile-grid {
-  display: grid;
-  grid-template-columns: 380px 1fr;
   gap: 24px;
 }
 
-.header {
+/* HEADER PREMIUM */
+.header-premium {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.m-profile-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.hero-font-premium {
+  font-size: 22px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: -0.01em;
+}
+
+.status-badge-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+}
+
+.status-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+/* GRID SYSTEM */
+.profile-grid-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.forms-grid-desktop-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* CARDS COMMON */
+.glass-panel-premium {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 16px 20px;
+  backdrop-filter: blur(10px);
+}
+
+/* SUMMARY CARD (ROW 1) */
+.profile-summary-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.06) 0%, rgba(15, 23, 42, 0.9) 70%);
+  border: 1px solid rgba(250, 204, 21, 0.12);
 }
 
-.status-badge {
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
+.summary-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatar-wrapper-premium {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  background: rgba(250, 204, 21, 0.12);
+  border: 2px solid rgba(250, 204, 21, 0.25);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-icon-premium {
+  width: 28px;
+  height: 28px;
+  color: #facc15;
+}
+
+.status-dot-premium {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  background: #10b981;
+  border: 2px solid #0f172a;
+  border-radius: 50%;
+}
+
+.user-name-premium {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 2px;
+}
+
+.user-email-premium {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.summary-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.role-badges-premium {
+  display: flex;
+  gap: 8px;
+}
+
+.badge-premium {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.badge-premium.admin {
+  background: rgba(250, 204, 21, 0.1);
+  color: #facc15;
+}
+
+.badge-premium.verified {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.login-meta-premium {
+  font-size: 11px;
+  color: #94a3b8;
+  display: flex;
+  gap: 6px;
+}
+
+.meta-sep { opacity: 0.3; }
+
+/* FORM CARDS (ROW 2) */
+.card-header-premium {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-success);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.status-badge.warning {
-  color: #ffd700;
+.card-header-premium h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+}
+
+.form-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.label-premium {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.input-wrapper-premium {
+  position: relative;
+}
+
+.i-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  color: #64748b;
+  opacity: 0.6;
+}
+
+.input-premium {
+  width: 100%;
+  height: 38px;
+  background: rgba(10, 10, 10, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0 40px 0 40px;
+  color: white;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.input-premium:focus {
+  border-color: #facc15;
+  background: rgba(250, 204, 21, 0.03);
+  outline: none;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.i-eye-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.i-icon-xs {
+  width: 13px;
+  height: 13px;
+}
+
+.i-eye-btn:hover {
+  color: white;
+}
+
+.strength-meter-compact {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: -12px;
+}
+
+.meter-bar {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.actions-premium {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-premium {
+  height: 36px;
+  padding: 0 24px;
+  background: var(--color-primary);
+  color: black;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-premium:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+.btn-premium:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .dot {
@@ -404,9 +651,7 @@ async function handleUpdatePassword() {
   background: currentColor;
 }
 
-.pulse {
-  animation: pulse-glow 2s infinite;
-}
+.pulse { animation: pulse-glow 2s infinite; }
 
 @keyframes pulse-glow {
   0% { transform: scale(1); opacity: 1; }
@@ -414,287 +659,10 @@ async function handleUpdatePassword() {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* LEFT PANEL: IDENTITY */
-.identity-panel {
-  padding: 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-}
-
-.identity-card-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.pfp-container {
-  position: relative;
-  width: 120px;
-  height: 120px;
-  margin-bottom: 24px;
-}
-
-.pfp-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: var(--color-primary);
-  filter: blur(25px);
-  opacity: 0.15;
-  border-radius: 40px;
-}
-
-.pfp-icon {
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  padding: 30px;
-  border-radius: 40px;
-  color: var(--color-primary);
-  z-index: 1;
-  position: relative;
-}
-
-.status-dot {
-  position: absolute;
-  bottom: 5px;
-  right: 5px;
-  width: 18px;
-  height: 18px;
-  border: 3px solid #0a0a0a;
-  border-radius: 50%;
-  z-index: 2;
-}
-
-.status-dot.online { 
-  background: var(--color-success);
-  box-shadow: 0 0 10px var(--color-success);
-}
-
-.user-meta .name { 
-  font-size: 1.8rem; 
-  font-weight: 900; 
-  color: white; 
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-  font-family: var(--font-headline);
-}
-
-.user-meta .email { 
-  font-size: 1rem; 
-  margin: 0 0 28px 0; 
-  opacity: 0.6;
-  font-weight: 500;
-}
-
-.role-pills { 
-  display: flex; 
-  gap: 12px; 
-  justify-content: center; 
-  align-items: center;
-}
-
-.role-pill {
-  font-size: 0.7rem;
-  font-weight: 800;
-  padding: 6px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  color: #a0a0a0;
-  letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  text-transform: uppercase;
-  transition: all 0.3s ease;
-}
-
-.role-pill.secured { 
-  color: var(--color-success); 
-  border-color: rgba(0, 255, 157, 0.15); 
-  background: rgba(0, 255, 157, 0.02);
-}
-
-.role-pill svg {
-  width: 14px;
-  height: 14px;
-}
-
-.account-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 20px;
-}
-
-.stat-item { display: flex; justify-content: space-between; align-items: center; }
-.s-label { font-size: 0.7rem; font-weight: 800; color: var(--color-text-dim); text-transform: uppercase; }
-.s-val { font-size: 0.8rem; font-weight: 700; color: white; }
-
-/* RIGHT PANEL: SECURITY */
-.security-terminal {
-  padding: 48px;
-  position: relative;
-}
-
-.terminal-header {
-  margin-bottom: 40px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.t-line { width: 40px; height: 3px; background: var(--color-primary); border-radius: 2px; }
-.t-line.blue { background: #3ab0ff; }
-.panel-title { font-size: 1.3rem; font-weight: 800; color: white; display: flex; align-items: center; gap: 10px; }
-
-.terminal-stack { display: flex; flex-direction: column; gap: 24px; }
-.identity-terminal { padding-bottom: 32px; border-bottom: 1px dashed rgba(255,255,255,0.05); }
-
-.security-form { display: flex; flex-direction: column; gap: 32px; max-width: 700px; }
-
-.divider-line { height: 1px; background: linear-gradient(90deg, var(--glass-border), transparent); }
-
-.tactical-label {
-  font-size: 0.75rem;
-  font-weight: 950;
-  color: var(--color-text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 12px;
-  display: block;
-}
-
-.password-field { position: relative; }
-.field-icon {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-primary);
-  opacity: 0.4;
-  width: 18px;
-}
-
-.premium-input {
-  width: 100%;
-  background: rgba(10, 10, 10, 0.4);
-  border: 1px solid var(--glass-border);
-  padding: 16px 48px 16px 48px;
-  border-radius: 15px;
-  color: white;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-}
-
-.premium-input:focus {
-  border-color: var(--color-primary);
-  background: rgba(255, 140, 0, 0.05);
-  box-shadow: 0 0 20px rgba(255, 140, 0, 0.05);
-  outline: none;
-}
-
-.eye-btn {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  color: var(--color-text-dim);
-  cursor: pointer;
-}
-
-.eye-btn:hover { color: white; }
-
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-
-/* STRENGTH METER */
-.strength-meter { margin-top: -8px; }
-.meter-bar { height: 3px; border-radius: 4px; transition: all 0.5s ease; width: 0; }
-.meter-label { font-size: 0.6rem; font-weight: 900; margin-top: 6px; display: block; letter-spacing: 0.1em; }
-
-/* TACTICAL MESSAGES */
-.tactical-msg {
-  position: relative;
-  padding: 16px 20px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  overflow: hidden;
-}
-
-.msg-accent { position: absolute; left: 0; top: 0; width: 4px; height: 100%; }
-
-.tactical-msg.error { background: rgba(255, 66, 66, 0.05); border: 1px solid rgba(255, 66, 66, 0.2); color: #ff4242; }
-.tactical-msg.error .msg-accent { background: #ff4242; }
-
-.tactical-msg.success { background: rgba(0, 255, 157, 0.05); border: 1px solid rgba(0, 255, 157, 0.2); color: #00ff9d; }
-.tactical-msg.success .msg-accent { background: #00ff9d; }
-
-.btn-tactical-glow {
-  width: 100%;
-  background: var(--color-primary);
-  color: black;
-  border: none;
-  padding: 18px;
-  border-radius: 15px;
-  font-weight: 900;
-  font-size: 0.85rem;
-  letter-spacing: 0.1em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 10px 30px rgba(255, 140, 0, 0.2);
-}
-
-.btn-tactical-glow.secondary {
-  background: rgba(58, 176, 255, 0.1);
-  border: 1px solid #3ab0ff;
-  color: #3ab0ff;
-  box-shadow: 0 10px 30px rgba(58, 176, 255, 0.1);
-}
-
-.btn-tactical-glow.secondary:hover {
-  background: #3ab0ff;
-  color: black;
-}
-
-.btn-tactical-glow:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 15px 40px rgba(255, 140, 0, 0.3);
-}
-
-.btn-tactical-glow:disabled { opacity: 0.3; cursor: not-allowed; }
-
-.spinner-sm {
-  width: 18px;
-  height: 18px;
-  border: 3px solid rgba(0,0,0,0.1);
-  border-top-color: black;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 
 @media (max-width: 1000px) {
-  .profile-grid { grid-template-columns: 1fr; }
-  .identity-panel { min-height: auto; }
+  .forms-grid-desktop-container { grid-template-columns: 1fr; }
 }
 </style>

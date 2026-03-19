@@ -64,3 +64,30 @@ export function withTimeout(
 
     return attempt(maxRetries, 1)
 }
+
+/**
+ * safeAsync — Wraps any async function and specifically ignores AbortError.
+ * Useful for Supabase queries that are aborted during route navigation.
+ */
+export async function safeAsync<T>(
+    fn: () => Promise<T>,
+    _options = {}
+): Promise<T | null> {
+    try {
+        return await fn()
+    } catch (error: any) {
+        // AbortError = navigation moved away before fetch finished — NOT a real error
+        if (
+            error?.name === 'AbortError' ||
+            error?.message?.includes('aborted without reason') ||
+            error?.message?.includes('signal is aborted') ||
+            error?.message?.includes('Fetch is aborted')
+        ) {
+            console.debug('Request aborted — navigation detected, safe to ignore')
+            return null
+        }
+
+        // Re-throw genuine errors (network down, etc.)
+        throw error
+    }
+}

@@ -5,7 +5,7 @@
       <span class="label">Home</span>
     </router-link>
 
-    <router-link to="/sales" class="nav-item">
+    <router-link to="/orders" class="nav-item">
       <ClipboardListIcon class="icon" />
       <span class="label">Orders</span>
     </router-link>

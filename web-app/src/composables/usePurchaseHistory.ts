@@ -28,7 +28,7 @@ export function usePurchaseHistory() {
       .reduce((sum, p) => sum + (p.total_cost || 0), 0)
   })
 
-  async function fetchPurchases(limit = 50) {
+  async function fetchPurchases(limit = 50, signal?: AbortSignal) {
     isLoading.value = true
     error.value = null
 
@@ -51,6 +51,7 @@ export function usePurchaseHistory() {
         .eq('log_type', 'arrival')
         .order('created_at', { ascending: false })
         .limit(limit)
+        .abortSignal(signal as AbortSignal)
 
       if (err) throw err
 

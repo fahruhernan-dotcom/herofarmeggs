@@ -25,9 +25,16 @@ app.config.warnHandler = (msg, _instance, trace) => {
     console.warn('Global warn:', msg, trace)
 }
 
-// Handle unhandled promise rejections silently:
+// Handle unhandled promise rejections:
 window.addEventListener('unhandledrejection', (event) => {
-    event.preventDefault()
+    if (
+        event.reason?.name === 'AbortError' ||
+        event.reason?.message?.includes('aborted')
+    ) {
+        event.preventDefault()
+        console.debug('AbortError suppressed — safe navigation abort')
+        return
+    }
     console.warn('Unhandled rejection:', event.reason)
 })
 

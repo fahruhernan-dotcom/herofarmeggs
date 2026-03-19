@@ -146,4 +146,15 @@ router.beforeEach(async (to, _from, next) => {
     next();
 });
 
+router.onError((error, _to, _from) => {
+    if (
+        error?.name === 'AbortError' ||
+        error?.message?.includes('aborted')
+    ) {
+        console.debug('Router AbortError ignored:', error.message)
+        return false
+    }
+    console.error('Router error:', error)
+})
+
 export default router;

@@ -80,7 +80,7 @@
             <button 
               v-if="authStore.isAdmin"
               class="btn-recalculate" 
-              @click="recalculateAllHPP"
+              @click="recalculateAllHPP()"
               :disabled="recalculating"
             >
               <RefreshCwIcon :class="{ 'animate-spin': recalculating }" class="icon-xs" />
@@ -322,7 +322,7 @@
         <!-- FILTER PILLS (DESKTOP) -->
         <div class="filter-pills mb-4 desktop-only">
           <button
-            v-for="type in ['ALL', 'ARRIVAL', 'SALE', 'SALE_OUT', 'MANUAL_ADJUSTMENT', 'OPNAME']"
+            v-for="type in ['ALL', 'ARRIVAL', 'PENJUALAN', 'ADJUSTMENT', 'OPNAME']"
             :key="type"
             class="filter-pill"
             :class="{ active: activeAuditFilter === type }"
@@ -333,14 +333,14 @@
             } : {}"
             @click="activeAuditFilter = type"
           >
-            {{ type.replace('_', ' ') }}
+            {{ type === 'ALL' ? 'ALL' : type }}
           </button>
         </div>
 
         <!-- NEW MOBILE FILTER PILLS -->
         <div class="m-filter-pills mobile-only mb-3">
           <button
-            v-for="type in ['ALL', 'ARRIVAL', 'SALE', 'SALE_OUT', 'MANUAL_ADJUSTMENT', 'OPNAME']"
+            v-for="type in ['ALL', 'ARRIVAL', 'PENJUALAN', 'ADJUSTMENT', 'OPNAME']"
             :key="type"
             class="m-filter-pill"
             :class="{ active: activeAuditFilter === type }"
@@ -351,7 +351,7 @@
             } : {}"
             @click="activeAuditFilter = type"
           >
-            {{ type.replace('_', ' ') }}
+            {{ type === 'ALL' ? 'ALL' : type }}
           </button>
         </div>
 
@@ -397,7 +397,7 @@
                   }"
                 >
                   <span class="type-icon">{{ getAuditConfig(log.log_type).icon }}</span>
-                  {{ log.log_type?.replace('_', ' ').toUpperCase() }}
+                  {{ getAuditConfig(log.log_type).label || log.log_type?.replace('_', ' ').toUpperCase() }}
                 </span>
               </div>
 
@@ -411,7 +411,7 @@
                     'is-zero': log.change === 0
                   }"
                 >
-                  {{ log.change > 0 ? '+' : '' }}{{ log.change.toLocaleString('id-ID') }}
+                  {{ formatChange(log) }}
                 </span>
               </div>
 
@@ -432,19 +432,45 @@
             </div>
           </div>
 
-          <!-- 📱 MOBILE CARDS (Ultra Compact) -->
+          <!-- 📱 MOBILE CARDS (Phase 17-Hotfix) -->
           <div class="cards-mobile gap-1 mt-2">
             <div 
               v-for="log in filteredLogs" 
               :key="'m-'+log.id" 
-              class="m-log-item"
-              :style="{ borderLeftColor: getAuditConfig(log.log_type).text }"
+              class="audit-log-item"
+              :style="{ borderLeft: `3px solid ${getAuditConfig(log.log_type).text}` }"
             >
-              <div class="m-log-row">
-                <span class="m-log-type" :style="{ color: getAuditConfig(log.log_type).text }">{{ getAuditConfig(log.log_type).icon }} {{ log.log_type?.replace('_', ' ').toUpperCase() }}</span>
-                <span class="m-log-time">{{ formatRelativeDate(log.created_at) }}</span>
-                <span class="m-log-change" :class="log.change > 0 ? 'pos' : log.change < 0 ? 'neg' : 'neu'">{{ log.change > 0 ? '+' : '' }}{{ log.change }} butir</span>
-                <span class="m-log-code">{{ log.inventory_id ? log.inventory_id.slice(0,6).toUpperCase() : 'SYS' }}</span>
+              <!-- BARIS 1 -->
+              <div class="audit-log-row1">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="type-badge-mini" :style="{
+                    background: getAuditConfig(log.log_type).bg,
+                    border: `1px solid ${getAuditConfig(log.log_type).border}`,
+                    color: getAuditConfig(log.log_type).text
+                  }">
+                    {{ getAuditConfig(log.log_type).icon }} {{ getAuditConfig(log.log_type).label || log.log_type?.replace('_', ' ').toUpperCase() }}
+                  </span>
+                  <span class="audit-log-time">{{ formatRelativeDate(log.created_at) }}</span>
+                </div>
+                <span class="audit-log-change" :class="log.change > 0 ? 'pos' : log.change < 0 ? 'neg' : 'neu'">
+                  {{ formatChange(log) }}
+                </span>
+              </div>
+              
+              <!-- BARIS 2 -->
+              <div class="audit-log-row2">
+                <span class="audit-log-reason">
+                  <template v-if="log.log_type === 'sale_out' || log.log_type === 'sale'">
+                    {{ log.notes?.match(/EP-\d+/)?.[0] || log.notes || '-' }}
+                  </template>
+                  <template v-else-if="log.log_type === 'arrival'">
+                    {{ log.notes?.split('| Supplier: ')?.[1] || log.notes?.split('Supplier: ')?.[1] || log.notes || '-' }}
+                  </template>
+                  <template v-else>
+                    {{ log.notes || '-' }}
+                  </template>
+                </span>
+                <span class="audit-log-admin-mobile">System Admin</span>
               </div>
             </div>
           </div>
@@ -746,7 +772,7 @@
     <RestockSuppliesSlideOver 
       :show="showSuppliesSlideOver" 
       @close="showSuppliesSlideOver = false"
-      @restockDone="fetchData"
+      @restockDone="fetchData(abortController?.signal)"
     />
 
     <!-- QUICK ADJUST MODAL (kept for waste/price-update/manual on grade cards) -->
@@ -973,6 +999,29 @@ function formatStockCount(val: number) {
   return formatStock(val);
 }
 
+function formatChange(log: any) {
+  const abs = Math.abs(log.change)
+  const sign = log.change > 0 ? '+' : '-'
+  const eggType = log.egg_type
+    || log.inventory_id
+    || ''
+
+  // Penjualan selalu dalam pack
+  if (log.log_type === 'sale' ||
+      log.log_type === 'sale_out') {
+    const packs = abs / 10
+    return `${sign}${packs} pack`
+  }
+
+  // Packaging dalam unit
+  if (eggType.includes('packaging')) {
+    return `${sign}${abs} unit`
+  }
+
+  // Semua telur dalam butir
+  return `${sign}${abs} butir`
+}
+
 function getGradeLabel(id: string) {
   return getGlobalLabel(id)
 }
@@ -1014,6 +1063,9 @@ const confirmData = reactive({
 });
 const submitting = ref(false);
 
+// Abort Controller for navigation safety
+const abortController = ref<AbortController | null>(null);
+
 // ━━━ PURCHASE STATE (Refactored to Composable) ━━━
 const { 
   purchases, 
@@ -1026,8 +1078,8 @@ const {
 
 const bankAccounts = ref<any[]>([]);
 
-async function fetchPurchases() {
-  await fetchPurchasesFromComposable();
+async function fetchPurchases(signal?: AbortSignal) {
+  await fetchPurchasesFromComposable(50, signal);
 }
 
 
@@ -1083,26 +1135,43 @@ const AUDIT_TYPE_CONFIG: Record<string, any> = {
     rowBorder: 'rgba(16, 185, 129, 0.08)'
   },
   'SALE': {
-    bg:     'rgba(56, 189, 248, 0.12)',
-    border: 'rgba(56, 189, 248, 0.25)',
-    text:   '#38bdf8',
+    bg:     'rgba(239, 68, 68, 0.12)',
+    border: 'rgba(239, 68, 68, 0.25)',
+    text:   '#ef4444',
     icon:   '↗',
-    rowBg:  'rgba(56, 189, 248, 0.03)',
-    rowBorder: 'rgba(56, 189, 248, 0.08)'
+    label:  'PENJUALAN',
+    rowBg:  'rgba(239, 68, 68, 0.03)',
+    rowBorder: 'rgba(239, 68, 68, 0.08)'
   },
   'SALE_OUT': {
     bg:     'rgba(239, 68, 68, 0.12)',
     border: 'rgba(239, 68, 68, 0.25)',
     text:   '#ef4444',
     icon:   '↗',
+    label:  'PENJUALAN',
     rowBg:  'rgba(239, 68, 68, 0.03)',
     rowBorder: 'rgba(239, 68, 68, 0.08)'
+  },
+  'PENJUALAN': {
+    bg:     'rgba(239, 68, 68, 0.12)',
+    border: 'rgba(239, 68, 68, 0.25)',
+    text:   '#ef4444',
+    icon:   '↗',
+    label:  'PENJUALAN'
+  },
+  'ADJUSTMENT': {
+    bg:     'rgba(245, 158, 11, 0.12)',
+    border: 'rgba(245, 158, 11, 0.25)',
+    text:   '#f59e0b',
+    icon:   '⚙',
+    label:  'ADJUSTMENT'
   },
   'MANUAL_ADJUSTMENT': {
     bg:     'rgba(245, 158, 11, 0.12)',
     border: 'rgba(245, 158, 11, 0.25)',
     text:   '#f59e0b',
     icon:   '⚙',
+    label:  'ADJUSTMENT',
     rowBg:  'rgba(245, 158, 11, 0.03)',
     rowBorder: 'rgba(245, 158, 11, 0.08)'
   },
@@ -1156,7 +1225,13 @@ const filteredLogs = computed(() => {
   let list = logs.value;
   
   if (activeAuditFilter.value !== 'ALL') {
-    list = list.filter(l => l.log_type?.toUpperCase() === activeAuditFilter.value);
+    if (activeAuditFilter.value === 'PENJUALAN') {
+      list = list.filter(l => ['sale', 'sale_out'].includes(l.log_type?.toLowerCase()));
+    } else if (activeAuditFilter.value === 'ADJUSTMENT') {
+      list = list.filter(l => l.log_type?.toUpperCase() === 'MANUAL_ADJUSTMENT');
+    } else {
+      list = list.filter(l => l.log_type?.toUpperCase() === activeAuditFilter.value);
+    }
   }
   
   if (searchAuditLogQuery.value.trim()) {
@@ -1221,7 +1296,7 @@ function handleChoiceSelect(type: 'telur' | 'supplies') {
 
 async function handlePurchaseCreated() {
   showPembelianSlideOver.value = false;
-  fetchData();
+  fetchData(abortController.value?.signal);
 }
 
 
@@ -1269,7 +1344,7 @@ const packForm = reactive({
   mode: 'restock' // 'restock' or 'adjust'
 });
 
-async function fetchData() {
+async function fetchData(signal?: AbortSignal) {
   loading.value = true;
   try {
     const [
@@ -1279,11 +1354,11 @@ async function fetchData() {
       { data: soData },
       { data: bAcc }
     ] = await withTimeout(Promise.all([
-      supabase.from('inventory').select('*').order('id'),
-      supabase.from('stock_logs').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('suppliers').select('*').eq('is_deleted', false).order('name'),
-      supabase.from('stock_opname').select('*').order('opname_date', { ascending: false }),
-      supabase.from('bank_accounts').select('*').eq('is_active', true)
+      supabase.from('inventory').select('*').order('id').abortSignal(signal as AbortSignal),
+      supabase.from('stock_logs').select('*').order('created_at', { ascending: false }).limit(20).abortSignal(signal as AbortSignal),
+      supabase.from('suppliers').select('*').eq('is_deleted', false).order('name').abortSignal(signal as AbortSignal),
+      supabase.from('stock_opname').select('*').order('opname_date', { ascending: false }).abortSignal(signal as AbortSignal),
+      supabase.from('bank_accounts').select('*').eq('is_active', true).abortSignal(signal as AbortSignal)
     ]), 15000, 'stock-fetch');
 
     if (inv) inventory.value = inv;
@@ -1292,7 +1367,7 @@ async function fetchData() {
     if (soData) opnameHistory.value = soData;
     if (bAcc) bankAccounts.value = bAcc;
 
-    await fetchPurchases();
+    await fetchPurchases(signal);
   } catch (err: any) {
     console.error('Error fetching inventory:', err);
     showToast('Gagal sinkronisasi data', 'error');
@@ -1434,7 +1509,7 @@ async function finalizeStokOpname() {
 
       showToast('Stok Opname Berhasil Difinalisasi');
       activeStokTake.value = null;
-      fetchData();
+      fetchData(abortController.value?.signal);
     } catch (err: any) {
       showToast('Gagal finalisasi', 'error');
     } finally {
@@ -1604,7 +1679,7 @@ async function submitPackagingPurchase() {
     }
 
     showPackagingModal.value = false;
-    fetchData();
+    fetchData(abortController.value?.signal);
     showToast(isRestock ? `Stok ${packForm.label} diperbarui & HPP telur dihitung ulang` : `Stok ${packForm.label} berhasil dikoreksi`);
   } catch (err: any) {
     showToast('Gagal memproses stok', 'error');
@@ -1613,14 +1688,14 @@ async function submitPackagingPurchase() {
   }
 }
 
-async function recalculateAllHPP() {
+async function recalculateAllHPP(signal?: AbortSignal) {
   recalculating.value = true;
   try {
     const latestPackaging = supplyInventory.value.find(s => s.id === 'packaging_standard')?.cost_per_egg || 0;
     const latestSticker = supplyInventory.value.find(s => s.id === 'sticker_label')?.cost_per_egg || 0;
     const latestCard = supplyInventory.value.find(s => s.id === 'mini_card')?.cost_per_egg || 0;
 
-    const { data: eggs, error: fetchError } = await supabase.from('inventory').select('*').eq('item_type', 'egg');
+    const { data: eggs, error: fetchError } = await supabase.from('inventory').select('*').eq('item_type', 'egg').abortSignal(signal as AbortSignal);
     if (fetchError) throw fetchError;
 
     if (eggs) {
@@ -1632,10 +1707,10 @@ async function recalculateAllHPP() {
           cost_per_card: latestCard,
           cost_price: totalHpp,
           updated_at: new Date().toISOString()
-        }).eq('id', egg.id);
+        }).eq('id', egg.id).abortSignal(signal as AbortSignal);
       }
     }
-    await fetchData();
+    await fetchData(signal);
     showToast('Seluruh HPP Telur telah berhasil dihitung ulang!');
   } catch (err: any) {
     showToast('Gagal menghitung ulang HPP: ' + err.message, 'error');
@@ -1684,7 +1759,7 @@ async function submitAdjustment() {
     if (!invRes.error) {
        showToast('Spesifikasi produk diperbarui');
        showAdjustmentModal.value = false;
-       fetchData();
+       fetchData(abortController.value?.signal);
     } else {
        showToast('Gagal update spesifikasi', 'error');
     }
@@ -1831,7 +1906,7 @@ onUnmounted(() => {
 
 // Force refresh data on route change
 watch(() => route.path, () => {
-  fetchData();
+  fetchData(abortController.value?.signal);
 });
 </script>
 
@@ -3547,6 +3622,70 @@ watch(() => route.path, () => {
     border-radius: 12px;
     padding: 24px;
   }
+
+  /* PHASE 17-HOTFIX: LOG ITEM 2 BARIS */
+  .audit-log-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 8px;
+    margin-bottom: 4px;
+  }
+  .audit-log-row1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+  }
+  .audit-log-row2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    margin-top: 1px;
+  }
+  .type-badge-mini {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 3px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .audit-log-time {
+    font-size: 10px;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+  .audit-log-change {
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: fit-content;
+  }
+  .audit-log-change.pos { color: #10b981; }
+  .audit-log-change.neg { color: #ef4444; }
+  .audit-log-change.neu { color: #facc15; }
+
+  .audit-log-reason {
+    font-size: 10px;
+    color: #64748b;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 70px);
+  }
+  .audit-log-admin-mobile {
+    font-size: 9px;
+    color: #475569;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .col-admin { display: none !important; }
 }
 </style>
 

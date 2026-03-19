@@ -18,21 +18,26 @@
     }
 
     /* GLOBAL MOBILE RULES FOR PHASE 05, 06, 07 & 09 */
+    /* iOS-SAFE SCROLL RULES (PHASE 16) */
     html {
-      overflow: hidden;
+      overflow-x: clip;
+      overflow-y: auto;
       width: 100%;
     }
     
     body {
-      overflow-x: hidden;
+      overflow-x: clip;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       width: 100%;
       max-width: 100vw;
       position: relative;
     }
     
     #app {
-      overflow: hidden;
+      overflow-x: clip;
+      overflow-y: auto;
+      min-height: 100vh;
       width: 100%;
       max-width: 100vw;
     }
@@ -584,7 +589,7 @@
         white-space: nowrap;
         overflow: hidden;
     }
-    .m-log-type { font-weight: bold; white-space: nowrap; flex-shrink: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+    .m-log-type { font-weight: bold; white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
     .m-log-time { color: #64748b; white-space: nowrap; flex-shrink: 0; }
     .m-log-change { font-weight: bold; white-space: nowrap; flex-shrink: 0; }
     .m-log-change.pos { color: #10b981; }
@@ -598,6 +603,16 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         min-width: 0;
+    }
+    .m-log-reason-sub {
+        font-size: 9px;
+        color: #64748b;
+        margin-top: 1px;
+        padding-left: 20px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1;
     }
 
     /* Mobile Pembelian Tab */
@@ -723,6 +738,192 @@
         padding: 0 !important;
         border: none !important;
         margin-bottom: 4px !important;
+    }
+
+    /* PHASE 18: PROFILE REDESIGN */
+    .profile-page {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px 12px 80px;
+        overflow-x: clip;
+    }
+
+    .mobile-profile-header {
+        margin-bottom: 4px;
+        padding-left: 2px;
+    }
+
+    .m-profile-tag {
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        color: #64748b;
+        text-transform: uppercase;
+    }
+
+    .identity-panel.glass-panel {
+        padding: 12px 14px !important;
+        background: linear-gradient(135deg, rgba(250,204,21,0.08) 0%, rgba(15,23,42,0.95) 60%) !important;
+        border: 1px solid rgba(250,204,21,0.15) !important;
+        border-radius: 12px !important;
+        gap: 0 !important;
+    }
+
+    .m-identity-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .m-pfp-avatar {
+        width: 48px;
+        height: 48px;
+        background: rgba(250,204,21,0.15);
+        border: 2px solid rgba(250,204,21,0.3);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+
+    .m-pfp-icon {
+        width: 24px;
+        height: 24px;
+        color: #facc15;
+    }
+
+    .m-status-dot {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 8px;
+        height: 8px;
+        background: #10b981;
+        border: 1.5px solid #0f172a;
+        border-radius: 50%;
+    }
+
+    .m-user-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .m-user-name {
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        color: #f8fafc !important;
+        margin: 0 !important;
+    }
+
+    .m-user-email {
+        font-size: 11px !important;
+        color: #94a3b8 !important;
+        margin: 0 !important;
+    }
+
+    .m-role-badges {
+        display: flex;
+        gap: 6px;
+        margin: 2px 0;
+    }
+
+    .m-badge {
+        font-size: 9px;
+        font-weight: 800;
+        height: 20px;
+        padding: 0 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        text-transform: uppercase;
+        background: rgba(255,255,255,0.05);
+        color: #94a3b8;
+    }
+
+    .m-badge.admin {
+        color: #facc15;
+        background: rgba(250,204,21,0.1);
+    }
+    .m-badge.verified {
+        color: #10b981;
+        background: rgba(16,185,129,0.1);
+    }
+
+    .profile-section-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        white-space: nowrap;
+    }
+
+    .m-panel-title {
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        color: #f8fafc !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+    }
+
+    .security-terminal.glass-panel {
+        padding: 16px 18px !important;
+    }
+
+    .tactical-label {
+        font-size: 9px !important;
+        color: #64748b !important;
+        letter-spacing: 0.5px !important;
+    }
+
+    .profile-input {
+        background: rgba(15, 23, 42, 0.6) !important;
+        color: white !important;
+        height: 38px !important;
+        font-size: 13px !important;
+        padding: 0 12px 0 42px !important;
+        border-radius: 10px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .profile-btn {
+        background: #facc15 !important;
+        color: #0f172a !important;
+        height: 38px !important;
+        font-size: 12px !important;
+        font-weight: 800 !important;
+        border-radius: 10px !important;
+        padding: 0 20px !important;
+        width: fit-content !important;
+        border: none !important;
+    }
+
+    .btn-premium.secondary.profile-btn {
+        background: rgba(58, 176, 255, 0.1) !important;
+        border: 1px solid #3ab0ff !important;
+        color: #3ab0ff !important;
+    }
+
+    .actions-premium {
+        display: flex !important;
+        justify-content: flex-end !important;
+        margin-top: 10px;
+    }
+
+    .profile-form-row {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 20px !important;
+    }
+
+    .security-form {
+        gap: 20px !important;
+    }
+
+    .desktop-only {
+        display: none !important;
     }
 }
 

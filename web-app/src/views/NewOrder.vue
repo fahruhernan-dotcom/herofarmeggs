@@ -126,7 +126,7 @@
           </div>
           <div v-else class="empty-inventory-alert glass-panel p-20 text-center">
             <p class="text-dim mb-12">Tidak ada produk tersedia atau gagal memuat data.</p>
-            <button @click="fetchData" class="btn-secondary btn-sm">RETRY DATA FETCH</button>
+            <button @click="fetchData()" class="btn-secondary btn-sm">RETRY DATA FETCH</button>
           </div>
         </div>
 
@@ -356,10 +356,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
-import { withTimeout } from '../utils/safeAsync';
+import { withTimeout, safeAsync } from '../utils/safeAsync';
 import { 
   PlusIcon, 
   MinusIcon,
@@ -435,10 +435,13 @@ const cart = ref<Array<{
   overrideReason?: string
 }>>([]);
 
+// Abort Controller for navigation safety
+const abortController = ref<AbortController | null>(null);
+
 // 2. FETCHING
 const loadingMsg = ref('Initializing terminal...');
 
-async function fetchData() {
+async function fetchData(signal?: AbortSignal) {
   if (loading.value) return;
   loading.value = true;
   loadingMsg.value = 'Connecting to inventory...';
@@ -446,7 +449,7 @@ async function fetchData() {
   try {
     // 1. Fetch Inventory
     const { data: inv, error: invErr } = await withTimeout(
-      supabase.from('inventory').select('*'),
+      supabase.from('inventory').select('*').abortSignal(signal as AbortSignal),
       undefined, 'pos-inventory'
     );
     if (invErr) throw invErr;
@@ -455,7 +458,7 @@ async function fetchData() {
     loadingMsg.value = 'Fetching CRM database...';
     // 2. Fetch Customers
     const { data: cust, error: custErr } = await withTimeout(
-      supabase.from('customers').select('*').limit(100),
+      supabase.from('customers').select('*').limit(100).abortSignal(signal as AbortSignal),
       undefined, 'pos-customers'
     );
     if (custErr) {
@@ -477,7 +480,7 @@ async function safeFetchData() {
   retryCount.value = 0;
   isRetrying.value = false;
   try {
-    await fetchData();
+    await safeAsync(() => fetchData(abortController.value?.signal));
   } catch (err: any) {
     let succeeded = false;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -486,7 +489,7 @@ async function safeFetchData() {
       const delay = 1000 * Math.pow(2, attempt - 1);
       await new Promise(r => setTimeout(r, delay));
       try {
-        await fetchData();
+        await fetchData(abortController.value?.signal);
         succeeded = true;
         break;
       } catch { /* continue */ }
@@ -717,7 +720,14 @@ const vOutsideClick = {
   },
 };
 
-onMounted(safeFetchData);
+onMounted(() => {
+  abortController.value = new AbortController();
+  safeFetchData();
+});
+
+onUnmounted(() => {
+  abortController.value?.abort();
+});
 </script>
 
 <style scoped>

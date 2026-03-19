@@ -255,7 +255,7 @@ export function useDashboard() {
     })
 
     // ─── FETCH ──────────────────────────
-    async function fetchData() {
+    async function fetchData(signal?: AbortSignal) {
         loading.value = true
         try {
             const [
@@ -266,12 +266,12 @@ export function useDashboard() {
                 { data: kpis },
                 { data: piutangData }
             ] = await withTimeout(Promise.all([
-                supabase.from('inventory').select('*'),
-                supabase.from('sales').select('*, sale_items(*)').order('created_at', { ascending: false }),
-                supabase.from('customers').select('*').eq('is_deleted', false),
-                supabase.from('finance_entries').select('*').order('entry_date', { ascending: false }),
-                supabase.rpc('get_dashboard_kpis'),
-                supabase.from('piutang').select('id, remaining, total_amount, customer_name, due_date, status, created_at').eq('status', 'belum_bayar')
+                supabase.from('inventory').select('*').abortSignal(signal as AbortSignal),
+                supabase.from('sales').select('*, sale_items(*)').order('created_at', { ascending: false }).abortSignal(signal as AbortSignal),
+                supabase.from('customers').select('*').eq('is_deleted', false).abortSignal(signal as AbortSignal),
+                supabase.from('finance_entries').select('*').order('entry_date', { ascending: false }).abortSignal(signal as AbortSignal),
+                supabase.rpc('get_dashboard_kpis').abortSignal(signal as AbortSignal),
+                supabase.from('piutang').select('id, remaining, total_amount, customer_name, due_date, status, created_at').eq('status', 'belum_bayar').abortSignal(signal as AbortSignal)
             ]), 12000, 'dashboard-main-fetch')
 
             if (stocks) inventory.value = stocks
@@ -288,10 +288,10 @@ export function useDashboard() {
                     { count: lCount },
                     { count: fCount }
                 ] = await withTimeout(Promise.all([
-                    supabase.from('sales').select('*', { count: 'exact', head: true }),
-                    supabase.from('customers').select('*', { count: 'exact', head: true }),
-                    supabase.from('stock_logs').select('*', { count: 'exact', head: true }),
-                    supabase.from('finance_entries').select('*', { count: 'exact', head: true })
+                    supabase.from('sales').select('*', { count: 'exact', head: true }).abortSignal(signal as AbortSignal),
+                    supabase.from('customers').select('*', { count: 'exact', head: true }).abortSignal(signal as AbortSignal),
+                    supabase.from('stock_logs').select('*', { count: 'exact', head: true }).abortSignal(signal as AbortSignal),
+                    supabase.from('finance_entries').select('*', { count: 'exact', head: true }).abortSignal(signal as AbortSignal)
                 ]), 10000, 'dashboard-counts')
                 impactCounts.sales = sCount || 0
                 impactCounts.customers = cCount || 0
