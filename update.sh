@@ -11,11 +11,12 @@ cd "$(dirname "$0")"
 echo "📥 [GIT] Fetching and resetting to latest code from GitHub..."
 git fetch origin main
 git reset --hard origin/main
+git clean -fd
 
 # 3. Cleanup to prevent conflicts
 echo "🧹 [CLEANUP] Stopping old/conflicting containers if any..."
 # Silently stop telur-web if it exists
-sudo docker stop telur-web 2>/dev/null || true
+sudo docker stop herofarm-web 2>/dev/null || true
 # Cleanup old images to save disk space
 sudo docker image prune -f
 
@@ -24,9 +25,9 @@ cd vps-deploy
 
 # 5. Rebuild and restart containers
 echo "🛠️ [DOCKER] Rebuilding (Clean Build) and restarting containers..."
-# Using --no-cache to ensure all recent code changes are captured
+# Using --no-cache and --force-recreate to ensure 100% fresh deployment
 sudo docker compose build --no-cache web-app
-sudo docker compose up -d
+sudo docker compose up -d --force-recreate
 
 # 6. Synchronize Host Nginx
 echo "🔄 [NGINX] Reloading host reverse proxy..."
@@ -34,7 +35,7 @@ if [ -f "/etc/nginx/sites-enabled/herofarm.web.id" ]; then
     sudo nginx -t && sudo systemctl reload nginx
     echo "✅ [NGINX] Proxy synchronized with new build."
 else
-    echo "⚠️ [NGINX] Config not found in sites-enabled. Skipping reload."
+    echo "⚠️ [NGINX] Config /etc/nginx/sites-enabled/herofarm.web.id not found. Skipping reload."
 fi
 
 echo ""
