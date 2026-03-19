@@ -1,5 +1,5 @@
 <template>
-  <div class="stock-page">
+  <div class="stock-page" style="overflow-x: hidden; width: 100%; max-width: 100vw;">
     <header v-if="!isMobile" class="header desktop-only">
       <div class="header-left">
         <h4 class="brand-tag">B2B LOGISTICS</h4>
@@ -14,15 +14,27 @@
       </div>
     </header>
 
-    <!-- Mobile Actions Bar (only buttons, title is in TopBar) -->
-    <div v-if="isMobile" class="mobile-actions-bar mobile-only mb-6">
-      <button class="btn-primary w-full" @click="showChoiceModal = true" :disabled="loading">
-        <PlusIcon class="icon" />
-        <span>TAMBAH STOK BARU</span>
-      </button>
+    <!-- NEW MOBILE HEADER ACTIONS -->
+    <div v-if="isMobile" class="mobile-stock-header mobile-only mb-4 stock-section" style="animation-delay: 0.05s;">
+      <!-- Baris 1: Search -->
+      <div class="m-search-box">
+        <SearchIcon class="m-search-icon" />
+        <input v-model="searchInventoryQuery" placeholder="Cari produk..." />
+      </div>
+      <!-- Baris 2: Tabs & Tambah -->
+      <div class="m-header-actions-row">
+        <div class="m-header-tabs">
+          <button :class="{ active: activeTab === 'inventory' }" @click="activeTab = 'inventory'">Inventory</button>
+          <button :class="{ active: activeTab === 'pembelian' }" @click="activeTab = 'pembelian'">Pembelian</button>
+        </div>
+        <button class="m-header-add" @click="showChoiceModal = true" :disabled="loading">
+          <PlusIcon class="m-add-icon" />
+          <span>TAMBAH</span>
+        </button>
+      </div>
     </div>
 
-    <nav class="tab-nav-wrapper scroll-x mb-6">
+    <nav v-if="!isMobile" class="tab-nav-wrapper scroll-x mb-6 desktop-only">
       <div class="tab-nav glass-panel">
         <button 
           class="tab-btn" 
@@ -56,10 +68,11 @@
       <section class="inventory-section section-primary-products">
         <div class="section-header">
           <div class="section-header-left">
-            <span class="section-badge">PRIMARY PRODUCTS</span>
-            <div class="section-divider-line"></div>
+            <span class="section-badge desktop-only">PRIMARY PRODUCTS</span>
+            <span class="m-section-label mobile-only">PRIMARY PRODUCTS</span>
+            <div class="section-divider-line desktop-only"></div>
           </div>
-          <div class="section-header-right" style="display:flex; gap:12px;">
+          <div class="section-header-right desktop-only" style="display:flex; gap:12px;">
             <div class="search-box-mini glass-panel">
               <SearchIcon class="icon-xs" />
               <input v-model="searchInventoryQuery" placeholder="Cari produk..." />
@@ -81,57 +94,111 @@
         </div>
 
         <div class="primary-products-grid" v-else-if="eggInventory.length > 0">
-          <div v-for="item in eggInventory" :key="item.id" class="product-card">
-            <!-- TOP ROW: GRADE & STATUS -->
-            <div class="card-header">
-              <span class="card-name" :class="getChipClass(item.id)">{{ getGradeLabel(item.id) }}</span>
-              <div class="status-badge" :class="`badge-${getStockStatus(item).class}`">
-                <span v-if="getStockStatus(item).class === 'kritis'" class="dot-pulse" style="margin-right:6px"></span>
-                {{ getStockStatus(item).label }}
+          <div v-for="(item, idx) in eggInventory" :key="item.id" class="product-card stock-section" :style="{ animationDelay: `${(idx + 1) * 0.05}s` }">
+            
+            <!-- MOBILE CARD DOM -->
+            <div class="m-card-inner mobile-only" :style="{ borderLeft: `3px solid ${getCardAccent(item)}` }">
+              <!-- BARIS 1 -->
+              <div class="m-pc-row1">
+                <span class="m-pc-badge" :class="getChipClass(item.id)">{{ getGradeLabel(item.id) }}</span>
+                <span class="m-pc-status" :class="`badge-${getStockStatus(item).class}`">
+                  <span v-if="getStockStatus(item).class === 'kritis'" class="m-dot-pulse"></span>
+                  {{ getStockStatus(item).label }}
+                </span>
+              </div>
+              <!-- BARIS 2 -->
+              <div class="m-pc-row2">
+                <div class="m-pc-stock-group">
+                  <span class="m-pc-stock">{{ formatStockCount(item.current_stock) }}</span>
+                  <span class="m-pc-unit">butir</span>
+                </div>
+                <span class="m-pc-packs">{{ calcMaxPacks(item.current_stock) }} PACK</span>
+              </div>
+              <!-- BARIS 3 -->
+              <div class="m-pc-row3">
+                <div class="m-pc-progress-track">
+                  <div class="m-pc-progress-fill" :class="`bg-${getStockStatus(item).class}`" :style="{ width: getStockProgress(item) + '%' }"></div>
+                </div>
+                <span class="m-pc-pct">{{ getStockProgress(item).toFixed(0) }}% • min {{ item.safety_stock || 20 }} butir</span>
+              </div>
+              <!-- BARIS 4 -->
+              <div class="m-pc-row4">
+                <div class="m-pc-metric">
+                  <span class="m-pc-mlabel">Retail</span>
+                  <span class="m-pc-mval">{{ formatCurrency(item.retail_price_per_pack || item.base_price_per_pack) }}</span>
+                </div>
+                <div class="m-pc-metric">
+                  <span class="m-pc-mlabel">HPP/Butir</span>
+                  <span class="m-pc-mval">{{ formatCurrency(item.hpp_per_egg || item.cost_per_egg) }}</span>
+                </div>
+                <div class="m-pc-metric">
+                  <span class="m-pc-mlabel">HPP/Pack</span>
+                  <span class="m-pc-mval">{{ formatCurrency((item.cost_per_egg * 10) + (item.cost_per_packaging || 0) + (item.cost_per_sticker || 0) + (item.cost_per_card || 0)) }}</span>
+                </div>
+              </div>
+              <!-- BARIS 5 -->
+              <div class="m-pc-row5">
+                <span v-if="false" class="m-pc-safety-text">Safety: {{ item.safety_stock || 20 }} butir</span>
+                <button class="m-pc-manage-btn" @click="quickAdjust(item.id)">
+                  <SettingsIcon class="m-settings-icon" />
+                  <span>MANAGE</span>
+                </button>
               </div>
             </div>
 
-            <!-- BIG NUMBER & PROGRESS -->
-            <div class="stock-display">
-              <h2 class="stock-number">{{ formatStockCount(item.current_stock) }}</h2>
-              <span class="stock-unit">butir</span>
-            </div>
-
-            <div class="pack-count">{{ calcMaxPacks(item.current_stock) }} PACK</div>
-
-            <div class="progress-bar-track">
-              <div class="progress-bar-fill" 
-                :class="`bg-${getStockStatus(item).class}`"
-                :style="{ width: getStockProgress(item) + '%' }">
+            <!-- DESKTOP CARD DOM -->
+            <div class="desktop-card-inner desktop-only">
+              <!-- TOP ROW: GRADE & STATUS -->
+              <div class="card-header">
+                <span class="card-name" :class="getChipClass(item.id)">{{ getGradeLabel(item.id) }}</span>
+                <div class="status-badge" :class="`badge-${getStockStatus(item).class}`">
+                  <span v-if="getStockStatus(item).class === 'kritis'" class="dot-pulse" style="margin-right:6px"></span>
+                  {{ getStockStatus(item).label }}
+                </div>
               </div>
-            </div>
-
-            <!-- MICRO STATS GRID -->
-            <div class="metrics-row">
-              <div class="metric-item">
-                <span class="metric-label">RETAIL</span>
-                <span class="metric-value">{{ formatCurrency(item.retail_price_per_pack || item.base_price_per_pack) }}</span>
+  
+              <!-- BIG NUMBER & PROGRESS -->
+              <div class="stock-display">
+                <h2 class="stock-number">{{ formatStockCount(item.current_stock) }}</h2>
+                <span class="stock-unit">butir</span>
               </div>
-              <div class="metric-item">
-                <span class="metric-label">HPP/BUTIR</span>
-                <span class="metric-value">{{ formatCurrency(item.hpp_per_egg || item.cost_per_egg) }}</span>
+  
+              <div class="pack-count">{{ calcMaxPacks(item.current_stock) }} PACK</div>
+  
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" 
+                  :class="`bg-${getStockStatus(item).class}`"
+                  :style="{ width: getStockProgress(item) + '%' }">
+                </div>
               </div>
-              <div class="metric-item">
-                <span class="metric-label">HPP/PACK</span>
-                <span class="metric-value">{{ formatCurrency((item.cost_per_egg * 10) + (item.cost_per_packaging || 0) + (item.cost_per_sticker || 0) + (item.cost_per_card || 0)) }}</span>
+  
+              <!-- MICRO STATS GRID -->
+              <div class="metrics-row">
+                <div class="metric-item">
+                  <span class="metric-label">RETAIL</span>
+                  <span class="metric-value">{{ formatCurrency(item.retail_price_per_pack || item.base_price_per_pack) }}</span>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-label">HPP/BUTIR</span>
+                  <span class="metric-value">{{ formatCurrency(item.hpp_per_egg || item.cost_per_egg) }}</span>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-label">HPP/PACK</span>
+                  <span class="metric-value">{{ formatCurrency((item.cost_per_egg * 10) + (item.cost_per_packaging || 0) + (item.cost_per_sticker || 0) + (item.cost_per_card || 0)) }}</span>
+                </div>
               </div>
-            </div>
-
-            <!-- BOTTOM ROW: SAFETY & ACTION -->
-            <div class="card-footer">
-              <div class="safety-info">
-                <span class="safety-label">Safety:</span>
-                <span class="safety-value">{{ item.safety_stock || 20 }} butir</span>
+  
+              <!-- BOTTOM ROW: SAFETY & ACTION -->
+              <div class="card-footer">
+                <div v-if="false" class="safety-info">
+                  <span class="safety-label">Safety:</span>
+                  <span class="safety-value">{{ item.safety_stock || 20 }} butir</span>
+                </div>
+                <button class="manage-btn" @click="quickAdjust(item.id)">
+                  <SettingsIcon class="icon-xs" />
+                  <span>MANAGE</span>
+                </button>
               </div>
-              <button class="manage-btn" @click="quickAdjust(item.id)">
-                <SettingsIcon class="icon-xs" />
-                <span>MANAGE</span>
-              </button>
             </div>
           </div>
         </div>
@@ -139,13 +206,14 @@
       </section>
 
       <!-- ━━━ SECTION: SUPPLIES & PACKAGING ━━━ -->
-      <section class="inventory-section section-supplies">
+      <section class="inventory-section section-supplies stock-section" style="animation-delay: 0.15s;">
         <div class="section-header">
           <div class="section-header-left">
-            <span class="section-badge">SUPPLIES & PACKAGING</span>
-            <div class="section-divider-line"></div>
+            <span class="section-badge badge-supply desktop-only">SUPPLIES & PACKAGING</span>
+            <span class="m-section-label mobile-only">SUPPLIES & PACKAGING</span>
+            <div class="section-divider-line desktop-only"></div>
           </div>
-          <div class="section-header-right"></div>
+          <div class="section-header-right desktop-only"></div>
         </div>
         
         <div class="supplies-grid" v-if="loading">
@@ -153,39 +221,75 @@
         </div>
         
         <div class="supplies-grid" v-else-if="supplyInventory.length > 0">
-          <div v-for="item in supplyInventory" :key="item.id" class="supply-card">
-            <div class="card-header">
-              <span class="card-name">{{ item.label }}</span>
-              <div class="status-badge" :class="item.current_stock <= (item.safety_stock || 20) ? 'badge-low' : 'badge-optimal'">
-                {{ item.current_stock <= (item.safety_stock || 20) ? 'LOW' : 'OPTIMAL' }}
+          <div v-for="(item, idx) in supplyInventory" :key="item.id" class="supply-card stock-section" :style="{ animationDelay: `${(idx + 3) * 0.05}s` }">
+            
+            <!-- MOBILE SUPPLY CARD -->
+            <div class="m-card-inner mobile-only" :style="{ borderLeft: `3px solid ${getSupplyAccent()}` }">
+              <div class="m-pc-row1">
+                <span class="m-pc-badge" style="background:rgba(139,92,246,0.15);color:#8b5cf6;">{{ item.label }}</span>
+                <span class="m-pc-status" :class="item.current_stock <= (item.safety_stock || 20) ? 'badge-low' : 'badge-optimal'">
+                  <span v-if="item.current_stock <= (item.safety_stock || 20)" class="m-dot-pulse"></span>
+                  {{ item.current_stock <= (item.safety_stock || 20) ? 'LOW' : 'OK' }}
+                </span>
+              </div>
+              <div class="m-pc-row2">
+                <div class="m-pc-stock-group">
+                  <span class="m-pc-stock">{{ item.current_stock }}</span>
+                  <span class="m-pc-unit">units</span>
+                </div>
+                <span v-if="false" class="m-pc-packs" style="color:#8b5cf6;">Safety: {{ item.safety_stock || 20 }}</span>
+              </div>
+              <div class="m-pc-row3">
+                <div class="m-pc-progress-track">
+                  <div class="m-pc-progress-fill" style="background:#8b5cf6;" :style="{ width: Math.min((item.current_stock / (item.safety_stock * 3 || 60)) * 100, 100) + '%' }"></div>
+                </div>
+              </div>
+              <div class="m-pc-row4" style="grid-template-columns: 1fr;">
+                <div class="m-pc-metric">
+                  <span class="m-pc-mlabel">Effective Cost</span>
+                  <span class="m-pc-mval">{{ formatCurrency(item.cost_per_egg || 0) }}</span>
+                </div>
+              </div>
+              <div class="m-pc-row5">
+                <span class="m-pc-safety-text">{{ item.label }}</span>
+                <button class="m-pc-manage-btn" @click="openPackagingPurchase(item)">
+                  <PlusIcon class="m-settings-icon" />
+                  <span>MANAGE</span>
+                </button>
               </div>
             </div>
 
-            <div class="stock-display" style="gap: 6px;">
-              <h2 class="stock-number" style="color: #10b981;">{{ item.current_stock }}</h2>
-              <span class="stock-unit">units</span>
-            </div>
-
-            <div class="progress-bar-track" style="margin-top: 12px; margin-bottom: 24px;">
-              <div class="progress-bar-fill bg-optimal" :style="{ width: Math.min((item.current_stock / (item.safety_stock * 3 || 60)) * 100, 100) + '%' }"></div>
-            </div>
-
-            <div class="metrics-row" style="grid-template-columns: 1fr;">
-              <div class="metric-item">
-                <span class="metric-label">Effective Cost:</span>
-                <span class="metric-value">{{ formatCurrency(item.cost_per_egg || 0) }}</span>
+            <!-- DESKTOP SUPPLY CARD -->
+            <div class="desktop-supply-inner desktop-only">
+              <div class="card-header">
+                <span class="card-name">{{ item.label }}</span>
+                <div class="status-badge" :class="item.current_stock <= (item.safety_stock || 20) ? 'badge-low' : 'badge-optimal'">
+                  {{ item.current_stock <= (item.safety_stock || 20) ? 'LOW' : 'OPTIMAL' }}
+                </div>
               </div>
-            </div>
-
-            <div class="card-footer">
-              <div class="safety-info">
-                <span class="safety-label">Safety:</span>
-                <span class="safety-value">{{ item.safety_stock || 20 }} units</span>
+              <div class="stock-display" style="gap: 6px;">
+                <h2 class="stock-number" style="color: #10b981;">{{ item.current_stock }}</h2>
+                <span class="stock-unit">units</span>
               </div>
-              <button class="supply-manage-btn" @click="openPackagingPurchase(item)">
-                <PlusIcon class="icon-xs" />
-                <span>MANAGE</span>
-              </button>
+              <div class="progress-bar-track" style="margin-top: 12px; margin-bottom: 24px;">
+                <div class="progress-bar-fill bg-optimal" :style="{ width: Math.min((item.current_stock / (item.safety_stock * 3 || 60)) * 100, 100) + '%' }"></div>
+              </div>
+              <div class="metrics-row" style="grid-template-columns: 1fr;">
+                <div class="metric-item">
+                  <span class="metric-label">Effective Cost:</span>
+                  <span class="metric-value">{{ formatCurrency(item.cost_per_egg || 0) }}</span>
+                </div>
+              </div>
+              <div class="card-footer">
+                <div v-if="false" class="safety-info">
+                  <span class="safety-label">Safety:</span>
+                  <span class="safety-value">{{ item.safety_stock || 20 }} units</span>
+                </div>
+                <button class="supply-manage-btn" @click="openPackagingPurchase(item)">
+                  <PlusIcon class="icon-xs" />
+                  <span>MANAGE</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -193,8 +297,8 @@
       </section>
 
     <!-- ━━━ SECTION: AUDIT TRAIL ━━━ -->
-    <section class="audit-trail-section glass-panel">
-      <div class="audit-header">
+    <section class="audit-trail-section glass-panel stock-section" style="animation-delay: 0.2s;">
+      <div class="audit-header desktop-only">
         <div>
           <h3 class="audit-title hero-font">Audit Trail</h3>
           <span class="audit-subtitle">Last 20 operations</span>
@@ -205,13 +309,40 @@
         </div>
       </div>
       
+      <!-- NEW MOBILE AUDIT HEADER -->
+      <div class="m-audit-header mobile-only">
+        <div class="m-ah-left">
+          <span class="m-ah-title">Audit Trail</span>
+          <span class="m-ah-subtitle">20 operasi terakhir</span>
+        </div>
+        <input v-model="searchAuditLogQuery" placeholder="Filter log..." class="m-ah-input" />
+      </div>
+      
       <div class="audit-table-wrapper">
-        <!-- FILTER PILLS -->
-        <div class="filter-pills mb-4">
+        <!-- FILTER PILLS (DESKTOP) -->
+        <div class="filter-pills mb-4 desktop-only">
           <button
             v-for="type in ['ALL', 'ARRIVAL', 'SALE', 'SALE_OUT', 'MANUAL_ADJUSTMENT', 'OPNAME']"
             :key="type"
             class="filter-pill"
+            :class="{ active: activeAuditFilter === type }"
+            :style="activeAuditFilter === type ? {
+              background: getAuditConfig(type).bg,
+              borderColor: getAuditConfig(type).border,
+              color: getAuditConfig(type).text
+            } : {}"
+            @click="activeAuditFilter = type"
+          >
+            {{ type.replace('_', ' ') }}
+          </button>
+        </div>
+
+        <!-- NEW MOBILE FILTER PILLS -->
+        <div class="m-filter-pills mobile-only mb-3">
+          <button
+            v-for="type in ['ALL', 'ARRIVAL', 'SALE', 'SALE_OUT', 'MANUAL_ADJUSTMENT', 'OPNAME']"
+            :key="type"
+            class="m-filter-pill"
             :class="{ active: activeAuditFilter === type }"
             :style="activeAuditFilter === type ? {
               background: getAuditConfig(type).bg,
@@ -301,28 +432,19 @@
             </div>
           </div>
 
-          <!-- 📱 MOBILE CARDS -->
-          <div class="cards-mobile">
+          <!-- 📱 MOBILE CARDS (Ultra Compact) -->
+          <div class="cards-mobile gap-1 mt-2">
             <div 
               v-for="log in filteredLogs" 
               :key="'m-'+log.id" 
-              class="mobile-audit-card glass-panel"
-              :style="{ borderLeft: `3px solid ${getAuditConfig(log.log_type).text}` }"
+              class="m-log-item"
+              :style="{ borderLeftColor: getAuditConfig(log.log_type).text }"
             >
-              <div class="mac-header">
-                <span 
-                  class="type-badge-mini" 
-                  :style="{ color: getAuditConfig(log.log_type).text }"
-                >
-                  {{ getAuditConfig(log.log_type).icon }} {{ log.log_type?.replace('_', ' ').toUpperCase() }}
-                </span>
-                <span class="mac-time font-mono">{{ formatRelativeDate(log.created_at) }}</span>
-              </div>
-              <div class="mac-body">
-                <div class="mac-change" :class="{ 'is-positive': log.change > 0, 'is-negative': log.change < 0 }">
-                  {{ log.change > 0 ? '+' : '' }}{{ log.change.toLocaleString('id-ID') }} butir
-                </div>
-                <div class="mac-notes" :style="{ color: getAuditConfig(log.log_type).text }">{{ log.notes || '-' }}</div>
+              <div class="m-log-row">
+                <span class="m-log-type" :style="{ color: getAuditConfig(log.log_type).text }">{{ getAuditConfig(log.log_type).icon }} {{ log.log_type?.replace('_', ' ').toUpperCase() }}</span>
+                <span class="m-log-time">{{ formatRelativeDate(log.created_at) }}</span>
+                <span class="m-log-change" :class="log.change > 0 ? 'pos' : log.change < 0 ? 'neg' : 'neu'">{{ log.change > 0 ? '+' : '' }}{{ log.change }} butir</span>
+                <span class="m-log-code">{{ log.inventory_id ? log.inventory_id.slice(0,6).toUpperCase() : 'SYS' }}</span>
               </div>
             </div>
           </div>
@@ -334,79 +456,138 @@
 
     <!-- ━━━ TAB 2: PEMBELIAN & GRADING ━━━ -->
     <div v-else-if="activeTab === 'pembelian'" class="tab-content pembelian-tab animate-fade">
-      <div class="pembelian-card">
-        <div class="pembelian-card-header">
+      
+      <!-- MOBILE SUMMARY CARDS -->
+      <div v-if="isMobile" class="m-pembelian-summary mobile-only mb-4">
+        <div class="m-summary-grid">
+          <div class="m-summary-card" style="border-left: 3px solid #facc15;">
+            <div class="m-sc-label">
+              <ShoppingCartIcon class="m-sc-icon" />
+              <span>TOTAL PEMBELIAN</span>
+            </div>
+            <div class="m-sc-value">{{ formatCurrency(totalPembelian) }}</div>
+          </div>
+          <div class="m-summary-card" style="border-left: 3px solid #38bdf8;">
+            <div class="m-sc-label">
+              <PackageIcon class="m-sc-icon" />
+              <span>TOTAL BUTIR MASUK</span>
+            </div>
+            <div class="m-sc-value">{{ formatStock(totalButir) }} <small>butir</small></div>
+          </div>
+        </div>
+        
+        <button class="m-btn-catat-pembelian mt-3" @click="showChoiceModal = true">
+          <PlusIcon class="m-sc-icon" />
+          <span>CATAT PEMBELIAN BARU</span>
+        </button>
+      </div>
+
+      <div class="pembelian-card" :class="{ 'glass-panel': !isMobile }">
+        <div v-if="!isMobile" class="pembelian-card-header desktop-only">
           <div>
             <h3 class="pembelian-card-title hero-font">Riwayat Pembelian</h3>
             <p class="pembelian-card-sub">Catatan seluruh pembelian dari supplier</p>
           </div>
           <button class="catat-btn" @click="showChoiceModal = true">
             <PlusIcon class="icon-xs" />
-            + Catat Pembelian Baru
+            <span>CATAT PEMBELIAN BARU</span>
           </button>
         </div>
 
-        <div class="pembelian-kpi-row">
+        <div v-if="!isMobile" class="pembelian-kpi-row desktop-only">
           <div class="kpi-card">
             <div class="kpi-label">TOTAL PEMBELIAN</div>
-            <div class="kpi-value">{{ formatCurrency(purchaseStats.totalCost) }}</div>
+            <div class="kpi-value">{{ formatCurrency(totalPembelian) }}</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">TOTAL BUTIR</div>
-            <div class="kpi-value">{{ purchaseStats.totalEggs.toLocaleString('id-ID') }}</div>
+            <div class="kpi-value">{{ totalButir.toLocaleString('id-ID') }}</div>
           </div>
           <div class="kpi-card utang">
             <div class="kpi-label">UTANG AKTIF</div>
-            <div class="kpi-value">{{ formatCurrency(purchaseStats.totalDebt) }}</div>
+            <div class="kpi-value">{{ formatCurrency(totalDebt) }}</div>
           </div>
         </div>
 
-        <div class="pembelian-divider"></div>
+        <div v-if="!isMobile" class="pembelian-divider desktop-only"></div>
 
-        <div v-if="purchases.length === 0" class="empty-state">
-          <div class="empty-icon">📦</div>
-          <h4 class="empty-title">Belum Ada Pembelian</h4>
-          <p class="empty-sub">Klik tombol '+ Catat Pembelian Baru' di atas untuk mencatat batch pertama.</p>
+        <span v-if="isMobile" class="m-section-label mobile-only mb-2">RIWAYAT PEMBELIAN</span>
+
+        <div v-if="loadingPurchases" class="loading-purchases-spinner py-8 flex-center">
+          <RefreshCwIcon class="animate-spin text-dim" />
         </div>
 
-        <table v-else class="pembelian-table">
-          <thead>
-            <tr>
-              <th>Tanggal</th>
-              <th>Supplier</th>
-              <th>Qty (butir)</th>
-              <th>Harga/Butir</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Sisa Utang</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in purchases" :key="p.id">
-              <td><strong>{{ formatDate(p.purchase_date || p.created_at) }}</strong></td>
-              <td>{{ suppliers.find(s => s.id === p.supplier_id)?.name || '-' }}</td>
-              <td>{{ p.total_eggs_bought.toLocaleString('id-ID') }}</td>
-              <td>{{ formatCurrency(p.price_per_egg) }}</td>
-              <td><strong>{{ formatCurrency(p.total_cost) }}</strong></td>
-              <td>
-                <span class="status-badge" :class="p.status">
-                  {{ p.status === 'lunas' ? 'LUNAS' : p.status === 'cicilan' ? 'CICILAN' : 'UTANG' }}
+        <div v-else-if="purchases.length === 0" class="empty-purchases py-8 flex-center flex-column text-center">
+          <InboxIcon class="text-dim mb-3" style="width: 32px; height: 32px;" />
+          <h4 class="text-slate-300 font-bold mb-1">Belum ada riwayat pembelian</h4>
+          <p class="text-xs text-dim">Tap tombol di atas untuk catat pembelian</p>
+        </div>
+
+        <template v-else>
+          <!-- MOBILE PURCHASE LIST -->
+          <div v-if="isMobile" class="mobile-only m-purchase-list">
+            <div 
+              v-for="p in purchases" 
+              :key="'m-'+p.id" 
+              class="m-purchase-card"
+              :style="{ borderLeft: `3px solid ${p.status === 'lunas' ? '#10b981' : p.status === 'tempo' ? '#facc15' : '#ef4444'}` }"
+            >
+              <div class="m-pc-row-top">
+                <span class="m-pc-supplier">{{ p.supplier }}</span>
+                <span class="m-pc-badge-status" :class="'m-status-' + p.status">
+                  {{ (p.status || 'HUTANG').toUpperCase() }}
                 </span>
-              </td>
-              <td :class="p.remaining_debt > 0 ? 'text-red font-bold' : 'text-green'">
-                {{ formatCurrency(p.remaining_debt || 0) }}
-              </td>
-              <td>
-                <button 
-                  v-if="p.remaining_debt > 0"
-                  class="btn-secondary" 
-                  @click="openDetails(p)"
-                >Detail →</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+              <div class="m-pc-row-mid">
+                <span>{{ p.product_label }} · {{ p.total_eggs_bought?.toLocaleString('id-ID') || 0 }} butir</span>
+              </div>
+              <div class="m-pc-row-bot">
+                <span class="m-pc-cost-val">{{ p.total_cost !== null ? formatCurrency(p.total_cost) : '-' }}</span>
+                <span class="m-pc-relative-date">{{ formatRelativeDate(p.created_at) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DESKTOP TABLE -->
+          <table v-if="!isMobile" class="pembelian-table desktop-only">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Supplier</th>
+                <th>Qty (butir)</th>
+                <th>Harga/Butir</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Sisa Utang</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in purchases" :key="p.id">
+                <td><strong>{{ formatRelativeDate(p.purchase_date || p.created_at) }}</strong></td>
+                <td>{{ p.supplier }}</td>
+                <td>{{ p.product_label }}</td>
+                <td>{{ p.total_eggs_bought.toLocaleString('id-ID') }}</td>
+                <td>{{ p.total_cost !== null ? formatCurrency(p.total_cost) : '-' }}</td>
+                <td>
+                  <span class="status-badge" :class="p.status">
+                    {{ p.status === 'lunas' ? 'LUNAS' : p.status === 'cicilan' ? 'CICILAN' : 'UTANG' }}
+                  </span>
+                </td>
+                <td :class="p.remaining_debt > 0 ? 'text-red font-bold' : 'text-green'">
+                  {{ formatCurrency(p.remaining_debt || 0) }}
+                </td>
+                <td>
+                  <button 
+                    v-if="p.remaining_debt > 0"
+                    class="btn-secondary" 
+                    @click="openDetails(p)"
+                  >Detail →</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
       </div>
     </div>
 
@@ -767,15 +948,19 @@ import AddStockChoiceModal from '../components/inventory/AddStockChoiceModal.vue
 import PembelianTelurSlideOver from '../components/inventory/PembelianTelurSlideOver.vue';
 import RestockSuppliesSlideOver from '../components/inventory/RestockSuppliesSlideOver.vue';
 import { sanitizePayload } from '../utils/sanitize';
-import { 
+import {
   PlusIcon,
   SearchIcon,
   SettingsIcon,
   TruckIcon,
   ClipboardListIcon,
   PackageIcon,
-  RefreshCwIcon
+  RefreshCwIcon,
+  ShoppingCartIcon,
+  InboxIcon
 } from 'lucide-vue-next';
+
+import { usePurchaseHistory } from '../composables/usePurchaseHistory';
 
 // @ts-ignore
 import { GRADES, getGradeLabel as getGlobalLabel, normalizeGrade } from '../constants/grades';
@@ -815,6 +1000,7 @@ const showFullHistory = ref(false);
 
 const logs = ref<any[]>([]);
 const suppliers = ref<any[]>([]);
+
 const showAdjustmentModal = ref(false);
 const showPackagingModal = ref(false);
 const showConfirmModal = ref(false);
@@ -828,27 +1014,20 @@ const confirmData = reactive({
 });
 const submitting = ref(false);
 
-// removed priceHistory as it's folded into adjustment flow
+// ━━━ PURCHASE STATE (Refactored to Composable) ━━━
+const { 
+  purchases, 
+  totalPembelian, 
+  totalButir, 
+  totalDebt, 
+  isLoading: loadingPurchases, 
+  fetchPurchases: fetchPurchasesFromComposable 
+} = usePurchaseHistory();
 
-// ━━━ PURCHASE STATE ━━━
-const purchases = ref<any[]>([]);
 const bankAccounts = ref<any[]>([]);
-const purchaseStats = reactive({
-  totalEggs: 0,
-  totalCost: 0,
-  totalDebt: 0
-});
 
-function calculatePurchaseStats() {
-  let totalCost = 0, totalEggs = 0, totalDebt = 0;
-  purchases.value.forEach(p => {
-    totalCost += (p.total_cost || 0);
-    totalEggs += (p.total_eggs_bought || 0);
-    totalDebt += (p.remaining_debt || 0);
-  });
-  purchaseStats.totalCost = totalCost;
-  purchaseStats.totalEggs = totalEggs;
-  purchaseStats.totalDebt = totalDebt;
+async function fetchPurchases() {
+  await fetchPurchasesFromComposable();
 }
 
 
@@ -865,6 +1044,19 @@ function getChipClass(id: string) {
   if (normalized === 'hero') return 'chip-hero'
   if (normalized === 'salted_egg') return 'chip-small'
   return ''
+}
+
+function getCardAccent(item: any) {
+  // KRITIS overrides everything
+  if (getStockStatus(item).class === 'kritis') return '#ef4444'
+  const normalized = normalizeGrade(item.id)
+  if (normalized === 'hero') return '#facc15'
+  if (normalized === 'salted_egg') return '#38bdf8'
+  return '#facc15' // default gold for other primary products
+}
+
+function getSupplyAccent() {
+  return '#8b5cf6'
 }
 
 function getStockProgress(item: any) {
@@ -979,24 +1171,7 @@ const filteredLogs = computed(() => {
 });
 
 
-async function fetchPurchases() {
-  const { data: pData } = await supabase
-    .from('purchases')
-    .select('*, utang_supplier(remaining)')
-    .order('created_at', { ascending: false })
-    .limit(50);
-  if (pData) {
-    // Override remaining_debt with live utang_supplier data when available
-    purchases.value = pData.map((p: any) => {
-      const utang = Array.isArray(p.utang_supplier) ? p.utang_supplier[0] : p.utang_supplier;
-      return {
-        ...p,
-        remaining_debt: utang ? Number(utang.remaining) : (p.remaining_debt || 0)
-      };
-    });
-  }
-  calculatePurchaseStats();
-}
+
 
 const eggInventory = computed(() => {
   const items = inventory.value.filter(i => i.item_type !== 'packaging');
@@ -3343,6 +3518,35 @@ watch(() => route.path, () => {
   .opname-start-btn { width: 100%; justify-content: center; }
   .tips-banner { padding: 12px 14px; }
   .opname-table { display: none; }
+
+  /* STEP 4 — COMPACT: Header actions */
+  .mobile-stock-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  /* STEP 5 — COMPACT: Card produk font size */
+  .stock-number {
+    font-size: 1.4rem !important;
+  }
+  .product-card,
+  .supply-card {
+    margin-bottom: 8px !important;
+  }
+  .m-card-inner {
+    padding: 12px 14px !important;
+  }
+
+  /* Ensure desktop inner wrappers have proper glass styling */
+  .desktop-card-inner,
+  .desktop-supply-inner {
+    background: rgba(15,23,42,0.75);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 24px;
+  }
 }
 </style>
 

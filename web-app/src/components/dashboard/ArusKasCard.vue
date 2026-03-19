@@ -95,14 +95,20 @@ const chartOptions = computed(() => ({
   },
   scales: {
     x: {
-      display: false
+      display: true,
+      grid: { display: false },
+      ticks: {
+        color: 'rgba(255,255,255,0.25)',
+        font: { size: 8 },
+        maxTicksLimit: 5
+      }
     },
     y: {
       beginAtZero: true,
       grid: { color: 'rgba(255,255,255,0.03)' },
       ticks: {
         color: 'rgba(255,255,255,0.25)',
-        font: { size: 9 },
+        font: { size: 8 },
         callback: (v: any) => formatCompactCurrency(v)
       },
       border: { display: false }

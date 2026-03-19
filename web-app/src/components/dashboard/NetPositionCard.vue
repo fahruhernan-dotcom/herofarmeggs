@@ -1,6 +1,9 @@
 <template>
   <div class="net-card" :class="netPosition >= 0 ? 'positive' : 'negative'">
-    <span class="nc-label">NET POSITION</span>
+    <div class="nc-header-row">
+      <span class="nc-label">NET POSITION</span>
+      <TrendingUpIcon v-if="netPosition >= 0" class="nc-trend-icon" />
+    </div>
     <div class="nc-value" :class="netPosition >= 0 ? 'text-green' : 'text-red'">
       {{ formatCurrency(animatedNet) }}
     </div>
@@ -27,6 +30,7 @@
 import { useAnimatedNumber } from '../../composables/useAnimatedNumber'
 // @ts-ignore
 import { formatCurrency, formatCompactCurrency, formatPct } from '../../utils/formatters'
+import { TrendingUpIcon } from 'lucide-vue-next'
 
 const props = defineProps<{
   netPosition: number
@@ -130,5 +134,61 @@ const animatedNet = useAnimatedNumber(() => props.netPosition)
 .nc-progress-label {
   font-size: 0.7rem;
   color: var(--muted);
+}
+
+.nc-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.nc-trend-icon {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .net-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(15,23,42,0.95) 60%) !important;
+    border: 1px solid rgba(16,185,129,0.3) !important;
+    box-shadow: inset 0 0 30px rgba(16,185,129,0.08) !important;
+  }
+  
+  .net-card.negative {
+    background: linear-gradient(135deg, rgba(239,68,68,0.18) 0%, rgba(15,23,42,0.95) 60%) !important;
+    border: 1px solid rgba(239,68,68,0.3) !important;
+    box-shadow: inset 0 0 30px rgba(239,68,68,0.08) !important;
+  }
+  
+  .nc-trend-icon {
+    display: block;
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    color: rgba(16,185,129,0.4);
+    width: 18px;
+    height: 18px;
+  }
+
+  .negative .nc-trend-icon {
+    color: rgba(239,68,68,0.4);
+    transform: rotate(180deg);
+  }
+
+  .net-card .nc-value {
+    font-size: 1.6rem !important;
+    letter-spacing: 1px !important;
+  }
+  
+  .net-card.positive .nc-value { color: #10b981 !important; }
+  .net-card.negative .nc-value { color: #ef4444 !important; }
+
+  .net-card .nc-label {
+    font-size: 9px !important;
+    letter-spacing: 2px !important;
+  }
+  
+  .net-card.positive .nc-label { color: rgba(16,185,129,0.6) !important; }
+  .net-card.negative .nc-label { color: rgba(239,68,68,0.6) !important; }
 }
 </style>

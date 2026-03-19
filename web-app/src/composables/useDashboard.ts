@@ -127,25 +127,27 @@ export function useDashboard() {
         return items.reduce((a: number, i: any) => a + (i.quantity || 0), 0)
     })
 
-    // Sales chart data — full current month
+    // Sales chart data — precisely last 7 days
     const salesChartData = computed(() => {
         const today = new Date()
-        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-        const days = Math.ceil((endOfMonth.getTime() - startOfMonth.getTime()) / (1000 * 3600 * 24)) + 1
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(today.getDate() - 6)
+
         const labels: string[] = []
         const heroData: number[] = []
         const saltedData: number[] = []
+        
+        const hariNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
 
-        for (let i = 0; i < days; i++) {
-            const d = new Date(startOfMonth)
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(sevenDaysAgo)
             d.setDate(d.getDate() + i)
-            const dateStr = d.toISOString().split('T')[0]
-            labels.push(`${d.getDate()}/${d.getMonth() + 1}`)
+            const dateStr = d.toISOString().split('T')[0] as string
+            labels.push(hariNames[d.getDay()])
 
             const daySales = allSales.value.filter((s: any) => {
                 if (!s.created_at || s.payment_status === 'voided') return false
-                return s.created_at.startsWith(dateStr)
+                return s.created_at?.startsWith(dateStr) ?? false
             })
 
             const dayItems = daySales.flatMap((s: any) => s.sale_items || [])
@@ -191,8 +193,8 @@ export function useDashboard() {
         for (let i = 29; i >= 0; i--) {
             const d = new Date(today)
             d.setDate(d.getDate() - i)
-            const dateStr = d.toISOString().split('T')[0]
-            dates.push(d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }))
+            const dateStr = d.toISOString().split('T')[0] as string
+            dates.push(`${d.getDate()}/${d.getMonth() + 1}`)
 
             const dayFin = financeEntries.value.filter((f: any) => f.entry_date === dateStr)
             income.push(dayFin.filter((f: any) => f.entry_type === 'income').reduce((a: number, f: any) => a + Number(f.amount), 0))

@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
 
-const supabaseUrl = 'https://cjpqkrlpdvdipbxrrubx.supabase.co'
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqcHFrcmxwZHZkaXBieHJydWJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyOTk1NzUsImV4cCI6MjA4Njg3NTU3NX0.UzHRPm_oTLPbsbfBogTnV0cEUvTP3AhQe2C5fDZaDd0'
+dotenv.config()
+
+const supabaseUrl = process.env.SUPABASE_URL || 'YOUR_SUPABASE_URL'
+const supabaseKey = process.env.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 async function nukebase() {
@@ -25,7 +28,7 @@ async function nukebase() {
     .insert([{
       session_name: 'default',
       base_url: 'https://herofarm.web.id/waha-api',
-      api_key: 'f84052ca69ad4216a7c784274016b3f0'
+      api_key: process.env.WAHA_API_KEY || 'YOUR_WAHA_API_KEY'
     }])
 
   if (insErr) {

@@ -22,6 +22,23 @@
       </div>
     </header>
 
+    <!-- RETRYING BANNER -->
+    <div v-if="isRetrying" class="retry-banner glass-panel animate-fade-in">
+      <span class="retry-dot pulse"></span>
+      <span>Mencoba memuat ulang... (percobaan ke-{{ retryCount }})</span>
+    </div>
+
+    <!-- FETCH ERROR STATE -->
+    <section v-if="fetchError" class="fetch-error-card glass-panel animate-pop">
+      <div class="fec-icon">⚠️</div>
+      <h3 class="fec-title">Koneksi bermasalah</h3>
+      <p class="fec-desc">Data inventori tidak bisa dimuat.</p>
+      <button class="btn-primary mt-6" @click="retryFetch">
+        🔄 Coba Lagi
+      </button>
+      <p class="fec-hint mt-4">Pastikan koneksi internetmu stabil</p>
+    </section>
+
     <!-- MOBILE STOCK BAR -->
     <div class="mobile-stock-nav scroll-x glass-panel mobile-only mb-6">
       <div 
@@ -393,6 +410,11 @@ const confirmData = reactive({
   onConfirm: () => {}
 });
 
+// Error Recovery State (cart is preserved during retries)
+const fetchError = ref(false);
+const retryCount = ref(0);
+const isRetrying = ref(false);
+
 const customerSearch = ref('');
 const customerPhone = ref('');
 const showCustResults = ref(false);
@@ -425,16 +447,16 @@ async function fetchData() {
     // 1. Fetch Inventory
     const { data: inv, error: invErr } = await withTimeout(
       supabase.from('inventory').select('*'),
-      8000, 'pos-inventory'
+      undefined, 'pos-inventory'
     );
     if (invErr) throw invErr;
     if (inv) inventory.value = inv;
 
     loadingMsg.value = 'Fetching CRM database...';
-    // 2. Fetch Customers (simplified to avoid missing columns errors)
+    // 2. Fetch Customers
     const { data: cust, error: custErr } = await withTimeout(
       supabase.from('customers').select('*').limit(100),
-      8000, 'pos-customers'
+      undefined, 'pos-customers'
     );
     if (custErr) {
         console.warn('Customer fetch failed, proceeding anyway:', custErr);
@@ -443,11 +465,44 @@ async function fetchData() {
     
   } catch (err: any) {
     console.error('Terminal Data Sync Error:', err);
-    showToast('Koneksi bermasalah: ' + (err.message || ''), 'error');
+    throw err; // Let safeFetchData handle retries
   } finally {
     loading.value = false;
     loadingMsg.value = '';
   }
+}
+
+async function safeFetchData() {
+  fetchError.value = false;
+  retryCount.value = 0;
+  isRetrying.value = false;
+  try {
+    await fetchData();
+  } catch (err: any) {
+    let succeeded = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      retryCount.value = attempt;
+      isRetrying.value = true;
+      const delay = 1000 * Math.pow(2, attempt - 1);
+      await new Promise(r => setTimeout(r, delay));
+      try {
+        await fetchData();
+        succeeded = true;
+        break;
+      } catch { /* continue */ }
+    }
+    isRetrying.value = false;
+    if (!succeeded) {
+      fetchError.value = true;
+      showToast('Gagal memuat data. Tap Coba Lagi.', 'error');
+    }
+  }
+}
+
+function retryFetch() {
+  fetchError.value = false;
+  retryCount.value = 0;
+  safeFetchData();
 }
 
 // 3. COMPUTED
@@ -662,7 +717,7 @@ const vOutsideClick = {
   },
 };
 
-onMounted(fetchData);
+onMounted(safeFetchData);
 </script>
 
 <style scoped>
@@ -1307,5 +1362,62 @@ onMounted(fetchData);
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* ─── RETRY BANNER ──────────────────────── */
+.retry-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.retry-dot {
+  width: 8px;
+  height: 8px;
+  background: #f59e0b;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── FETCH ERROR CARD ──────────────────── */
+.fetch-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 32px;
+  border-radius: 16px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+  margin-bottom: 24px;
+}
+
+.fec-icon { font-size: 3rem; margin-bottom: 16px; }
+.fec-title { font-size: 1.2rem; font-weight: 700; color: #f87171; margin-bottom: 8px; }
+.fec-desc { color: var(--muted); font-size: 0.85rem; max-width: 300px; }
+.fec-hint { color: #64748b; font-size: 0.75rem; font-style: italic; }
+
+.animate-fade-in { animation: fadeIn 0.4s ease forwards; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.animate-pop { animation: popIn 0.3s cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.pulse { animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

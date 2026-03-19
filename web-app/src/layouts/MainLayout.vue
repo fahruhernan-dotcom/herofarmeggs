@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-layout">
+  <div class="dashboard-layout" style="overflow: hidden; max-width: 100vw; width: 100%;">
     <!-- 🌌 AURORA BACKGROUND -->
     <div class="aurora-static"></div>
 
@@ -25,7 +25,7 @@
       </div>
     </aside>
 
-    <main class="workspace">
+    <main class="workspace" style="overflow-x: hidden; width: 100%; position: relative;">
       <!-- 📱 MOBILE TOP BAR -->
       <MobileTopBar 
         v-if="isMobile" 
@@ -40,11 +40,13 @@
         </div>
       </header>
 
-      <router-view v-slot="{ Component }">
-        <transition name="fade-slide" mode="out-in">
-          <component :is="Component" :key="$route.fullPath" />
-        </transition>
-      </router-view>
+      <div style="overflow-x: hidden; width: 100%;">
+        <router-view v-slot="{ Component }">
+          <transition name="fade-slide" mode="out-in">
+            <component :is="Component" :key="$route.fullPath" />
+          </transition>
+        </router-view>
+      </div>
     </main>
 
     <!-- 📱 MOBILE NAVIGATION -->
@@ -196,10 +198,15 @@ onUnmounted(() => {
 .dashboard-layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
+  position: relative;
   background-color: var(--bg-base);
   color: var(--color-text);
   padding: 16px;
   gap: 16px;
+  box-sizing: border-box;
 }
 
 .aurora-static {
@@ -296,9 +303,12 @@ onUnmounted(() => {
   flex-direction: column;
   z-index: 10;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
   padding: 0 40px 40px; /* Reduced top padding for header */
   scroll-behavior: smooth;
   position: relative;
+  box-sizing: border-box;
 }
 
 @media (max-width: 768px) {

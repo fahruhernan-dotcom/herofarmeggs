@@ -25,8 +25,25 @@
       </div>
     </header>
 
+    <!-- RETRYING BANNER -->
+    <div v-if="isRetrying" class="retry-banner glass-panel animate-fade-in">
+      <span class="retry-dot pulse"></span>
+      <span>Mencoba memuat ulang... (percobaan ke-{{ retryCount }})</span>
+    </div>
+
+    <!-- FETCH ERROR STATE -->
+    <section v-if="fetchError" class="fetch-error-card glass-panel animate-pop">
+      <div class="fec-icon">⚠️</div>
+      <h3 class="fec-title">Koneksi bermasalah</h3>
+      <p class="fec-desc">Data tidak bisa dimuat setelah beberapa percobaan.</p>
+      <button class="btn-primary mt-6" @click="retryFetch">
+        🔄 Coba Lagi
+      </button>
+      <p class="fec-hint mt-4">Pastikan koneksi internetmu stabil</p>
+    </section>
+
     <!-- SKELETON LOADING STATE -->
-    <section v-if="loading" class="dashboard-grid">
+    <section v-else-if="loading" class="dashboard-grid">
       <div class="skeleton-bar"></div>
       <div v-for="i in 9" :key="i" class="skeleton-card"></div>
     </section>
@@ -44,27 +61,49 @@
       />
 
       <!-- ROW 2: COMMAND METRICS -->
-      <div class="command-metrics-scroller" :class="{ 'scroll-x': isMobile }">
+      <div class="command-metrics-scroller dash-section" :class="{ 'scroll-x': isMobile }">
         <NetPositionCard
           :netPosition="netPosition"
           :totalCost="totalCost"
           :revenue="totalRevenue"
           :pct="modalKembaliPct"
-          class="row-2 animate-row"
-          style="--row-delay: 0"
+          class="row-2 animate-row dash-section"
+          style="--row-delay: 0; border-left: 3px solid #10b981;"
         />
-        <UtangCard
-          :amount="kpiData.total_utang || 0"
-          :count="kpiData.utang_count || 0"
-          class="row-2 animate-row"
-          style="--row-delay: 1"
-        />
-        <PiutangCard
-          :amount="kpiData.total_piutang || 0"
-          :count="kpiData.piutang_count || 0"
-          class="row-2 animate-row"
-          style="--row-delay: 2"
-        />
+
+        <template v-if="!isMobile">
+          <UtangCard
+            :amount="kpiData.total_utang || 0"
+            :count="kpiData.utang_count || 0"
+            class="row-2 animate-row"
+            style="--row-delay: 1"
+          />
+          <PiutangCard
+            :amount="kpiData.total_piutang || 0"
+            :count="kpiData.piutang_count || 0"
+            class="row-2 animate-row"
+            style="--row-delay: 2"
+          />
+        </template>
+        <div v-else class="combined-debt-card glass-panel row-2 animate-row dash-section" style="--row-delay: 1">
+          <div class="cdc-col" :style="(kpiData.total_utang || 0) > 0 ? 'border-left: 3px solid #ef4444; padding-left: 8px;' : ''">
+            <div class="cdc-label-row">
+              <AlertCircleIcon class="icon-xxs text-red" />
+              <span class="cdc-label">Utang Supplier</span>
+            </div>
+            <span class="cdc-val" :class="(kpiData.total_utang || 0) > 0 ? 'text-red' : 'text-slate-400'">{{ formatCurrency(kpiData.total_utang || 0) }}</span>
+            <button class="btn-sm btn-bayar" @click="$router.push('/suppliers')">Bayar</button>
+          </div>
+          <div class="cdc-divider"></div>
+          <div class="cdc-col" :style="(kpiData.total_piutang || 0) > 0 ? 'border-left: 3px solid #facc15; padding-left: 8px;' : ''">
+            <div class="cdc-label-row">
+              <ClockIcon class="icon-xxs text-gold" />
+              <span class="cdc-label">Piutang Aktif</span>
+            </div>
+            <span class="cdc-val" :class="(kpiData.total_piutang || 0) > 0 ? 'text-gold' : 'text-slate-400'">{{ formatCurrency(kpiData.total_piutang || 0) }}</span>
+            <button class="btn-sm btn-tagih" @click="$router.push('/customers')">Tagih</button>
+          </div>
+        </div>
       </div>
 
       <!-- ROW 3: PRIMARY CONTENT -->
@@ -76,13 +115,14 @@
         :packsSold="totalPacksSold"
         :growth="revenueWidget.growth"
         :salesChart="salesChartData"
-        class="row-3-main animate-row"
-        style="--row-delay: 3"
+        class="row-3-main animate-row dash-section"
+        style="--row-delay: 3; border-left: 3px solid #38bdf8;"
       />
+      
       <StockStatusCard
         :grades="eggInventory"
         :potentialRevenue="potentialRevenue"
-        class="row-3-side animate-row"
+        class="row-3-side animate-row dash-section"
         style="--row-delay: 4"
       />
 
@@ -94,7 +134,7 @@
         :totalIncome="cashFlowData.totalIncome"
         :totalExpense="cashFlowData.totalExpense"
         :net="cashFlowData.net"
-        class="row-4 animate-row"
+        class="row-4 animate-row dash-section"
         style="--row-delay: 5"
       />
       <PiutangAgingCard
@@ -102,18 +142,64 @@
         :week1="piutangBuckets.week1"
         :week2="piutangBuckets.week2"
         :overdue="piutangBuckets.overdue"
-        class="row-4 animate-row"
+        class="row-4 animate-row dash-section"
         style="--row-delay: 6"
       />
       <TopPelangganCard
         :customers="topCustomers"
-        class="row-4 animate-row"
+        class="row-4 animate-row dash-section"
         style="--row-delay: 7"
       />
+
+      <!-- ROW 5: PURCHASE HISTORY (Desktop Only) -->
+      <div v-if="!isMobile" class="pembelian-widget glass-panel row-5 animate-row dash-section" style="--row-delay: 8">
+        <div class="pw-header">
+          <div class="pw-title-group">
+            <ShoppingCartIcon class="icon-sm text-gold" />
+            <span class="pw-title hero-font">RIWAYAT PEMBELIAN</span>
+          </div>
+          <router-link to="/stock?tab=pembelian" class="pw-link">
+            <span>Lihat Semua</span>
+            <ArrowRightIcon class="icon-xs" />
+          </router-link>
+        </div>
+
+        <div v-if="loadingPurchases" class="pw-loading py-6 flex-center">
+          <RefreshCwIcon class="animate-spin text-dim" />
+        </div>
+        
+        <div v-else-if="purchases.length === 0" class="pw-empty py-6 text-center">
+          <p class="text-xs text-dim">Belum ada transaksi</p>
+        </div>
+
+        <div v-else class="pw-list">
+          <div v-for="p in purchases" :key="p.id" class="pw-item">
+            <div class="pw-item-left">
+              <div class="pw-item-icon" :class="p.status">
+                <PackageIcon v-if="p.item_type === 'egg'" class="icon-xs" />
+                <ShoppingCartIcon v-else class="icon-xs" />
+              </div>
+              <div class="pw-item-info">
+                <span class="pw-item-name">{{ p.supplier || 'General Supplier' }}</span>
+                <span class="pw-item-meta">{{ p.total_eggs_bought?.toLocaleString('id-ID') }} butir · {{ formatRelativeDate(p.created_at) }}</span>
+              </div>
+            </div>
+            <div class="pw-item-right">
+              <span class="pw-item-amount">{{ formatCurrency(p.total_cost) }}</span>
+              <span class="pw-item-status" :class="p.status">{{ p.status?.toUpperCase() }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pw-footer">
+          <span class="pw-footer-label">Total bulan ini</span>
+          <span class="pw-footer-val">{{ formatCurrency(monthlyTotal) }}</span>
+        </div>
+      </div>
     </section>
 
     <!-- DANGER ZONE -->
-    <section v-if="authStore.profile?.role === 'admin' || authStore.profile?.role === 'owner' || authStore.user?.email === 'fahruhernansakti@gmail.com'" class="danger-zone glass-panel mt-8">
+    <section v-if="(authStore.profile?.role === 'admin' || authStore.profile?.role === 'owner' || authStore.user?.email === 'fahruhernansakti@gmail.com') && !isMobile" class="danger-zone glass-panel mt-8">
       <div class="dz-header">
         <div>
           <h3 class="hero-font text-error">System Maintenance</h3>
@@ -216,10 +302,23 @@ import { useToast } from '../composables/useToast'
 import { useDashboard } from '../composables/useDashboard'
 import { withTimeout } from '../utils/safeAsync'
 // @ts-ignore
-import { formatCurrency } from '../utils/formatters'
+import { formatCurrency, formatRelativeDate } from '../utils/formatters'
 
 // Icons
-import { Trash2Icon, AlertTriangleIcon, DownloadIcon, AlertOctagonIcon } from 'lucide-vue-next'
+import { 
+  Trash2Icon, 
+  AlertTriangleIcon, 
+  DownloadIcon, 
+  AlertOctagonIcon, 
+  AlertCircleIcon, 
+  ClockIcon,
+  ShoppingCartIcon,
+  PackageIcon,
+  ArrowRightIcon,
+  RefreshCwIcon
+} from 'lucide-vue-next'
+
+import { usePurchaseHistory } from '../composables/usePurchaseHistory'
 
 // Dashboard Components
 import AlertBar from '../components/dashboard/AlertBar.vue'
@@ -234,6 +333,11 @@ import TopPelangganCard from '../components/dashboard/TopPelangganCard.vue'
 
 const { showToast } = useToast()
 const authStore = useAuthStore()
+
+// Error Recovery State
+const fetchError = ref(false)
+const retryCount = ref(0)
+const isRetrying = ref(false)
 
 // Dashboard data
 const {
@@ -255,10 +359,54 @@ const {
   cashFlowData,
   piutangBuckets,
   potentialRevenue,
-  fetchData,
+  fetchData: _rawFetch,
   setupRealtime,
   cleanup
 } = useDashboard()
+
+const {
+  purchases,
+  monthlyTotal,
+  isLoading: loadingPurchases,
+  fetchPurchases
+} = usePurchaseHistory()
+
+async function safeFetchData() {
+  fetchError.value = false
+  retryCount.value = 0
+  isRetrying.value = false
+  try {
+    await Promise.all([
+      _rawFetch(),
+      fetchPurchases(5) // Only need top 5 for dashboard
+    ])
+  } catch (err: any) {
+    // Auto-retry with exponential backoff
+    let succeeded = false
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      retryCount.value = attempt
+      isRetrying.value = true
+      const delay = 1000 * Math.pow(2, attempt - 1)
+      await new Promise(r => setTimeout(r, delay))
+      try {
+        await _rawFetch()
+        succeeded = true
+        break
+      } catch { /* continue retrying */ }
+    }
+    isRetrying.value = false
+    if (!succeeded) {
+      fetchError.value = true
+      showToast('Gagal memuat data dashboard', 'error')
+    }
+  }
+}
+
+function retryFetch() {
+  fetchError.value = false
+  retryCount.value = 0
+  safeFetchData()
+}
 
 const isMobile = ref(window.innerWidth <= 768)
 function checkMobile() {
@@ -357,7 +505,7 @@ async function handleSystemReset() {
     
     showToast('Sistem berhasil direset')
     closeResetModal()
-    fetchData()
+    safeFetchData()
   } catch {
     showToast('Gagal total reset sistem', 'error')
   } finally {
@@ -367,7 +515,7 @@ async function handleSystemReset() {
 
 // Lifecycle
 onMounted(() => {
-  fetchData()
+  safeFetchData()
   setupRealtime()
   updateClock()
   clockInterval = setInterval(updateClock, 1000)
@@ -405,6 +553,60 @@ onUnmounted(() => {
 /* Row 3: Performance (8) + Stock (4) */
 .row-3-main { grid-column: span 8; }
 .row-3-side { grid-column: span 4; }
+
+/* ─── COMBINED DEBT CARD (MOBILE) ───────── */
+.combined-debt-card {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  padding: 12px 14px;
+  align-items: center;
+}
+.cdc-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cdc-label {
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.cdc-val {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.cdc-divider {
+  width: 1px;
+  height: 100%;
+  background: rgba(255,255,255,0.06);
+}
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  width: fit-content;
+  text-decoration: none;
+  margin-top: 4px;
+}
+.btn-outline-red {
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: var(--red);
+}
+.btn-outline-gold {
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--gold);
+}
+.text-gold { color: var(--gold); }
 
 /* Row 4: Secondary Widgets — 3 cards, 4 cols each */
 .row-4 { grid-column: span 4; }
@@ -760,6 +962,189 @@ onUnmounted(() => {
 .animate-fade-in { animation: fadeIn 0.4s ease forwards; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+/* ─── RETRY BANNER ──────────────────────── */
+.retry-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.retry-dot {
+  width: 8px;
+  height: 8px;
+  background: #f59e0b;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── FETCH ERROR CARD ──────────────────── */
+.fetch-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 32px;
+  border-radius: 16px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.fec-icon { font-size: 3rem; margin-bottom: 16px; }
+.fec-title { font-size: 1.2rem; font-weight: 700; color: #f87171; margin-bottom: 8px; }
+.fec-desc { color: var(--muted); font-size: 0.85rem; max-width: 300px; }
+.fec-hint { color: #64748b; font-size: 0.75rem; font-style: italic; }
+
+/* ─── PEMBELIAN WIDGET ──────────────────── */
+.pembelian-widget {
+  grid-column: span 4;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+}
+
+.pw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.pw-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pw-title {
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: var(--color-text-dim);
+}
+
+.pw-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--gold-egg);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.pw-link:hover { opacity: 0.8; transform: translateX(2px); }
+
+.pw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.pw-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.pw-item:hover { background: rgba(255, 255, 255, 0.05); }
+
+.pw-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pw-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-dim);
+}
+
+.pw-item-icon.lunas { color: #10b981; background: rgba(16, 185, 129, 0.1); }
+.pw-item-icon.hutang { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+.pw-item-icon.tempo { color: #facc15; background: rgba(250, 204, 21, 0.1); }
+
+.pw-item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.pw-item-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+}
+
+.pw-item-meta {
+  font-size: 0.7rem;
+  color: var(--color-text-dim);
+}
+
+.pw-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.pw-item-amount {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: white;
+}
+
+.pw-item-status {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pw-item-status.lunas { color: #10b981; }
+.pw-item-status.hutang { color: #ef4444; }
+.pw-item-status.tempo { color: #facc15; }
+
+.pw-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pw-footer-label {
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+}
+
+.pw-footer-val {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--gold-egg);
+}
+
 /* ─── RESPONSIVE ────────────────────────── */
 @media (max-width: 1200px) {
   .row-2 { grid-column: span 4; }
@@ -777,20 +1162,81 @@ onUnmounted(() => {
   
   .command-metrics-scroller {
     display: flex;
-    overflow-x: auto;
+    flex-direction: column;
+    overflow-x: hidden;
+    width: 100%;
     margin-bottom: 8px;
     gap: 12px;
-    padding-bottom: 8px;
+    padding: 0;
   }
   
   .command-metrics-scroller > * {
-    min-width: 280px;
-    flex-shrink: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .row-2, .row-3-main, .row-3-side, .row-4 {
     grid-column: 1 / -1;
     width: 100%;
+    box-sizing: border-box;
+  }
+
+  .dashboard-content {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  .card, .glass-panel, [class*="card"] {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+  }
+
+  .dash-section {
+    animation: fadeSlideUp 0.4s ease forwards;
+    opacity: 0;
+  }
+  .dash-section:nth-child(1) { animation-delay: 0.05s; }
+  .dash-section:nth-child(2) { animation-delay: 0.1s; }
+  .dash-section:nth-child(3) { animation-delay: 0.15s; }
+  .dash-section:nth-child(4) { animation-delay: 0.2s; }
+  .dash-section:nth-child(5) { animation-delay: 0.25s; }
+  .dash-section:nth-child(6) { animation-delay: 0.3s; }
+  .dash-section:nth-child(7) { animation-delay: 0.35s; }
+  .dash-section:nth-child(8) { animation-delay: 0.4s; }
+
+  .combined-debt-card {
+    background: rgba(15,23,42,0.8) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+  }
+  .cdc-divider {
+    background: rgba(255,255,255,0.06) !important;
+    width: 1px;
+  }
+  .cdc-label-row { display: flex; align-items: center; gap: 4px; }
+  .icon-xxs { width: 14px; height: 14px; }
+  .text-slate-400 { color: #94a3b8 !important; }
+
+  .btn-bayar {
+    background: rgba(239,68,68,0.1) !important;
+    border: 1px solid rgba(239,68,68,0.3) !important;
+    color: #ef4444 !important;
+  }
+  .btn-bayar:hover { background: rgba(239,68,68,0.2) !important; }
+
+  .btn-tagih {
+    background: rgba(250,204,21,0.1) !important;
+    border: 1px solid rgba(250,204,21,0.3) !important;
+    color: #facc15 !important;
+  }
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>

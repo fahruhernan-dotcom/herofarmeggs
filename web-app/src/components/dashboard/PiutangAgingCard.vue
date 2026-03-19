@@ -8,7 +8,10 @@
       <router-link to="/financial" class="ag-link">Semua Piutang →</router-link>
     </div>
 
-    <div class="ag-buckets">
+    <div v-if="allZero" class="ag-compact-empty">
+      Tidak ada piutang aktif
+    </div>
+    <div v-else class="ag-buckets">
       <div v-for="bucket in buckets" :key="bucket.label" class="ag-row" :class="bucket.color">
         <span class="ag-row-label">{{ bucket.label }}</span>
         <div class="ag-bar-track">
@@ -36,6 +39,10 @@ const overdueCount = computed(() => props.week1.count + props.week2.count + prop
 
 const maxTotal = computed(() => {
   return Math.max(props.paid.total, props.week1.total, props.week2.total, props.overdue.total, 1)
+})
+
+const allZero = computed(() => {
+  return props.paid.total === 0 && props.week1.total === 0 && props.week2.total === 0 && props.overdue.total === 0
 })
 
 function getWidth(total: number) {
@@ -169,5 +176,12 @@ const buckets = computed(() => [
   width: 90px;
   text-align: right;
   flex-shrink: 0;
+}
+
+.ag-compact-empty {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 8px 0;
 }
 </style>

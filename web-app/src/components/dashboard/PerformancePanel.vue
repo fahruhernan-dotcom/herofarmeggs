@@ -1,24 +1,32 @@
 <template>
   <div class="perf-panel">
     <!-- KPI Stats Row -->
-    <div class="kpi-row scroll-x">
+    <div class="kpi-row">
       <div class="kpi-stat">
+        <div class="kpi-label-row">
+          <DollarSignIcon class="kpi-icon text-blue-muted" />
+          <span class="kpi-label">Total Omzet</span>
+        </div>
         <span class="kpi-value sky">{{ formatCurrency(revenue) }}</span>
-        <span class="kpi-label">Total Omzet</span>
         <div v-if="growth.status !== 'none'" class="kpi-pill" :class="growth.status">
           {{ growth.status === 'up' ? '↑' : '↓' }} {{ growth.val }}%
         </div>
       </div>
       <div class="kpi-divider"></div>
       <div class="kpi-stat">
+        <div class="kpi-label-row">
+          <TrendingUpIcon class="kpi-icon text-green-muted" />
+          <span class="kpi-label">Laba Kotor</span>
+        </div>
         <span class="kpi-value green">{{ formatCurrency(profit) }}</span>
-        <span class="kpi-label">Laba Kotor</span>
         <div class="kpi-pill margin">{{ formatPct(marginPct) }}</div>
       </div>
       <div class="kpi-divider desktop-only"></div>
-      <div class="kpi-stat">
-        <span class="kpi-value white">{{ transaksi }} penjualan</span>
-        <span class="kpi-label">Bulan Ini</span>
+      <div class="kpi-stat kpi-penjualan">
+        <div class="pj-kiri">
+          <ShoppingBagIcon class="kpi-icon text-purple-muted" />
+          <span class="kpi-value white">{{ transaksi }} penjualan</span>
+        </div>
         <span class="kpi-sub">{{ packsSold }} pack terjual</span>
       </div>
     </div>
@@ -47,6 +55,7 @@ import {
 } from 'chart.js'
 // @ts-ignore
 import { formatCurrency, formatPct, formatCompactCurrency } from '../../utils/formatters'
+import { DollarSignIcon, TrendingUpIcon, ShoppingBagIcon } from 'lucide-vue-next'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Filler)
 
@@ -104,15 +113,22 @@ const chartOptions = computed(() => ({
     x: {
       stacked: true,
       grid: { display: false },
-      ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 10 } }
+      ticks: {
+        color: 'rgba(255,255,255,0.35)',
+        font: { size: 8 },
+        maxTicksLimit: 7,
+        maxRotation: 0
+      }
     },
     y: {
       stacked: true,
       grid: { color: 'rgba(255,255,255,0.04)' },
       ticks: {
         color: 'rgba(255,255,255,0.3)',
-        font: { size: 10 },
-        callback: (v: any) => formatCompactCurrency(v)
+        font: { size: 8 },
+        callback: (v: any) => formatCompactCurrency(v),
+        maxTicksLimit: 5,
+        maxRotation: 0
       },
       border: { display: false }
     }
@@ -224,6 +240,8 @@ const chartOptions = computed(() => ({
   flex: 1;
   min-height: 160px;
   position: relative;
+  width: 100%;
+  overflow: hidden;
 }
 
 .chart-empty {
@@ -236,26 +254,95 @@ const chartOptions = computed(() => ({
 }
 @media (max-width: 768px) {
   .kpi-row {
-    padding: 16px;
+    padding: 12px;
+    flex-direction: column;
+    gap: 8px;
+    border-bottom: none;
   }
   
   .kpi-stat {
-    min-width: 140px;
-    padding: 0 12px;
+    width: 100%;
+    min-width: 100%;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
   }
   
-  .kpi-stat:first-child { padding-left: 0; }
+  .kpi-stat:first-child { padding-left: 16px; }
+  .kpi-stat:last-child { padding-right: 16px; }
+  
+  .kpi-divider {
+    display: none;
+  }
   
   .kpi-value {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
   }
 
   .chart-section {
-    padding: 16px;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255,255,255,0.06);
   }
 
   .chart-wrapper {
     min-height: 140px;
+  }
+}
+
+.kpi-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.kpi-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.text-blue-muted { color: rgba(56,189,248,0.5); }
+.text-green-muted { color: rgba(16,185,129,0.5); }
+.text-purple-muted { color: rgba(139,92,246,0.5); }
+
+@media (max-width: 768px) {
+  .perf-panel {
+    background: rgba(15,23,42,0.8) !important;
+    box-shadow: none !important;
+  }
+  
+  .sky { font-size: 1.1rem !important; color: #38bdf8 !important; }
+  .green { font-size: 1.1rem !important; color: #10b981 !important; }
+
+  .kpi-penjualan {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    border-top: 1px solid rgba(255,255,255,0.06) !important;
+    padding: 6px 10px !important;
+    width: 100% !important;
+    background: transparent !important;
+  }
+  .pj-kiri {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .kpi-penjualan .white {
+    font-size: 0.95rem !important;
+    font-weight: bold !important;
+    color: #f8fafc !important;
+  }
+  .kpi-penjualan .kpi-sub {
+    font-size: 10px !important;
+    color: #94a3b8 !important;
+  }
+
+  .chart-wrapper canvas {
+    height: 110px !important;
+    max-height: 110px !important;
   }
 }
 </style>

@@ -1,7 +1,10 @@
 <template>
   <div class="top-card">
     <div class="tc-header">
-      <span class="tc-label">TOP PELANGGAN</span>
+      <div class="tc-title-row">
+        <UsersIcon class="tc-icon" />
+        <span class="tc-label">TOP PELANGGAN</span>
+      </div>
       <router-link to="/customers" class="tc-link">Lihat Semua →</router-link>
     </div>
 
@@ -26,6 +29,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { formatCurrency } from '../../utils/formatters'
+import { UsersIcon } from 'lucide-vue-next'
 
 const props = defineProps<{
   customers: Array<{ name: string; total: number }>
@@ -165,5 +169,28 @@ function getWidth(total: number) {
 .tc-empty-text {
   font-size: 0.8rem;
   color: #475569;
+}
+
+.tc-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tc-icon {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .tc-icon {
+    display: block;
+    width: 14px;
+    height: 14px;
+    color: rgba(250,204,21,0.5);
+  }
+  .tc-row {
+    padding: 5px 0 !important;
+    gap: 8px !important;
+  }
 }
 </style>

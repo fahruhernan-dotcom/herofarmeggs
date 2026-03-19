@@ -2,6 +2,7 @@
   <div class="stock-card">
     <div class="sc-header">
       <div class="sc-title-row">
+        <PackageIcon class="sc-icon" />
         <span class="sc-label">STATUS STOK</span>
         <span class="sc-live-dot"></span>
       </div>
@@ -42,6 +43,7 @@
 import { GRADES, getGradeLabel, normalizeGrade } from '../../constants/grades'
 // @ts-ignore
 import { formatCurrency, formatStock } from '../../utils/formatters'
+import { PackageIcon } from 'lucide-vue-next'
 
 defineProps<{
   grades: any[]
@@ -105,12 +107,16 @@ function getProgressWidth(item: any) {
 }
 
 .sc-live-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--green);
+  width: 6px;
+  height: 6px;
+  background: #10b981;
   border-radius: 50%;
-  box-shadow: 0 0 10px var(--green);
+  box-shadow: 0 0 10px #10b981;
   animation: livePulse 1.5s ease-in-out infinite;
+}
+
+.sc-icon {
+  display: none;
 }
 
 @keyframes livePulse {
@@ -234,8 +240,17 @@ function getProgressWidth(item: any) {
 @media (max-width: 768px) {
   .stock-card {
     padding: 16px;
+    border-left: 3px solid #ef4444 !important;
+    box-shadow: none !important;
   }
   
+  .sc-icon {
+    display: block;
+    width: 14px;
+    height: 14px;
+    color: #ef4444;
+  }
+
   .sc-grade-count {
     font-size: 0.7rem;
   }

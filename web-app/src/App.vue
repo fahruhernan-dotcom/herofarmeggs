@@ -1,6 +1,8 @@
 <template>
-  <router-view :key="$route.fullPath"></router-view>
-  <ToastContainer />
+  <div id="app" style="overflow: hidden; max-width: 100vw; width: 100%;">
+    <router-view :key="$route.fullPath"></router-view>
+    <ToastContainer />
+  </div>
 </template>
 
 <script setup lang="ts">

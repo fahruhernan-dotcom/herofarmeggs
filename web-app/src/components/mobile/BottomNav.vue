@@ -22,10 +22,10 @@
       <span class="label">Stock</span>
     </router-link>
 
-    <button class="nav-item btn-more" @click="$emit('open-drawer')">
-      <MenuIcon class="icon" />
-      <span class="label">More</span>
-    </button>
+    <router-link to="/profile" class="nav-item">
+      <UserIcon class="icon" />
+      <span class="label">Account</span>
+    </router-link>
   </nav>
 </template>
 
@@ -35,7 +35,7 @@ import {
   ClipboardListIcon, 
   PlusCircleIcon, 
   PackageIcon, 
-  MenuIcon 
+  UserIcon 
 } from 'lucide-vue-next';
 
 defineEmits(['open-drawer']);
