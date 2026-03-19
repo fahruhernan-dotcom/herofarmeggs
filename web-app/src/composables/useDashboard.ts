@@ -143,7 +143,7 @@ export function useDashboard() {
             const d = new Date(sevenDaysAgo)
             d.setDate(d.getDate() + i)
             const dateStr = d.toISOString().split('T')[0] as string
-            labels.push(hariNames[d.getDay()])
+            labels.push(hariNames[d.getDay()]!)
 
             const daySales = allSales.value.filter((s: any) => {
                 if (!s.created_at || s.payment_status === 'voided') return false
